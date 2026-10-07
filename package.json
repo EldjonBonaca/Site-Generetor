@@ -1,0 +1,26 @@
+{
+  "name": "elementor-site-generator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-powered generator of Elementor templates/kits from site data, images and custom prompts.",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,magenta \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "build": "npm run build -w frontend",
+    "start": "npm run build && npm run start -w backend",
+    "sample-kit": "npm run sample-kit -w backend",
+    "test": "npm test -w backend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "overrides": {
+    "shell-quote": "^1.12.0"
+  }
+}
