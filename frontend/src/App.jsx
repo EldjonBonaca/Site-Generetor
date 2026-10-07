@@ -23,7 +23,7 @@ export default function App() {
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-6 px-4 sm:px-6">
           <NavLink to="/projects" className="flex items-center gap-2 font-semibold text-slate-900">
             <span className="flex size-7 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">E</span>
-            <span className="hidden sm:inline">Site Generator</span>
+            <span className="hidden sm:inline">Sites Generator</span>
           </NavLink>
           <nav className="flex flex-1 items-center gap-1 overflow-x-auto">
             {nav.map(({ to, label, icon: Icon }) => (
