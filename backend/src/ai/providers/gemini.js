@@ -5,7 +5,7 @@ export default class GeminiProvider extends AIProvider {
   static type = 'gemini';
   static label = 'Google Gemini (AI Studio)';
   static description = 'Gemini models via generativelanguage.googleapis.com. Get a key at aistudio.google.com.';
-  static defaultModels = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'];
+  static defaultModels = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
   static defaultBaseUrl = 'https://generativelanguage.googleapis.com/v1beta';
   static keyPlaceholder = 'AIza...';
 
@@ -18,6 +18,9 @@ export default class GeminiProvider extends AIProvider {
         ...(options.json ? { responseMimeType: 'application/json' } : {}),
       },
     };
+    // Gemini 3 models think by default, and thinking tokens count against maxOutputTokens:
+    // keep it low so the JSON answer (or the short test reply) is not cut off.
+    if (/^gemini-3/.test(this.model)) body.generationConfig.thinkingConfig = { thinkingLevel: 'low' };
     if (options.system) body.systemInstruction = { parts: [{ text: options.system }] };
 
     // Key sent as header (not query string) so it never ends up in URLs/logs.
