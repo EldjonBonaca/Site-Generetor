@@ -33,6 +33,10 @@ On first start the backend creates `backend/.env` with a random `ENCRYPTION_KEY`
 
 Rebuild the sample kit at any time with `npm run sample-kit`.
 
+### Deploy on a server
+
+See [DEPLOY.md](DEPLOY.md) (Hostinger VPS: Node + PM2 + nginx + HTTPS). It needs a VPS: the app keeps state in SQLite and `storage/`, so serverless hosts such as Vercel cannot run the backend.
+
 ### Other commands
 
 | Command | What it does |
@@ -51,6 +55,9 @@ Rebuild the sample kit at any time with `npm run sample-kit`.
 | Variable | Default | Description |
 |---|---|---|
 | `PORT` | `4000` | API port (the Vite dev server proxies `/api` to it) |
+| `HOST` | `127.0.0.1` | Interface to listen on. A non-local address requires `APP_PASSWORD` |
+| `TRUST_PROXY` | `0` | Number of reverse proxies in front of the app (`1` behind nginx) |
+| `APP_USER` / `APP_PASSWORD` | `admin` / empty | Login (HTTP Basic Auth) for the whole app. **Required on a server**; empty = no login |
 | `ENCRYPTION_KEY` | auto‑generated | 64 hex chars (32 bytes) used for AES‑256‑GCM encryption of API keys. **If you lose or change it, saved API keys can't be decrypted** (just enter them again). |
 | `STORAGE_DIR` | `../storage` | SQLite DB, uploaded images, kits and exports |
 | `MAX_IMAGE_MB` | `15` | Max size of each uploaded image |
@@ -287,7 +294,8 @@ Missing strings fall back to English. A partial Italian locale is included as an
   - Size limits apply to all uploads.
 - **Zip files**: protected against zip‑slip (absolute paths, `..`, drive letters) and zip bombs (entry count and total uncompressed size).
 - **AI HTML**: `<script>`, `<iframe>`, `on*` attributes and `javascript:` URLs are stripped from AI‑written HTML.
-- **Network**: the server listens on `127.0.0.1` only and refuses cross‑origin write requests.
+- **Network**: the server listens on `127.0.0.1` by default (`HOST`) and refuses cross‑origin write requests.
+- **Login**: with `APP_PASSWORD` set, the whole app (UI, API, images, downloads) requires HTTP Basic Auth; repeated failed logins from one IP are blocked for 15 minutes. Use it only over HTTPS.
 - **No third‑party calls**: the only external requests go to the AI provider you selected. Demo images referenced by a kit are never loaded by the UI.
 
 ---
@@ -316,7 +324,7 @@ Missing strings fall back to English. A partial Italian locale is included as an
 - **The plugin overwrites**: running it again replaces the content of the pages and articles it created (and of existing ones with the same slug), so edit the site in the generator and re-export rather than in WordPress, or stop running the plugin once you start editing in WordPress.
 - **Duplicate images (manual import only)**: Elementor's importer creates its own copy of each referenced image, so each image appears twice in the Media Library (see `INSTRUCTIONS.md`). The plugin does not have this problem.
 - **Restarts**: a generation interrupted by a server restart is marked as failed and must be started again.
-- **Single user**: local tool with no authentication.
+- **Single user**: one shared login (`APP_USER` / `APP_PASSWORD`), no user accounts.
 
 ## Possible future developments
 

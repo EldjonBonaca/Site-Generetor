@@ -9,6 +9,7 @@ import multer from 'multer';
 import { config } from './config.js';
 import { run } from './db/index.js';
 import { HttpError } from './lib/util.js';
+import { basicAuth } from './lib/auth.js';
 import projects from './routes/projects.js';
 import images from './routes/images.js';
 import kits from './routes/kits.js';
@@ -22,6 +23,12 @@ run("UPDATE generations SET status = 'failed', error = 'Interrupted (server rest
 
 const app = express();
 app.disable('x-powered-by');
+if (config.trustProxy) app.set('trust proxy', config.trustProxy);
+
+// Health check stays public (uptime monitors); everything else needs the login when APP_PASSWORD is set.
+app.get('/api/health', (req, res) => res.json({ ok: true }));
+if (config.appPassword) app.use(basicAuth({ user: config.appUser, password: config.appPassword }));
+
 app.use(express.json({ limit: '2mb' }));
 
 // Local tool: refuse cross-site requests from other origins (basic CSRF guard).
@@ -35,7 +42,6 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-app.get('/api/health', (req, res) => res.json({ ok: true }));
 for (const r of [projects, images, library, kits, providers, prompts, generations]) app.use('/api', r);
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
