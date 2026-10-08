@@ -133,35 +133,73 @@ function wrapper(elements, widget, seed) {
 /** Contact form widgets of the kit (Pro Form, MetForm, WPForms…): their forms do not exist on the new site. */
 const isFormWidget = (type) => /form/.test(type) && !/search|login|transform|platform/.test(type);
 
-/** Every page: kit form widgets -> the Contact Form 7 shortcode (created by the WordPress plugin). */
-function replaceForms(elements, shortcode) {
-  const walk = (e) => {
-    if (!e || typeof e !== 'object') return;
-    if (e.elType === 'widget' && isFormWidget(e.widgetType || '')) {
-      e.widgetType = 'shortcode';
-      e.settings = { shortcode };
+// MetForm field widgets (mf-text, mf-email…) only work inside a MetForm form: on a page they print raw code
+const isMetformField = (type) => /^mf-/.test(type);
+
+// Layout of the Contact Form 7 form inside kit designs (colors and the button follow the kit styles)
+const FORM_CSS = `<style>
+.esg-form .wpcf7-form{display:flex!important;flex-direction:column!important;gap:16px;width:100%}
+.esg-form .wpcf7-form>p,.esg-form .wpcf7-form>div:not(.screen-reader-response){width:100%!important;max-width:100%!important;margin:0!important;float:none!important}
+.esg-form .wpcf7-form label{display:block;width:100%;font-weight:600}
+.esg-form .wpcf7-form-control-wrap{display:block;margin-top:6px}
+.esg-form input:not([type=submit]):not([type=checkbox]):not([type=radio]),.esg-form textarea,.esg-form select{width:100%!important;max-width:100%!important;box-sizing:border-box;padding:14px 16px;border:1px solid #dcdfe4;border-radius:8px;background:#fff;font-size:15px}
+.esg-form textarea{min-height:150px;resize:vertical}
+.esg-form input[type=submit]{cursor:pointer;min-width:200px}
+.esg-form .wpcf7-response-output{margin:8px 0 0!important;border-radius:8px}
+</style>`;
+
+const formWidget = (shortcode, seed) => ({ id: newId(`${seed}:cf7`), elType: 'widget', widgetType: 'shortcode', settings: { shortcode, _css_classes: 'esg-form' }, elements: [] });
+const formCssWidget = (seed) => ({ id: newId(`${seed}:css`), elType: 'widget', widgetType: 'html', settings: { html: FORM_CSS }, elements: [] });
+
+/**
+ * Kit forms: the forms of the kit (Pro Form, MetForm, WPForms…) do not exist on the new site.
+ *  - pages: each one becomes the Contact Form 7 shortcode (created by the WordPress plugin), styled
+ *  - header / footer (newsletter boxes…): removed
+ *  - MetForm field widgets: removed; containers left empty are removed too
+ * Returns true when the document has a contact form.
+ */
+function cleanForms(elements, { shortcode, removeForms }) {
+  let hasForm = false;
+  const clean = (list) => {
+    for (let i = list.length - 1; i >= 0; i--) {
+      const e = list[i];
+      if (!e || typeof e !== 'object') continue;
+      const type = e.widgetType || '';
+      if (e.elType === 'widget' && (isMetformField(type) || (isFormWidget(type) && (removeForms || !shortcode)))) {
+        list.splice(i, 1);
+        continue;
+      }
+      if (e.elType === 'widget' && isFormWidget(type)) {
+        list.splice(i, 1, formWidget(shortcode, e.id || String(i)), formCssWidget(e.id || String(i)));
+        hasForm = true;
+        continue;
+      }
+      if (e.elType === 'widget' && type === 'shortcode' && /contact-form-7|form/i.test(e.settings?.shortcode || '') && shortcode && !removeForms) {
+        e.settings = { ...e.settings, shortcode, _css_classes: 'esg-form' };
+        list.splice(i + 1, 0, formCssWidget(e.id || String(i)));
+        hasForm = true;
+        continue;
+      }
+      const kids = e.elements;
+      if (Array.isArray(kids) && kids.length) {
+        clean(kids);
+        if (!kids.length && e.elType === 'container') list.splice(i, 1);
+      }
     }
-    (e.elements || []).forEach(walk);
   };
-  elements.forEach(walk);
+  clean(elements);
+  return hasForm;
 }
 
 function prepareContact(elements, { shortcode, mapEmbed, address }) {
-  let hasForm = false;
+  const hasForm = cleanForms(elements, { shortcode, removeForms: false });
   let hasMap = false;
   const walk = (e) => {
     if (!e || typeof e !== 'object') return;
     if (e.elType === 'widget') {
       const type = e.widgetType || '';
       const s = e.settings || {};
-      if (shortcode && isFormWidget(type)) {
-        e.widgetType = 'shortcode';
-        e.settings = { shortcode };
-        hasForm = true;
-      } else if (shortcode && type === 'shortcode' && /form/i.test(s.shortcode || '')) {
-        s.shortcode = shortcode;
-        hasForm = true;
-      } else if (type === 'google_maps') {
+      if (type === 'google_maps') {
         s.address = address;
         hasMap = true;
       } else if (type === 'html' && /google\.[a-z.]+\/maps|maps\.google/i.test(s.html || '')) {
@@ -173,7 +211,11 @@ function prepareContact(elements, { shortcode, mapEmbed, address }) {
   };
   elements.forEach(walk);
 
-  if (shortcode && !hasForm) elements.push(wrapper(elements, { id: newId('cf7'), elType: 'widget', widgetType: 'shortcode', settings: { shortcode }, elements: [] }, 'cf7'));
+  if (shortcode && !hasForm) {
+    const box = wrapper(elements, formWidget(shortcode, 'contact'), 'cf7');
+    (box.elements[0].elType === 'column' ? box.elements[0].elements : box.elements).push(formCssWidget('contact'));
+    elements.push(box);
+  }
   if (mapEmbed && address && !hasMap) elements.push(wrapper(elements, { id: newId('map'), elType: 'widget', widgetType: 'html', settings: { html: mapIframe(address) }, elements: [] }, 'map'));
 }
 
@@ -224,7 +266,7 @@ export function prepareDocument(doc, opts = {}) {
 
   // 3. Contact page
   if (opts.role === 'contact' && opts.contact) prepareContact(elements, opts.contact);
-  else if (opts.contact?.shortcode) replaceForms(elements, opts.contact.shortcode);
+  else cleanForms(elements, { shortcode: opts.contact?.shortcode, removeForms: ['header', 'footer'].includes(opts.role) });
 
   // 4. Gallery page: a gallery widget for all the photos
   if (opts.role === 'gallery' && opts.ensureGallery) ensureGalleryWidget(elements);

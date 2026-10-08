@@ -162,8 +162,21 @@ test('ElementsKit menu gets the site menu; "#" and empty button links become lin
 test('kit forms (MetForm, Pro Form) on any page become the Contact Form 7 shortcode', async () => {
   const { prepareDocument } = await import('../src/elementor/prepare.js');
   const shortcode = '[contact-form-7 id="INSERIRE_ID" title="Modulo di contatto"]';
-  const doc = { content: [sec('hero', w('heading', { title: 'Hi' })), sec('f', w('metform', { mf_form_id: 99 }), w('form', {}), w('search-form', {}))] };
+  const doc = {
+    content: [
+      sec('hero', w('heading', { title: 'Hi' })),
+      sec('f', w('metform', { mf_form_id: 99 }), w('form', {}), w('search-form', {})),
+      sec('mf', w('mf-text', { mf_input_label: 'Name' }), w('mf-email', {}), w('mf-button', {})),
+    ],
+  };
   const { doc: out } = prepareDocument(doc, { role: 'home', contact: { shortcode } });
-  assert.deepEqual(out.content[1].elements.map((e) => e.widgetType), ['shortcode', 'shortcode', 'search-form']);
-  assert.equal(out.content[1].elements[0].settings.shortcode, shortcode);
+  assert.deepEqual(out.content[1].elements.map((e) => e.widgetType), ['shortcode', 'html', 'shortcode', 'html', 'search-form']);
+  assert.deepEqual(out.content[1].elements[0].settings, { shortcode, _css_classes: 'esg-form' });
+  assert.match(out.content[1].elements[1].settings.html, /.esg-form .wpcf7-form{display:flex/);
+  assert.equal(out.content.length, 2, 'MetForm fields print raw code: removed, with their empty container');
+
+  // Header / footer: newsletter and other forms are removed, not turned into a contact form
+  const footer = { content: [sec('n', w('heading', { title: 'Newsletter' }), w('metform', {}))] };
+  const { doc: f2 } = prepareDocument(footer, { role: 'footer', contact: { shortcode } });
+  assert.deepEqual(f2.content[0].elements.map((e) => e.widgetType), ['heading']);
 });
