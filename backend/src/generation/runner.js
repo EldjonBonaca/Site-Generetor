@@ -14,7 +14,10 @@ import { sleep, stripHtml } from '../lib/util.js';
 
 const CHUNK_SIZE = 45; // max fields per AI call, keeps answers reliable on long pages
 const CONTENT_RETRIES = 2; // retries when the JSON is invalid/incomplete
-const TRANSPORT_RETRIES = 3; // retries on rate limit / timeouts / 5xx
+// Waits before each retry on rate limit / timeouts / 5xx. Free tiers (e.g. Gemini 503 "high demand")
+// can stay overloaded for minutes, so the last waits are long (about 5 minutes in total).
+const TRANSPORT_BACKOFF_MS = [5000, 15000, 30000, 60000, 90000, 120000];
+const TRANSPORT_RETRIES = TRANSPORT_BACKOFF_MS.length;
 const FATAL_CODES = new Set(['auth', 'not_found', 'bad_request']);
 
 const cancelled = new Set();
@@ -75,7 +78,7 @@ async function callWithRetry(provider, prompt, options, log) {
     } catch (err) {
       const retryable = err instanceof AIError && err.retryable;
       if (!retryable || attempt >= TRANSPORT_RETRIES) throw err;
-      const wait = err.retryAfterMs || [2000, 6000, 15000][attempt];
+      const wait = err.retryAfterMs || TRANSPORT_BACKOFF_MS[attempt];
       log('warn', `${err.message} Retrying in ${Math.round(wait / 1000)}s...`);
       await sleep(wait);
     }
