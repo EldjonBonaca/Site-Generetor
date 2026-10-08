@@ -80,7 +80,7 @@ router.patch('/projects/:id', (req, res) => {
     const s = req.body.settings;
     settings = {
       ...settings,
-      ...pick(s, ['subheaderPerPage', 'replaceAllEmails', 'replaceAllImages', 'mapEmbed', 'contactShortcode', 'menuName']),
+      ...pick(s, ['subheaderPerPage', 'replaceAllEmails', 'replaceAllImages', 'mapEmbed', 'contactShortcode', 'menuName', 'autoRemoveSections']),
       image: { ...(settings.image || {}), ...(s.image || {}) },
       demoValues: { ...(settings.demoValues || {}), ...(s.demoValues || {}) },
       generation: { ...(settings.generation || {}), ...(s.generation || {}) },

@@ -54,6 +54,7 @@ const UI = {
     cf7Created: 'Modulo di contatto "{title}" creato in Contact Form 7.',
     permalinks: 'Permalink impostati su "Nome articolo".',
     globalStyles: 'Colori e font del Template Kit applicati al kit Elementor del sito.',
+    proRequired: 'Il Template Kit usa Elementor Pro (a pagamento): installalo e attivalo a mano, poi clicca "Aggiorna il sito". Senza Pro alcuni widget del kit non vengono mostrati.',
   }),
   en: (name) => ({
     menuTitle: `Site ${name}`,
@@ -91,6 +92,7 @@ const UI = {
     cf7Created: 'Contact form "{title}" created in Contact Form 7.',
     permalinks: 'Permalinks set to "Post name".',
     globalStyles: 'Colors and fonts of the template kit applied to the Elementor site kit.',
+    proRequired: 'The template kit uses Elementor Pro (paid): install and activate it by hand, then click "Update the website". Without Pro some widgets of the kit are not shown.',
   }),
 };
 
@@ -122,7 +124,7 @@ function contactFormInfo(ctx) {
  *   images: [{ file, alt, photo, logo }], imagesDir, category, globalStyles
  * @returns {{ fileName: string, buffer: Buffer }}
  */
-export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, category, globalStyles, replaceGlobalStyles = false }) {
+export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, category, globalStyles, replaceGlobalStyles = false, kitPlugins = [] }) {
   const { project } = ctx;
   const slug = pluginSlug(project);
   const hash = crypto.createHash('md5').update(`${project.id}:${slug}`).digest('hex').slice(0, 8);
@@ -162,6 +164,7 @@ export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, c
     templates: templates.map((t) => ({ key: t.key, role: t.role, title: t.title, type: t.type, elementor: addDoc(t.key, t.doc) })),
     globalStyles: globalStyles || null,
     replaceGlobalStyles,
+    kitPlugins,
   };
   add('data/site.json', JSON.stringify(site, null, 1));
 

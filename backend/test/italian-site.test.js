@@ -43,6 +43,7 @@ const png = (color) => sharp({ create: { width: 800, height: 500, channels: 3, b
 
 test('Italian full site: articles, gallery, contact form, menu, final checks', async () => {
   const p = await api('POST', '/projects', { site_name: 'Edil Bianchi' });
+  await api('PATCH', `/projects/${p.id}`, { settings: { autoRemoveSections: false } });
   assert.equal(p.language, 'it', 'new projects default to Italian');
   const pid = p.id;
   await api('PATCH', `/projects/${pid}`, {

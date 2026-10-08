@@ -50,7 +50,7 @@ function isCard(el) {
 }
 
 /** Groups of sibling cards in document order: [{ parent, holder }] (holder = array containing parent). */
-function findCardGroups(elements) {
+export function findCardGroups(elements) {
   const groups = [];
   const walk = (el, holder) => {
     if (!el || typeof el !== 'object') return;

@@ -4,7 +4,8 @@
 import path from 'node:path';
 import { get, all, parseJson } from '../db/index.js';
 import { config } from '../config.js';
-import { analyzeDocument, defaultSlotRoles, looksLikePhone, getAtPath, EMAIL_IN_TEXT } from '../elementor/analyze.js';
+import { analyzeDocument, defaultSlotRoles, looksLikePhone, getAtPath, getRoot, EMAIL_IN_TEXT } from '../elementor/analyze.js';
+import { autoRemovedSections, sectionKind } from '../elementor/sections.js';
 import { buildLayoutDoc, isBuiltinTemplate, BUILTIN_PREFIX, BUILTIN_ROLES } from '../elementor/layout.js';
 import { prepareDocument } from '../elementor/prepare.js';
 import { loadTemplate } from '../elementor/kit.js';
@@ -46,6 +47,7 @@ export function defaultSettings(settings = {}) {
     menuName: '',
     layout: 'builtin', // 'builtin' = clean layout built by the generator, 'kit' = rewrite a Template Kit
     reviews: [], // [{ name, role, text }] real customer reviews (Home reviews section)
+    autoRemoveSections: true, // kit layout: keep only the planned sections of each page
     ...settings,
     design: { primaryColor: '', ...(settings.design || {}) }, // '' = color of the logo
     image: { seoRename: true, maxWidth: 1920, convertWebp: true, quality: 82, ...DEFAULT_CROP_SIZES, ...(settings.image || {}) },
@@ -84,7 +86,7 @@ export function mappingFor(ctx, templateId) {
   return {
     role: PAGE_ROLES.includes(role) ? role : 'ignore', // 'service' / 'other' pages of older projects are no longer generated
     slotOverrides: parseJson(m?.image_slots_json, {}),
-    options: { removedSections: [], ...parseJson(m?.options_json, {}) },
+    options: { removedSections: null, ...parseJson(m?.options_json, {}) }, // null = automatic (removedSectionsFor)
   };
 }
 
@@ -188,10 +190,11 @@ export function analyzePage(ctx, page) {
   if (isBuiltinTemplate(page.templateId)) return analyzeBuiltin(ctx, page);
   const raw = loadTemplate(ctx.kit.dir, page.templateId);
   if (!raw) throw new Error(`Template "${page.templateId}" cannot be read.`);
-  const { slotOverrides, options } = mappingFor(ctx, page.templateId);
+  const { slotOverrides } = mappingFor(ctx, page.templateId);
+  const removedSections = removedSectionsFor(ctx, page.templateId, page.role, raw);
   const { doc, meta, cardCount } = prepareDocument(raw, {
     role: page.role,
-    removedSections: options.removedSections,
+    removedSections,
     serviceCount: ctx.services.length,
     ensureGallery: galleryPool(ctx.images).length > 0,
     contact: { shortcode: ctx.settings.contactShortcode, mapEmbed: ctx.settings.mapEmbed, address: oneLine(ctx.project.address) },
@@ -200,7 +203,58 @@ export function analyzePage(ctx, page) {
   const heroName = page.role === 'home' ? 'hero' : ['header', 'footer', 'single_post'].includes(page.role) ? null : 'intro';
   const analysis = analyzeDocument(doc, { prefix: page.prefix, heroName, meta });
   const slotRoles = { ...defaultSlotRoles(analysis.slots, page.role), ...slotOverrides };
+  presetReviews(ctx, doc, analysis.fields);
   return { doc, ...analysis, slotRoles, cardCount };
+}
+
+const hasReviews = (ctx) => (ctx.settings.reviews || []).some((r) => String(r?.text || '').trim());
+
+/**
+ * Sections removed from a kit template: the ones chosen in the Layout step, or (until the user
+ * changes them) the automatic choice: only the planned sections of the page are kept.
+ */
+export function removedSectionsFor(ctx, templateId, role, raw) {
+  const { options } = mappingFor(ctx, templateId);
+  if (Array.isArray(options.removedSections)) return options.removedSections;
+  if (!ctx.settings.autoRemoveSections || !raw) return [];
+  return autoRemovedSections(raw, role, { hasReviews: hasReviews(ctx) });
+}
+
+const REVIEW_NAME = /(^|_)(name|author|client)(_|$)|client_?name|author_?name|reviewer/i;
+const REVIEW_ROLE = /job|designation|position|role|company|occupation|profession/i;
+const REVIEW_TEXT = /content|review|testimonial|description|desc|text|editor|quote|comment|message/i;
+
+/**
+ * Review sections of a kit keep only real reviews: their names / texts are filled with the
+ * reviews entered in Site data (in order, repeated if the kit has more items), never by the AI.
+ * Without reviews they are emptied (the section is removed automatically anyway).
+ */
+function presetReviews(ctx, doc, fields) {
+  const reviews = (ctx.settings.reviews || []).filter((r) => String(r?.text || '').trim());
+  const kinds = getRoot(doc).elements.map((el, i) => sectionKind(el, i));
+  const groups = new Map();
+  for (const f of fields) {
+    if (kinds[f.section] !== 'testimonials' || f.format === 'link') continue;
+    const at = f.path.lastIndexOf('settings');
+    const repeaterItem = typeof f.path[at + 2] === 'number';
+    // Review items: testimonial widgets or repeater items (titles / intros of the section stay AI texts)
+    if (!repeaterItem && !/testimonial|review/.test(f.widget || '')) continue;
+    const key = f.path.slice(0, repeaterItem ? at + 3 : at + 1).join('.');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(f);
+  }
+  let n = 0;
+  for (const group of groups.values()) {
+    const kindOf = (f) => (REVIEW_NAME.test(f.key) ? 'name' : REVIEW_ROLE.test(f.key) ? 'role' : REVIEW_TEXT.test(f.key) || stripHtml(f.original).length > 60 ? 'text' : null);
+    const parts = group.map((f) => [f, kindOf(f)]);
+    if (!parts.some(([, k]) => k === 'name' || k === 'text')) continue;
+    const r = reviews.length ? reviews[n++ % reviews.length] : { name: '', role: '', text: '' };
+    for (const [f, k] of parts) {
+      if (!k) continue;
+      const value = String(r[k] || '').trim();
+      f.preset = f.format === 'html' && value ? `<p>${value.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p>` : value;
+    }
+  }
 }
 
 /**
@@ -248,6 +302,7 @@ const keepWrapper = (original, plain, value) => (original.includes(plain) && pla
  */
 export function classifyField(field, ctx, replacements, page = null, state = {}) {
   const { project } = ctx;
+  if (field.preset !== undefined) return { source: 'auto', value: field.preset };
   const service = field.card != null ? ctx.services[field.card] : null;
 
   if (field.format === 'link') {

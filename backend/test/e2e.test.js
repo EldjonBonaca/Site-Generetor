@@ -47,6 +47,7 @@ const png = (color) => sharp({ create: { width: 2400, height: 1200, channels: 3,
 test('full generation flow (English, unmapped pages, WordPress plugin)', async () => {
   // 1. Project + site data
   const project = await api('POST', '/projects', { site_name: 'Rossi Idraulica' });
+  await api('PATCH', `/projects/${project.id}`, { settings: { autoRemoveSections: false } }); // sections chosen by hand in this test
   const pid = project.id;
   let p = await api('PATCH', `/projects/${pid}`, {
     phone: '+39 06 1234 5678',
@@ -314,6 +315,7 @@ test('website-kit format: only the site pages are kept in the kit manifest', asy
   assert.deepEqual(kit.templates.map((t) => t.suggestedRole).sort(), ['header', 'home', 'ignore']);
 
   const p = await api('POST', '/projects', { site_name: 'Kit Two' });
+  await api('PATCH', `/projects/${p.id}`, { settings: { autoRemoveSections: false } });
   const provider = await api('POST', '/providers', { type: 'mock' });
   await api('PATCH', `/projects/${p.id}`, { phone: '+1 212 555 0199', email: 'a@b.co', address: 'X', language: 'en', settings: { layout: 'kit', generation: { providerId: provider.id } } });
   for (const name of ['Alpha', 'Beta']) await api('POST', `/projects/${p.id}/services`, { name });

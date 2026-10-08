@@ -15,6 +15,7 @@ import { exportNames, galleryPool } from '../lib/images.js';
 import { loadContext, analyzePage, buildReplacements, mappingFor, siteLinks, fallbackLink, servicesCategory, oneLine, pageTitle, pageSlug, usesBuiltinLayout, PAGE_ROLES, SITE_PAGE_ROLES, DEFAULT_CROP_SIZES } from './plan.js';
 import { buildPostDoc, makeDesign, layoutGlobalStyles, isHexColor } from '../elementor/layout.js';
 import { logoColor } from '../lib/brand-color.js';
+import { kitPlugins } from '../elementor/sections.js';
 import { applyFieldValues, applyImages, replaceContacts, sanitizeHtml } from '../elementor/apply.js';
 import { isPersonSlot, EMAIL_IN_TEXT } from '../elementor/analyze.js';
 import { loadTemplate } from '../elementor/kit.js';
@@ -479,6 +480,8 @@ function pluginInput(ctx, pages, posts, exported, links, category, imagesDir) {
     // Built-in layout: the Elementor kit settings are replaced, not merged, so styles left by a
     // previous Template Kit run (fonts, line heights, widget spacing) do not leak into the pages
     replaceGlobalStyles: usesBuiltinLayout(ctx),
+    // Template kit: the plugins it needs (ElementsKit, MetForm…) are installed by the WordPress plugin
+    kitPlugins: usesBuiltinLayout(ctx) ? [] : kitPlugins(ctx.kit.manifest),
   };
 }
 

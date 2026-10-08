@@ -21,6 +21,23 @@ export const PAGE_ROLE_LABELS = {
   ignore: 'Ignore (not generated)',
 };
 
+const SECTION_KIND_LABELS = {
+  hero: 'Banner',
+  about: 'About',
+  services: 'Services',
+  gallery: 'Gallery',
+  testimonials: 'Reviews',
+  contact: 'Contact',
+  faq: 'FAQ',
+  team: 'Team',
+  pricing: 'Prices',
+  counters: 'Counters',
+  blog: 'Blog',
+  clients: 'Logos / partners',
+  newsletter: 'Newsletter',
+  generic: 'Other',
+};
+
 export const SLOT_ROLE_LABELS = {
   hero: 'Home hero image',
   subheader: 'Subheader image',
@@ -326,13 +343,25 @@ function TemplateRow({ kitId, tpl, pageRoles, slotRoles, onSave }) {
       )}
       {open === 'sections' && (
         <div className="mt-3 rounded-lg border border-slate-200 sm:ml-24">
-          <p className="border-b border-slate-100 px-3 py-2 text-xs text-slate-500">{t('Uncheck the sections that must not appear on the site.')}</p>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 text-xs text-slate-500">
+            <span>
+              {tpl.sections[0]?.auto
+                ? t('Chosen automatically: only the planned sections of this page are kept (FAQ, team, prices, counters, blog, logos… are removed). Check or uncheck to change.')
+                : t('Uncheck the sections that must not appear on the site.')}
+            </span>
+            {tpl.sections.length > 0 && !tpl.sections[0].auto && (
+              <Button size="sm" variant="ghost" onClick={() => onSave({ removed_sections: null })}>
+                {t('Automatic choice')}
+              </Button>
+            )}
+          </div>
           <ul className="divide-y divide-slate-100">
             {tpl.sections.map((s) => (
               <li key={s.id}>
                 <label className={cx('flex cursor-pointer items-center gap-3 px-3 py-2 text-sm', s.removed && 'bg-slate-50 text-slate-400')}>
                   <input type="checkbox" checked={!s.removed} onChange={() => toggleSection(s.id)} className="accent-brand-600" />
                   <span className="w-6 text-xs text-slate-400">#{s.index + 1}</span>
+                  {s.kind && <Badge color={s.removed ? 'gray' : 'blue'}>{t(SECTION_KIND_LABELS[s.kind] || s.kind)}</Badge>}
                   <span className={cx('min-w-0 flex-1 truncate', s.removed && 'line-through')}>{s.label}</span>
                   <span className="hidden truncate text-xs text-slate-400 md:inline">{s.widgets.join(', ')}</span>
                 </label>

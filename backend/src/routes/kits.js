@@ -9,7 +9,8 @@ import { badRequest, notFound } from '../lib/util.js';
 import { extractZipSafely, safeJoin } from '../lib/zip.js';
 import { readKit, loadTemplate } from '../elementor/kit.js';
 import { SLOT_ROLES, listSections } from '../elementor/analyze.js';
-import { loadContext, mappingFor, analyzePage, PAGE_ROLES } from '../generation/plan.js';
+import { loadContext, mappingFor, analyzePage, removedSectionsFor, PAGE_ROLES } from '../generation/plan.js';
+import { classifySections } from '../elementor/sections.js';
 import { touch } from './projects.js';
 
 const router = Router();
@@ -139,8 +140,11 @@ router.get('/projects/:id/kit-mapping', (req, res) => {
       slots = a.slots.map(({ id, kind, url, label, section, card }) => ({ id, kind, url, label, section, card }));
       slotRoles = a.slotRoles;
       cardCount = a.cardCount;
-      const removed = new Set(options.removedSections);
-      sections = listSections(loadTemplate(ctx.kit.dir, t.id)).map((sec) => ({ ...sec, removed: removed.has(sec.id) }));
+      const raw = loadTemplate(ctx.kit.dir, t.id);
+      const removed = new Set(removedSectionsFor(ctx, t.id, role, raw));
+      const kinds = new Map(classifySections(raw, role).map((s) => [s.id, s.kind]));
+      const auto = !Array.isArray(options.removedSections);
+      sections = listSections(raw).map((sec) => ({ ...sec, kind: kinds.get(sec.id), removed: removed.has(sec.id), auto }));
     }
     return { ...t, role, slots, slotRoles, sections, cardCount };
   });
@@ -161,6 +165,7 @@ router.put('/projects/:id/kit-mapping', (req, res) => {
   let overrides = current.slotOverrides;
   const options = { ...current.options };
   if (Array.isArray(req.body.removed_sections)) options.removedSections = req.body.removed_sections.map(String).slice(0, 500);
+  if (req.body.removed_sections === null) options.removedSections = null; // back to the automatic choice
   if (role !== current.role) overrides = {}; // slot defaults depend on the role
   if (req.body.image_slots && typeof req.body.image_slots === 'object') {
     for (const [slotId, slotRole] of Object.entries(req.body.image_slots)) {

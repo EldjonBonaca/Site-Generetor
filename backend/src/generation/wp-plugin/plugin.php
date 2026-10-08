@@ -324,13 +324,29 @@ function upgrader_error($result, $skin) {
 	return $errors->has_errors() ? $errors->get_error_message() : 'unknown error';
 }
 
-/** Install (from wordpress.org) and activate a plugin. */
+/** Main file ("folder/file.php") of an installed plugin, found by its folder; '' when not installed. */
+function plugin_file_for_slug($slug) {
+	if (function_exists('wp_clean_plugins_cache')) {
+		wp_clean_plugins_cache(false);
+	}
+	foreach (array_keys(get_plugins()) as $file) {
+		if (strpos($file, $slug . '/') === 0) {
+			return $file;
+		}
+	}
+	return '';
+}
+
+/** Install (from wordpress.org) and activate a plugin. Its 'file' may be '' (found after install). */
 function ensure_plugin(array $plugin, array &$messages) {
 	load_upgrader();
-	if (is_plugin_active($plugin['file'])) {
+	if (empty($plugin['file'])) {
+		$plugin['file'] = plugin_file_for_slug($plugin['slug']);
+	}
+	if ($plugin['file'] && is_plugin_active($plugin['file'])) {
 		return true;
 	}
-	if (!file_exists(WP_PLUGIN_DIR . '/' . $plugin['file'])) {
+	if (!$plugin['file'] || !file_exists(WP_PLUGIN_DIR . '/' . $plugin['file'])) {
 		if (!current_user_can('install_plugins')) {
 			$messages[] = array('level' => 'warning', 'text' => t('installFailed', array('name' => $plugin['name'], 'error' => 'permission denied')));
 			return false;
@@ -339,6 +355,13 @@ function ensure_plugin(array $plugin, array &$messages) {
 		$result = (new \Plugin_Upgrader($skin))->install('https://downloads.wordpress.org/plugin/' . $plugin['slug'] . '.latest-stable.zip');
 		if (is_wp_error($result) || !$result) {
 			$messages[] = array('level' => 'warning', 'text' => t('installFailed', array('name' => $plugin['name'], 'error' => upgrader_error($result, $skin))));
+			return false;
+		}
+		if (!$plugin['file'] || !file_exists(WP_PLUGIN_DIR . '/' . $plugin['file'])) {
+			$plugin['file'] = plugin_file_for_slug($plugin['slug']);
+		}
+		if (!$plugin['file']) {
+			$messages[] = array('level' => 'warning', 'text' => t('installFailed', array('name' => $plugin['name'], 'error' => 'plugin file not found')));
 			return false;
 		}
 	}
@@ -386,6 +409,18 @@ function setup_dependencies() {
 	}
 	if (!empty(data()['contactForm'])) {
 		ensure_plugin(CF7, $messages);
+	}
+	// Plugins required by the template kit (its widgets render nothing without them). Free ones
+	// come from wordpress.org; Elementor Pro and other paid plugins must be installed by hand.
+	$kit_plugins = isset(data()['kitPlugins']) ? data()['kitPlugins'] : array();
+	foreach ($kit_plugins as $plugin) {
+		if ($plugin['slug'] === 'elementor-pro') {
+			if (!defined('ELEMENTOR_PRO_VERSION')) {
+				$messages[] = array('level' => 'warning', 'text' => t('proRequired'));
+			}
+			continue;
+		}
+		ensure_plugin($plugin, $messages);
 	}
 	return array('done' => true, 'messages' => $messages);
 }
