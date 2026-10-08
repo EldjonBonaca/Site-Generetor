@@ -828,7 +828,7 @@ function import_content() {
 		$messages[] = array('level' => 'warning', 'text' => t('noPro'));
 	}
 
-	apply_global_styles($data['globalStyles'], $messages);
+	apply_global_styles($data['globalStyles'], !empty($data['replaceGlobalStyles']), $messages);
 
 	// Site settings: name, logo, static front page, "Post name" permalinks
 	update_option('blogname', $data['site']['name']);
@@ -872,14 +872,19 @@ function regenerate_theme_conditions(array &$messages) {
 	$messages[] = array('level' => 'warning', 'text' => t('conditions'));
 }
 
-/** Colors, fonts and other global settings of the template kit -> the active Elementor kit. */
-function apply_global_styles($styles, array &$messages) {
+/**
+ * Colors, fonts and other global settings -> the active Elementor kit. Template kit styles are
+ * merged; the built-in layout replaces them ($replace), so the leftovers of a template kit
+ * imported before (line heights, widget spacing, fonts) do not change its pages.
+ */
+function apply_global_styles($styles, $replace, array &$messages) {
 	$kit_id = (int) get_option('elementor_active_kit');
 	if (!$styles || !$kit_id || !get_post($kit_id)) {
 		return;
 	}
 	$current = get_post_meta($kit_id, '_elementor_page_settings', true);
-	update_post_meta($kit_id, '_elementor_page_settings', wp_slash(array_merge(is_array($current) ? $current : array(), $styles)));
+	$base = (!$replace && is_array($current)) ? $current : array();
+	update_post_meta($kit_id, '_elementor_page_settings', wp_slash(array_merge($base, $styles)));
 	delete_post_meta($kit_id, '_elementor_css');
 	$messages[] = array('level' => 'info', 'text' => t('globalStyles'));
 }

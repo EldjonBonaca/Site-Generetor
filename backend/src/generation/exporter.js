@@ -476,6 +476,9 @@ function pluginInput(ctx, pages, posts, exported, links, category, imagesDir) {
     imagesDir,
     category,
     globalStyles: kitGlobalStyles(ctx),
+    // Built-in layout: the Elementor kit settings are replaced, not merged, so styles left by a
+    // previous Template Kit run (fonts, line heights, widget spacing) do not leak into the pages
+    replaceGlobalStyles: usesBuiltinLayout(ctx),
   };
 }
 

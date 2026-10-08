@@ -161,7 +161,9 @@ test('built-in layout: clean pages, fixed links, reviews, logo color, Elementor 
   const header = JSON.stringify(doc('header'));
   assert.match(header, /"widgetType":"nav-menu"/);
   assert.match(header, /"menu":"menu-principale"/);
-  assert.match(header, new RegExp(`"url":"${baseUrl}logo\\.webp"`));
+  assert.match(header, /"widgetType":"theme-site-logo"/, 'WordPress site logo, changeable by the owner');
+  assert.match(header, /"align_items":"center"/, 'menu in the middle');
+  assert.match(header, /"_inline_size":22/, 'real column widths');
   const footer = JSON.stringify(doc('footer'));
   assert.match(footer, /"text":"Chi Siamo","selected_icon".*"url":"\/chi-siamo\/"/);
   assert.match(footer, new RegExp(`© ${new Date().getFullYear()} Salone Manuel\\. Tutti i diritti riservati\\.`));
@@ -177,6 +179,7 @@ test('built-in layout: clean pages, fixed links, reviews, logo color, Elementor 
   assert.equal(widgets(post.content[0])[0].settings.title, services[0].name);
   assert.ok(widgets(post.content[1])[0].settings.editor.replace(/<[^>]+>/g, '').length >= 300);
   assert.equal(site.globalStyles.system_colors[0].color, '#c0392b');
+  assert.equal(site.replaceGlobalStyles, true, 'old template kit styles are replaced');
   const php = plugin.readAsText('salone-manuel-site/salone-manuel-site.php');
   assert.match(php, /'comment_status' => 'closed'/);
 });

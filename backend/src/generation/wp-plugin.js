@@ -122,7 +122,7 @@ function contactFormInfo(ctx) {
  *   images: [{ file, alt, photo, logo }], imagesDir, category, globalStyles
  * @returns {{ fileName: string, buffer: Buffer }}
  */
-export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, category, globalStyles }) {
+export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, category, globalStyles, replaceGlobalStyles = false }) {
   const { project } = ctx;
   const slug = pluginSlug(project);
   const hash = crypto.createHash('md5').update(`${project.id}:${slug}`).digest('hex').slice(0, 8);
@@ -161,6 +161,7 @@ export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, c
     posts: posts.map(({ doc, ...p }) => ({ ...p, elementor: addDoc(p.key, doc) })),
     templates: templates.map((t) => ({ key: t.key, role: t.role, title: t.title, type: t.type, elementor: addDoc(t.key, t.doc) })),
     globalStyles: globalStyles || null,
+    replaceGlobalStyles,
   };
   add('data/site.json', JSON.stringify(site, null, 1));
 

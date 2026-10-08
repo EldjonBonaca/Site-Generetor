@@ -311,7 +311,7 @@ export function checkReadiness(ctx) {
   }
 
   if (usesBuiltinLayout(ctx)) {
-    if (!byRole('logo').length) add('images', 'warning', 'Logo is missing: the header and footer show the site name instead, and the default color is used.');
+    if (!byRole('logo').length) add('images', 'warning', 'Logo is missing: set it later in WordPress (Appearance → Customize → Site Identity → Logo). The footer shows the site name and the default color is used.');
   } else if (!ctx.kit) add('kit', 'error', 'Select or upload an Elementor Template Kit, or use the clean built-in layout.');
   else {
     const pages = buildPages(ctx);

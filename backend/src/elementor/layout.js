@@ -121,7 +121,9 @@ function makeKit(b, design) {
   const section = (settings, columns) =>
     el('section', { gap: 'wide', content_width: px(1180), layout: 'boxed', content_position: 'middle', ...settings }, columns);
   const innerSection = (columns, settings = {}) => ({ ...el('section', { gap: 'wide', ...settings }, columns), isInner: true });
-  const column = (size, widgets, settings = {}) => el('column', { _column_size: size, _inline_size: null, ...settings }, widgets);
+  // _inline_size sets the real width: Elementor only has CSS classes for some sizes (20, 25, 33, 50…),
+  // so a 24% or 58% column without it would shrink to its content.
+  const column = (size, widgets, settings = {}) => el('column', { _column_size: size, _inline_size: size < 100 ? size : null, ...settings }, widgets);
 
   const heading = (title, { tag = 'h2', size = 40, mobile = 28, color = design.heading, align, weight = 700, link, max = 70, ...opts } = {}) =>
     widget('heading', { title, header_size: tag, align, title_color: color, link, ...typo(size, weight, { family: HEADING_FONT, mobile, lineHeight: 1.2 }) }, { max, ...opts });
@@ -129,7 +131,7 @@ function makeKit(b, design) {
     widget('heading', { title, header_size: 'h6', align, title_color: color, ...typo(13, 600, { spacing: 2, transform: 'uppercase' }) }, { max: 40, ...opts });
   const text = (html, { color = design.text, align, size = 16, max = 220, ...opts } = {}) =>
     widget('text-editor', { editor: html, align, text_color: color, ...typo(size, 400, { lineHeight: 1.7 }) }, { max, ...opts });
-  const button = (label, url, { align, outline = false, ...opts } = {}) =>
+  const button = (label, url, { align, outline = false, small = false, ...opts } = {}) =>
     widget(
       'button',
       {
@@ -145,8 +147,8 @@ function makeKit(b, design) {
         border_width: outline ? box(2) : undefined,
         border_color: outline ? design.primary : undefined,
         border_radius: box(6),
-        text_padding: box(15, 32),
-        ...typo(15, 600),
+        text_padding: small ? box(10, 20) : box(12, 26),
+        ...typo(small ? 14 : 15, 600),
       },
       { max: 28, ...opts }
     );
@@ -183,6 +185,7 @@ function makeKit(b, design) {
         icon_typography_typography: 'custom',
         icon_typography_font_family: BODY_FONT,
         icon_typography_font_size: px(15),
+        icon_typography_line_height: { unit: 'em', size: 1.5 },
       },
       { fixed: true, ...opts }
     );
@@ -525,29 +528,32 @@ function contactDoc(ctx, k, b, design) {
 
 function headerDoc(ctx, k, b, design) {
   const s = siteData(ctx);
-  const brand = s.hasLogo
-    ? b.widget('image', { image: { url: PLACEHOLDER_IMAGE, id: '' }, image_size: 'medium', width: px(170), width_mobile: px(130), align: 'left', link_to: 'custom', link: { url: '/', is_external: '', nofollow: '' } }, { slot: 'logo' })
-    : k.heading(ctx.project.site_name, { tag: 'div', size: 24, mobile: 20, link: { url: '/', is_external: '', nofollow: '' }, fixed: true });
+  // Site logo widget: shows the WordPress logo (Appearance → Customize → Site Identity), which the
+  // plugin sets from the uploaded logo and the owner can change at any time. Without Elementor Pro
+  // the plugin converts it to the free Ultimate Addons "Site Logo".
+  const brand = b.widget('theme-site-logo', { width: px(170), width_mobile: px(130), align: 'left' }, { fixed: true });
   return [
     k.section(
       {
         gap: 'no',
+        layout: 'full_width',
         background_background: 'classic',
         background_color: '#ffffff',
-        padding: box(14, 20),
+        padding: box(12, 40),
+        padding_mobile: box(10, 16),
         box_shadow_box_shadow_type: 'yes',
         box_shadow_box_shadow: { horizontal: 0, vertical: 2, blur: 16, spread: 0, color: 'rgba(16,24,40,0.07)' },
         z_index: 20,
       },
       [
-        k.column(24, [brand], { _inline_size_mobile: 60, _inline_size_tablet: 40 }),
-        k.column(56, [
+        k.column(22, [brand], { _inline_size_mobile: 60, _inline_size_tablet: 40 }),
+        k.column(58, [
           b.widget(
             'nav-menu',
             {
               menu: ctx.menu.slug,
               layout: 'horizontal',
-              align_items: 'right',
+              align_items: 'center',
               pointer: 'underline',
               color_menu_item: design.heading,
               color_menu_item_hover: design.primary,
@@ -557,6 +563,7 @@ function headerDoc(ctx, k, b, design) {
               menu_typography_font_family: BODY_FONT,
               menu_typography_font_size: px(15),
               menu_typography_font_weight: '500',
+              menu_typography_line_height: { unit: 'em', size: 1.4 },
               dropdown: 'tablet',
               toggle_align: 'right',
               toggle_color: design.heading,
@@ -564,7 +571,7 @@ function headerDoc(ctx, k, b, design) {
             { fixed: true }
           ),
         ], { _inline_size_mobile: 40, _inline_size_tablet: 60 }),
-        k.column(20, [k.button(s.phone, `tel:${telHref(s.phone)}`, { align: 'right', fixed: true })], { hide_mobile: 'hidden-mobile', hide_tablet: 'hidden-tablet' }),
+        k.column(20, [k.button(s.phone, `tel:${telHref(s.phone)}`, { align: 'right', small: true, fixed: true })], { hide_mobile: 'hidden-mobile', hide_tablet: 'hidden-tablet' }),
       ]
     ),
   ];
@@ -649,7 +656,9 @@ export function buildPostDoc(ctx, { title, excerpt, content }) {
 
 /** Elementor kit settings for the built-in layout: the brand palette as global colors. */
 export function layoutGlobalStyles(design) {
+  const font = (_id, title, family, weight) => ({ _id, title, typography_typography: 'custom', typography_font_family: family, typography_font_weight: weight });
   return {
+    system_typography: [font('primary', 'Primary', HEADING_FONT, '700'), font('secondary', 'Secondary', HEADING_FONT, '500'), font('text', 'Text', BODY_FONT, '400'), font('accent', 'Accent', BODY_FONT, '600')],
     system_colors: [
       { _id: 'primary', title: 'Primary', color: design.primary },
       { _id: 'secondary', title: 'Secondary', color: design.dark },
