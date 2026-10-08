@@ -12,7 +12,9 @@ import { config } from '../config.js';
 import { AdmZip, addFolderToZip } from '../lib/zip.js';
 import { slugify, stripHtml } from '../lib/util.js';
 import { exportNames, galleryPool } from '../lib/images.js';
-import { loadContext, analyzePage, buildReplacements, mappingFor, siteLinks, fallbackLink, servicesCategory, oneLine, pageTitle, pageSlug, PAGE_ROLES, SITE_PAGE_ROLES, DEFAULT_CROP_SIZES } from './plan.js';
+import { loadContext, analyzePage, buildReplacements, mappingFor, siteLinks, fallbackLink, servicesCategory, oneLine, pageTitle, pageSlug, usesBuiltinLayout, PAGE_ROLES, SITE_PAGE_ROLES, DEFAULT_CROP_SIZES } from './plan.js';
+import { buildPostDoc, makeDesign, layoutGlobalStyles, isHexColor } from '../elementor/layout.js';
+import { logoColor } from '../lib/brand-color.js';
 import { applyFieldValues, applyImages, replaceContacts, sanitizeHtml } from '../elementor/apply.js';
 import { isPersonSlot, EMAIL_IN_TEXT } from '../elementor/analyze.js';
 import { loadTemplate } from '../elementor/kit.js';
@@ -317,8 +319,8 @@ function runChecks(ctx, built, posts, links, baseUrl, T) {
   const allowed = new Set(links.map((l) => normalizeUrl(l.url)));
   const ignored = new Set(ctx.settings.demoValues.ignored || []);
   const demoValues = [
-    ...(ctx.kit.info.contacts?.emails || []),
-    ...(ctx.kit.info.contacts?.phones || []),
+    ...(ctx.kit?.info.contacts?.emails || []),
+    ...(ctx.kit?.info.contacts?.phones || []),
     ctx.settings.demoValues.brand,
     ctx.settings.demoValues.address,
   ].filter((v) => v && !ignored.has(v) && v !== ctx.project.email && v !== ctx.project.phone);
@@ -404,6 +406,7 @@ const SKIPPED_KIT_SETTINGS = new Set(['site_name', 'site_description', 'site_log
 
 /** Global colors / fonts of the kit (Template Kit "global styles" template or Website Kit site settings). */
 function kitGlobalStyles(ctx) {
+  if (usesBuiltinLayout(ctx)) return layoutGlobalStyles(ctx.design);
   const tpl = ctx.kit.info.templates.find((t) => t.valid && isGlobalTemplate(t));
   const doc = tpl ? loadTemplate(ctx.kit.dir, tpl.id) : null;
   let settings = doc?.page_settings || doc?.settings;
@@ -462,6 +465,8 @@ function pluginInput(ctx, pages, posts, exported, links, category, imagesDir) {
       excerpt: p.excerpt,
       image: p.image?.name || null,
       seo: { title: p.page.seo?.title || '', description: p.page.seo?.description || '' },
+      // Built-in layout: the article is an Elementor document (colored banner + text)
+      doc: usesBuiltinLayout(ctx) ? buildPostDoc(ctx, { title: p.title, excerpt: p.excerpt, content: sanitizeHtml(p.content) }) : null,
     })),
     // Uploaded images (photos + logo) and their hero / subheader crops (not shown in the gallery)
     images: [...exported].map(([key, e]) => {
@@ -483,7 +488,9 @@ export async function exportGeneration(generationId) {
   if (!gen) throw new Error('Generation not found');
   const output = parseJson(gen.output_json, { pages: [] });
   const ctx = loadContext(gen.project_id);
-  if (!ctx.kit) throw new Error('The project has no kit selected anymore.');
+  const builtin = usesBuiltinLayout(ctx);
+  if (!builtin && !ctx.kit) throw new Error('The project has no kit selected anymore.');
+  if (builtin) ctx.design = makeDesign(await brandColor(ctx));
 
   // Pages whose service was deleted after the generation are skipped, and so are the service /
   // "other" pages of generations made by older versions (only the 5 site pages are kept).
@@ -512,7 +519,7 @@ export async function exportGeneration(generationId) {
   for (const b of built) {
     fs.writeFileSync(path.join(outRoot, 'templates', `${b.page.key}.json`), JSON.stringify(toImportable(b.doc, b.page), null, 1));
   }
-  fs.writeFileSync(path.join(outRoot, 'elementor-kit.zip'), buildKit(ctx, built, workDir));
+  if (!builtin) fs.writeFileSync(path.join(outRoot, 'elementor-kit.zip'), buildKit(ctx, built, workDir));
 
   // WordPress import file: pages (for slugs + menu), articles, category, featured images, menu
   const sitePages = pages.filter((p) => p.seo?.slug != null && p.role !== 'post');
@@ -554,6 +561,13 @@ export async function exportGeneration(generationId) {
 
   run(`UPDATE generations SET output_file = ?, updated_at = datetime('now') WHERE id = ?`, zipRel.replace(/\\/g, '/'), gen.id);
   return { file: zipRel, pages: built.length, posts: posts.length, images: exported.size, plugin: plugin.fileName, checks };
+}
+
+/** Brand color of the built-in layout: the one chosen in the Layout step, else the logo color. */
+export async function brandColor(ctx) {
+  if (isHexColor(ctx.settings.design?.primaryColor)) return ctx.settings.design.primaryColor;
+  const logo = ctx.images.find((i) => i.role === 'logo');
+  return logo ? await logoColor(path.join(config.storageDir, logo.file_path)) : null;
 }
 
 /** Path of the WordPress plugin zip of an export (null when not exported yet). */

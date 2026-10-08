@@ -6,6 +6,8 @@ import { all, get, run, tx, parseJson } from '../db/index.js';
 import { config } from '../config.js';
 import { badRequest, notFound, pick, slugify, LANGUAGES } from '../lib/util.js';
 import { loadContext, checkReadiness, defaultSettings } from '../generation/plan.js';
+import { brandColor } from '../generation/exporter.js';
+import { makeDesign, DEFAULT_PRIMARY } from '../elementor/layout.js';
 
 const router = Router();
 
@@ -85,6 +87,18 @@ router.patch('/projects/:id', (req, res) => {
     };
     if (typeof settings.contactShortcode === 'string') settings.contactShortcode = settings.contactShortcode.slice(0, 500);
     if (typeof settings.menuName === 'string') settings.menuName = settings.menuName.slice(0, 100);
+    if (s.layout === 'builtin' || s.layout === 'kit') settings.layout = s.layout;
+    if (s.design && typeof s.design === 'object') {
+      const color = String(s.design.primaryColor ?? '');
+      settings.design = { ...(settings.design || {}), primaryColor: /^#[0-9a-f]{6}$/i.test(color) ? color : '' };
+    }
+    if (Array.isArray(s.reviews)) {
+      const str = (v, max) => String(v ?? '').slice(0, max);
+      settings.reviews = s.reviews
+        .filter((r) => r && typeof r === 'object')
+        .slice(0, 9)
+        .map((r) => ({ name: str(r.name, 80), role: str(r.role, 80), text: str(r.text, 600) }));
+    }
   }
 
   const sets = Object.keys(data).map((k) => `${k} = ?`);
@@ -150,6 +164,14 @@ router.get('/projects/:id/readiness', (req, res) => {
   const ctx = loadContext(req.params.id);
   if (!ctx) throw notFound('Project');
   res.json(checkReadiness(ctx));
+});
+
+/** Brand color of the built-in layout: { logo: color detected in the logo, effective: palette primary }. */
+router.get('/projects/:id/brand-color', async (req, res) => {
+  const ctx = loadContext(req.params.id);
+  if (!ctx) throw notFound('Project');
+  const logo = await brandColor({ ...ctx, settings: { ...ctx.settings, design: {} } });
+  res.json({ logo, effective: makeDesign(await brandColor(ctx)).primary, defaultColor: DEFAULT_PRIMARY });
 });
 
 router.get('/languages', (req, res) => res.json(LANGUAGES));

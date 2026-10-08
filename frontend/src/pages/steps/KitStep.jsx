@@ -90,12 +90,27 @@ export default function KitStep({ project, reload }) {
   }
 
   const showPicker = !mapping.kit || changing;
+  const builtin = project.settings?.layout !== 'kit';
+  const setLayout = async (layout) => {
+    try {
+      await api.patch(`/projects/${project.id}`, { settings: { layout } });
+      await reload();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
 
   return (
     <>
       <StepIssues project={project} step="kit" t={t} />
+      <LayoutChoice builtin={builtin} onChange={setLayout} />
 
-      {showPicker ? (
+      {builtin ? (
+        <div className="space-y-6">
+          <BrandColorCard project={project} reload={reload} />
+          <SiteStructureCard project={project} reload={reload} />
+        </div>
+      ) : showPicker ? (
         <Card
           title={t('Choose an Elementor Template Kit')}
           description={t('Kits are saved in the library and can be reused by other projects. The original kit is never modified.')}
@@ -157,6 +172,100 @@ export default function KitStep({ project, reload }) {
         </div>
       )}
     </>
+  );
+}
+
+const LAYOUT_OPTIONS = [
+  {
+    value: 'builtin',
+    title: 'Clean built-in layout (recommended)',
+    description: 'Fixed, clean sections built by the generator. Home: banner, about, services, photo carousel, reviews. About: text with photos. Services: one card per service. Gallery: all photos. Contact: details, styled form, map. Service articles: colored banner + text, no comments.',
+  },
+  { value: 'kit', title: 'Elementor Template Kit', description: 'Rewrite the texts and images of a kit you upload. The kit design is kept, but demo sections must be removed by hand.' },
+];
+
+function LayoutChoice({ builtin, onChange }) {
+  const { t } = useT();
+  const current = builtin ? 'builtin' : 'kit';
+  return (
+    <Card title={t('Layout')} description={t('How the pages of the site are built.')} className="mb-6">
+      <div className="grid gap-3 md:grid-cols-2">
+        {LAYOUT_OPTIONS.map((o) => (
+          <label
+            key={o.value}
+            className={cx('flex cursor-pointer gap-3 rounded-lg border p-4', current === o.value ? 'border-brand-400 bg-brand-50/60 ring-1 ring-brand-300' : 'border-slate-200 hover:border-slate-300')}
+          >
+            <input type="radio" name="layout" className="mt-1" checked={current === o.value} onChange={() => onChange(o.value)} />
+            <span>
+              <span className="block text-sm font-semibold text-slate-900">{t(o.title)}</span>
+              <span className="mt-1 block text-xs leading-relaxed text-slate-500">{t(o.description)}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function BrandColorCard({ project, reload }) {
+  const { t } = useT();
+  const toast = useToast();
+  const chosen = project.settings?.design?.primaryColor || '';
+  const [info, setInfo] = useState(null);
+  const [value, setValue] = useState(chosen);
+
+  useEffect(() => {
+    api.get(`/projects/${project.id}/brand-color`).then(setInfo).catch(() => {});
+  }, [project.id, chosen]);
+
+  const save = async (primaryColor) => {
+    try {
+      await api.patch(`/projects/${project.id}`, { settings: { design: { primaryColor } } });
+      setValue(primaryColor);
+      await reload();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+  const { schedule, status } = useAutosave((patch) => save(patch.primaryColor));
+  const swatch = (color) => <span className="inline-block size-5 rounded ring-1 ring-black/10 align-middle" style={{ background: color }} />;
+
+  return (
+    <Card title={t('Brand color')} description={t('Used for buttons, banners, the service article banners and the footer.')} actions={<SaveStatus status={status} t={t} />}>
+      <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
+        <input
+          type="color"
+          aria-label={t('Brand color')}
+          value={value || info?.effective || '#1f4e79'}
+          onChange={(e) => {
+            setValue(e.target.value);
+            schedule({ primaryColor: e.target.value });
+          }}
+          className="h-10 w-16 cursor-pointer rounded border border-slate-200 bg-white p-1"
+        />
+        {value ? (
+          <>
+            <span>
+              {t('Custom color')} {swatch(value)} <code>{value}</code>
+            </span>
+            <Button size="sm" onClick={() => save('')}>
+              {t('Use the logo color')}
+            </Button>
+          </>
+        ) : info?.logo ? (
+          <span>
+            {t('Color taken from the logo')} {swatch(info.logo)} <code>{info.logo}</code>
+          </span>
+        ) : (
+          <span>{t('No logo color found: a default blue is used. Upload a logo or pick a color.')}</span>
+        )}
+      </div>
+      {info?.effective && (value || info.logo) && info.effective !== (value || info.logo) && (
+        <p className="mt-3 text-xs text-slate-500">
+          {t('This color is too light for white text and buttons: the site uses a darker shade')} {swatch(info.effective)} <code>{info.effective}</code>.
+        </p>
+      )}
+    </Card>
   );
 }
 

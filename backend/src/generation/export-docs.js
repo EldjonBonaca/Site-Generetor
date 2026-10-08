@@ -4,7 +4,7 @@
  */
 
 const pluginsOf = (ctx) =>
-  (ctx.kit.manifest.required_plugins || ctx.kit.manifest.plugins || []).map((p) => (typeof p === 'string' ? p : p.name || p.slug || p.plugin)).filter(Boolean);
+  (ctx.settings.layout === 'kit' ? ctx.kit?.manifest?.required_plugins || ctx.kit?.manifest?.plugins || [] : []).map((p) => (typeof p === 'string' ? p : p.name || p.slug || p.plugin)).filter(Boolean);
 
 const ORDER = { header: 0, footer: 1, single_post: 2, home: 3, about: 4, services: 5, gallery: 6, contact: 7 };
 const sortedTemplates = (built) => [...built].sort((a, b) => (ORDER[a.page.role] ?? 9) - (ORDER[b.page.role] ?? 9));
@@ -143,10 +143,10 @@ La mappa Google è già impostata con l'indirizzo: ${ctx.project.address.replace
 - **Controlli**: leggi \`CONTROLLI.md\` e verifica il layout su desktop, tablet e mobile.
 - Tutti i testi generati sono in \`content.md\`.
 
-## Alternativa: importare il kit completo
+${ctx.settings.layout === 'kit' ? `## Alternativa: importare il kit completo
 
 \`elementor-kit.zip\` contiene il Template Kit con i tuoi contenuti (stesso formato del kit originale): si importa con il plugin *Template Kit – Import* / Envato Elements${ctx.kit.format === 'website-kit' ? ' oppure da Elementor → Strumenti → Importa kit' : ''}. Gli articoli dei servizi vanno comunque importati con \`wordpress-import.xml\`.
-
+` : ''}
 ## Dati di contatto usati
 
 - Nome: ${ctx.project.site_name}
@@ -279,10 +279,10 @@ Create the form (**Contact → Add New**), copy its shortcode, then edit **${con
 - \`seo.csv\`: title, meta description and slug of every page and article.
 - Read \`CHECKS.md\` and check the layout on desktop, tablet and mobile. All texts are in \`content.md\`.
 
-## Alternative: import the whole kit
+${ctx.settings.layout === 'kit' ? `## Alternative: import the whole kit
 
 \`elementor-kit.zip\` contains the kit with your content in the original format (Template Kit – Import / Envato Elements${ctx.kit.format === 'website-kit' ? ', or Elementor → Tools → Import Kit' : ''}). Articles are still imported with \`wordpress-import.xml\`.
-`;
+` : ''}`;
   },
 };
 

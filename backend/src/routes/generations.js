@@ -5,7 +5,7 @@ import { Router } from 'express';
 import { all, get, run, parseJson } from '../db/index.js';
 import { config } from '../config.js';
 import { badRequest, notFound, HttpError, slugify } from '../lib/util.js';
-import { loadContext, checkReadiness, siteLinks } from '../generation/plan.js';
+import { loadContext, checkReadiness, siteLinks, buildPages } from '../generation/plan.js';
 import { initPages, runGeneration, regenerateField, cancelGeneration, isRunning } from '../generation/runner.js';
 import { SITE_PROMPT } from '../generation/site-prompt.js';
 import { exportGeneration, pluginFile } from '../generation/exporter.js';
@@ -46,7 +46,7 @@ router.get('/projects/:id/plan', (req, res) => {
   const ctx = loadContext(req.params.id);
   if (!ctx) throw notFound('Project');
   const readiness = checkReadiness(ctx);
-  if (!ctx.kit) return res.json({ pages: [], estimatedTokens: 0, readiness });
+  if (!buildPages(ctx).length) return res.json({ pages: [], estimatedTokens: 0, readiness });
   const links = siteLinks(ctx);
   let total = 0;
   const pages = initPages(ctx).map((p) => {

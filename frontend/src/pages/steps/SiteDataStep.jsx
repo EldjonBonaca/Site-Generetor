@@ -3,7 +3,8 @@ import { api } from '../../api.js';
 import { useT } from '../../i18n/index.jsx';
 import { useAutosave } from '../../hooks/useAutosave.js';
 import { useToast } from '../../components/Toast.jsx';
-import { Card, Field, Input, SaveStatus, Select, Textarea } from '../../components/ui.jsx';
+import { Plus, Trash2 } from 'lucide-react';
+import { Button, Card, Field, Input, SaveStatus, Select, Textarea } from '../../components/ui.jsx';
 import { StepIssues } from '../../components/StepIssues.jsx';
 
 export const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v || '').trim());
@@ -96,6 +97,56 @@ export default function SiteDataStep({ project, setProject }) {
           </Field>
         </div>
       </Card>
+      <ReviewsCard project={project} setProject={setProject} />
     </>
+  );
+}
+
+const MAX_REVIEWS = 9;
+
+/** Real customer reviews shown on the Home page (built-in layout). The AI never writes reviews. */
+function ReviewsCard({ project, setProject }) {
+  const { t } = useT();
+  const toast = useToast();
+  const [reviews, setReviews] = useState(() => project.settings?.reviews || []);
+  const { schedule, status } = useAutosave(async ({ reviews: list }) => {
+    try {
+      setProject(await api.patch(`/projects/${project.id}`, { settings: { reviews: list } }));
+    } catch (e) {
+      toast(e.message, 'error');
+      throw e;
+    }
+  });
+  const update = (next) => {
+    setReviews(next);
+    schedule({ reviews: next });
+  };
+  const setAt = (i, key) => (e) => update(reviews.map((r, j) => (j === i ? { ...r, [key]: e.target.value } : r)));
+
+  return (
+    <Card
+      className="mt-6"
+      title={t('Customer reviews')}
+      description={t('Real reviews (e.g. copied from Google). They are shown on the Home page; with no reviews the section is not created. The AI never invents reviews.')}
+      actions={<SaveStatus status={status} t={t} />}
+    >
+      <div className="space-y-4">
+        {reviews.map((r, i) => (
+          <div key={i} className="grid gap-3 rounded-lg border border-slate-200 p-4 sm:grid-cols-[1fr_1fr_auto]">
+            <Input aria-label={t('Name')} value={r.name || ''} onChange={setAt(i, 'name')} placeholder={t('Name')} />
+            <Input aria-label={t('Detail (optional)')} value={r.role || ''} onChange={setAt(i, 'role')} placeholder={t('Detail (optional)')} />
+            <Button size="sm" icon={Trash2} onClick={() => update(reviews.filter((_, j) => j !== i))} aria-label={t('Remove')}>
+              {t('Remove')}
+            </Button>
+            <Textarea aria-label={t('Review')} rows={2} value={r.text || ''} onChange={setAt(i, 'text')} placeholder={t('Review')} className="sm:col-span-3" />
+          </div>
+        ))}
+        {reviews.length < MAX_REVIEWS && (
+          <Button size="sm" icon={Plus} onClick={() => update([...reviews, { name: '', role: '', text: '' }])}>
+            {t('Add review')}
+          </Button>
+        )}
+      </div>
+    </Card>
   );
 }

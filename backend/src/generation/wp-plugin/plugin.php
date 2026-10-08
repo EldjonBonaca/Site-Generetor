@@ -747,12 +747,15 @@ function import_content() {
 		$page_ids[$page['role']] = $id;
 	}
 
-	// Services: one article each, in the services category, with featured image. Without the
-	// Elementor Pro single post template the theme does not show it: it opens the article instead.
+	// Services: one article each, in the services category, with featured image and no comments.
+	// Built-in layout: the article is an Elementor document (colored banner + text). Otherwise,
+	// without the Elementor Pro single post template the theme does not show the featured image:
+	// it opens the article instead.
 	foreach ($data['posts'] as $post) {
 		$image = ($post['image'] && isset($images[$post['image']])) ? $images[$post['image']]['id'] : 0;
 		$content = replace_string($post['content'], $r);
-		if ($image && !defined('ELEMENTOR_PRO_VERSION')) {
+		$doc = element_doc(isset($post['elementor']) ? $post['elementor'] : null);
+		if ($image && !$doc && !defined('ELEMENTOR_PRO_VERSION')) {
 			$content = '<figure class="wp-block-image size-large">' . wp_get_attachment_image($image, 'large') . '</figure>' . "
 " . $content;
 		}
@@ -764,9 +767,17 @@ function import_content() {
 			'post_content' => $content,
 			'post_excerpt' => $post['excerpt'],
 			'post_category' => array($category),
+			'comment_status' => 'closed',
+			'ping_status' => 'closed',
 		));
 		if ($image) {
 			set_post_thumbnail($id, $image);
+		}
+		if ($doc) {
+			update_post_meta($id, '_wp_page_template', 'elementor_header_footer');
+			set_elementor($id, $doc, 'wp-post', $r);
+		} else {
+			clear_elementor($id);
 		}
 		set_seo($id, $post['seo']);
 	}

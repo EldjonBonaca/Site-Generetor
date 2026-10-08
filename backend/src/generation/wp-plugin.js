@@ -158,7 +158,7 @@ export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, c
     menu: ctx.menu,
     contactForm: contactFormInfo(ctx),
     pages: pages.map((p) => ({ key: p.key, role: p.role, title: p.title, slug: p.slug, seo: p.seo || null, elementor: addDoc(p.key, p.doc) })),
-    posts,
+    posts: posts.map(({ doc, ...p }) => ({ ...p, elementor: addDoc(p.key, doc) })),
     templates: templates.map((t) => ({ key: t.key, role: t.role, title: t.title, type: t.type, elementor: addDoc(t.key, t.doc) })),
     globalStyles: globalStyles || null,
   };

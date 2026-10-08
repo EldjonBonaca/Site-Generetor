@@ -67,6 +67,22 @@ See [DEPLOY.md](DEPLOY.md) (Hostinger VPS: Node + PM2 + nginx + HTTPS). It needs
 
 ---
 
+## Layouts
+
+The **Layout** step of a project chooses how the pages are built:
+
+- **Clean built-in layout** (default, no kit needed). The generator builds the pages itself ([`elementor/layout.js`](backend/src/elementor/layout.js)) with fixed sections and only free Elementor widgets:
+  - **Home**: hero banner, about section with a button to the About page, a card per service (name, description, button), photo carousel, customer reviews.
+  - **About**: banner, then two text + photo blocks (no team section).
+  - **Services**: banner, then one card per service (photo, name, text, button to its article).
+  - **Gallery**: banner, then an image gallery of every photo, with lightbox.
+  - **Contact**: banner, contact details, a Contact Form 7 form styled with CSS, and a Google map.
+  - **Service articles**: a banner in the brand color with the service name and summary, then the text. Comments are closed.
+  - **Header and footer**: logo, menu, phone; footer links, contacts and copyright.
+
+  The brand color comes from the logo (dominant color), or from the color picked in the Layout step. Links, contact details and service names are set by the generator; the AI writes only the texts. Reviews are entered in *Site data → Customer reviews* and are never written by the AI. Without reviews, the Home page has no reviews section.
+- **Elementor Template Kit**: rewrites the texts and images of an uploaded kit. The rest of this README describes this mode.
+
 ## Italian full-site prompt ("Sito completo Elementor (IT)")
 
 This is **the** prompt of the system ([`backend/src/db/prompts/sito-completo-it.md`](backend/src/db/prompts/sito-completo-it.md), loaded by [`generation/site-prompt.js`](backend/src/generation/site-prompt.js)). Every site uses it for every page, the header, the footer and the service articles. Prompts cannot be uploaded, edited or chosen: the **AI** step only shows it (and the final prompt of each page) read-only. The technical instructions appended to it make the AI write in the site language, so the Italian wording of the prompt does not force Italian texts on sites in other languages.

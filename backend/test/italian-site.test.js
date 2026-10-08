@@ -91,7 +91,7 @@ test('Italian full site: articles, gallery, contact form, menu, final checks', a
   // Provider + the Italian full-site prompt for every page type
   const provider = await api('POST', '/providers', { type: 'mock' });
   await api('PATCH', `/projects/${pid}`, {
-    settings: { generation: { providerId: provider.id }, demoValues: { brand: 'Plumbix', address: '123 Demo Street, Springfield' } },
+    settings: { layout: 'kit', generation: { providerId: provider.id }, demoValues: { brand: 'Plumbix', address: '123 Demo Street, Springfield' } },
   });
 
   // The built-in site prompt is used automatically

@@ -140,7 +140,7 @@ test('full generation flow (English, unmapped pages, WordPress plugin)', async (
   assert.ok(!JSON.stringify(await api('GET', '/providers')).includes('test-key'), 'key never returned');
 
   p = await api('PATCH', `/projects/${pid}`, {
-    settings: { generation: { providerId: provider.id }, demoValues: { brand: 'Plumbix', address: '123 Demo Street, Springfield' } },
+    settings: { layout: 'kit', generation: { providerId: provider.id }, demoValues: { brand: 'Plumbix', address: '123 Demo Street, Springfield' } },
   });
   assert.equal(p.readiness.ready, true, JSON.stringify(p.readiness.items));
   const kitWarnings = p.readiness.items.filter((i) => i.step === 'kit').map((i) => i.message);
@@ -315,7 +315,7 @@ test('website-kit format: only the site pages are kept in the kit manifest', asy
 
   const p = await api('POST', '/projects', { site_name: 'Kit Two' });
   const provider = await api('POST', '/providers', { type: 'mock' });
-  await api('PATCH', `/projects/${p.id}`, { phone: '+1 212 555 0199', email: 'a@b.co', address: 'X', language: 'en', settings: { generation: { providerId: provider.id } } });
+  await api('PATCH', `/projects/${p.id}`, { phone: '+1 212 555 0199', email: 'a@b.co', address: 'X', language: 'en', settings: { layout: 'kit', generation: { providerId: provider.id } } });
   for (const name of ['Alpha', 'Beta']) await api('POST', `/projects/${p.id}/services`, { name });
   await api('PUT', `/projects/${p.id}/kit`, { kit_id: kit.id });
 

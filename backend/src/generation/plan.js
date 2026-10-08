@@ -4,7 +4,8 @@
 import path from 'node:path';
 import { get, all, parseJson } from '../db/index.js';
 import { config } from '../config.js';
-import { analyzeDocument, defaultSlotRoles, looksLikePhone, EMAIL_IN_TEXT } from '../elementor/analyze.js';
+import { analyzeDocument, defaultSlotRoles, looksLikePhone, getAtPath, EMAIL_IN_TEXT } from '../elementor/analyze.js';
+import { buildLayoutDoc, isBuiltinTemplate, BUILTIN_PREFIX, BUILTIN_ROLES } from '../elementor/layout.js';
 import { prepareDocument } from '../elementor/prepare.js';
 import { loadTemplate } from '../elementor/kit.js';
 import { isValidEmail, isValidPhone, slugify, stripHtml, telHref } from '../lib/util.js';
@@ -43,7 +44,10 @@ export function defaultSettings(settings = {}) {
     contactShortcode: '[contact-form-7 id="INSERIRE_ID" title="Modulo di contatto"]',
     mapEmbed: true,
     menuName: '',
+    layout: 'builtin', // 'builtin' = clean layout built by the generator, 'kit' = rewrite a Template Kit
+    reviews: [], // [{ name, role, text }] real customer reviews (Home reviews section)
     ...settings,
+    design: { primaryColor: '', ...(settings.design || {}) }, // '' = color of the logo
     image: { seoRename: true, maxWidth: 1920, convertWebp: true, quality: 82, ...DEFAULT_CROP_SIZES, ...(settings.image || {}) },
     demoValues: { brand: '', address: '', ignored: [], custom: [], ...(settings.demoValues || {}) },
     generation: { providerId: null, ...(settings.generation || {}) },
@@ -70,7 +74,10 @@ export function loadContext(projectId) {
   return { project, settings, services, images, kit, mappings, menu: { name: menuName, slug: slugify(menuName) } };
 }
 
+export const usesBuiltinLayout = (ctx) => ctx.settings.layout !== 'kit';
+
 export function mappingFor(ctx, templateId) {
+  if (isBuiltinTemplate(templateId)) return { role: templateId.slice(BUILTIN_PREFIX.length), slotOverrides: {}, options: { removedSections: [] } };
   const m = ctx.mappings.find((x) => x.template_id === templateId);
   const t = ctx.kit?.info.templates.find((x) => x.id === templateId);
   const role = m?.page_role ?? t?.suggestedRole ?? 'ignore';
@@ -95,12 +102,14 @@ export const pageSlug = (lang, role) => (role === 'home' ? '' : slugify(pageTitl
  * header, footer, single post template) + one article per service.
  */
 export function buildPages(ctx) {
-  if (!ctx.kit) return [];
+  const builtin = usesBuiltinLayout(ctx);
+  if (!builtin && !ctx.kit) return [];
   const lang = ctx.project.language;
   const pages = [];
   const seen = new Set();
+  const templates = builtin ? BUILTIN_ROLES.map((role) => ({ id: BUILTIN_PREFIX + role, title: 'Built-in layout', valid: true })) : ctx.kit.info.templates;
 
-  for (const t of ctx.kit.info.templates) {
+  for (const t of templates) {
     if (!t.valid) continue;
     const { role } = mappingFor(ctx, t.id);
     if (role === 'ignore' || seen.has(role)) continue;
@@ -176,6 +185,7 @@ function postFields(ctx) {
 /** Load, prepare and analyse the template of a page. Returns a fresh document every call. */
 export function analyzePage(ctx, page) {
   if (!page.templateId) return { doc: null, fields: postFields(ctx), slots: [], slotRoles: {}, widgets: {}, contacts: { emails: [], phones: [] }, cardCount: 0 };
+  if (isBuiltinTemplate(page.templateId)) return analyzeBuiltin(ctx, page);
   const raw = loadTemplate(ctx.kit.dir, page.templateId);
   if (!raw) throw new Error(`Template "${page.templateId}" cannot be read.`);
   const { slotOverrides, options } = mappingFor(ctx, page.templateId);
@@ -191,6 +201,26 @@ export function analyzePage(ctx, page) {
   const analysis = analyzeDocument(doc, { prefix: page.prefix, heroName, meta });
   const slotRoles = { ...defaultSlotRoles(analysis.slots, page.role), ...slotOverrides };
   return { doc, ...analysis, slotRoles, cardCount };
+}
+
+/**
+ * Page of the built-in layout: its links and contact/structural texts are set by the generator,
+ * the AI only writes the remaining texts (with a hint and a length limit for each one).
+ */
+function analyzeBuiltin(ctx, page) {
+  const { doc, meta, fixed, hints, limits, slotRoles: byElement } = buildLayoutDoc(ctx, page.role);
+  const heroName = page.role === 'home' ? 'hero' : ['header', 'footer'].includes(page.role) ? null : 'intro';
+  const analysis = analyzeDocument(doc, { prefix: page.prefix, heroName, meta });
+  const elementOf = (path) => getAtPath(doc, path.slice(0, path.lastIndexOf('settings')));
+  const fields = [];
+  for (const f of analysis.fields) {
+    const id = elementOf(f.path)?.id;
+    if (f.format === 'link' || fixed.has(id)) continue;
+    fields.push({ ...f, hint: hints[id], maxLength: limits[id] || f.maxLength });
+  }
+  const slotRoles = {};
+  for (const slot of analysis.slots) slotRoles[slot.id] = byElement[slot.id.split(':')[0]] || 'gallery';
+  return { doc, ...analysis, fields, slotRoles, cardCount: ctx.services.length };
 }
 
 /** Demo value -> project value replacement pairs. */
@@ -280,7 +310,9 @@ export function checkReadiness(ctx) {
     }
   }
 
-  if (!ctx.kit) add('kit', 'error', 'Select or upload an Elementor Template Kit.');
+  if (usesBuiltinLayout(ctx)) {
+    if (!byRole('logo').length) add('images', 'warning', 'Logo is missing: the header and footer show the site name instead, and the default color is used.');
+  } else if (!ctx.kit) add('kit', 'error', 'Select or upload an Elementor Template Kit, or use the clean built-in layout.');
   else {
     const pages = buildPages(ctx);
     const roles = ctx.kit.info.templates.map((t) => mappingFor(ctx, t.id).role);

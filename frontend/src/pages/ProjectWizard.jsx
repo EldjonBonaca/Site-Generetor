@@ -21,7 +21,7 @@ export const STEPS = [
   { path: 'site', key: 'site', label: 'Site data', Component: SiteDataStep },
   { path: 'services', key: 'services', label: 'Services', Component: ServicesStep },
   { path: 'images', key: 'images', label: 'Images', Component: ImagesStep },
-  { path: 'kit', key: 'kit', label: 'Template Kit', Component: KitStep },
+  { path: 'kit', key: 'kit', label: 'Layout', Component: KitStep },
   { path: 'ai', key: 'ai', label: 'AI', Component: AiStep },
   { path: 'generate', key: 'generate', label: 'Generate & Preview', Component: GenerateStep },
   { path: 'download', key: 'download', label: 'Download', Component: DownloadStep },
