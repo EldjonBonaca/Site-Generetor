@@ -27,7 +27,12 @@ export function applyFieldValues(doc, fields, values) {
   for (const f of fields) {
     const v = values[f.id];
     if (typeof v !== 'string') continue;
-    if (f.format === 'link') setAtPath(doc, f.path, v.trim());
+    if (f.format === 'link') {
+      setAtPath(doc, f.path, v.trim());
+      // Mark it as an Elementor link so the WordPress plugin makes internal links absolute
+      const link = getAtPath(doc, f.path.slice(0, -1));
+      if (link && typeof link === 'object') link.is_external ??= '';
+    }
     else setAtPath(doc, f.path, f.format === 'html' ? sanitizeHtml(v) : v.replace(/<[^>]+>/g, ''));
   }
 }

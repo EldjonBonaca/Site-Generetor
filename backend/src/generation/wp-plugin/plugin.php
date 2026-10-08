@@ -558,7 +558,8 @@ function prepare_elementor($node, array $r) {
 			$node = free_widget($node);
 		}
 		if (preg_match('/nav-menu|mega-menu|navigation-menu/', $node['widgetType'])) {
-			$node['settings']['menu'] = $r['menu'];
+			// ElementsKit stores the menu slug in its own setting
+			$node['settings'][$node['widgetType'] === 'ekit-nav-menu' ? 'elementskit_nav_menu' : 'menu'] = $r['menu'];
 		}
 	}
 	$is_link = isset($node['url']) && (array_key_exists('is_external', $node) || array_key_exists('nofollow', $node));

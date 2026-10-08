@@ -133,3 +133,37 @@ test('kit project: sections removed automatically, review texts come from the re
   assert.deepEqual(site.kitPlugins, []);
   assert.match(zip.readAsText('studio-rossi-site/studio-rossi-site.php'), /function plugin_file_for_slug/);
 });
+
+test('ElementsKit menu gets the site menu; "#" and empty button links become link fields', async () => {
+  const { prepareDocument } = await import('../src/elementor/prepare.js');
+  const { analyzeDocument } = await import('../src/elementor/analyze.js');
+  const { applyFieldValues } = await import('../src/elementor/apply.js');
+  const doc = {
+    content: [
+      sec('h', w('ekit-nav-menu', { elementskit_nav_menu: 'demo-menu' })),
+      sec(
+        'b',
+        w('button', { text: 'Contact us', link: { url: '#' } }),
+        w('button', { text: 'Learn more', link: { url: '', is_external: '', nofollow: '' } }),
+        w('elementskit-button', { ekit_btn_text: 'Book', ekit_btn_url: { url: '#' } }),
+        w('image', { image: { url: 'https://d.test/x.jpg', id: 3 } })
+      ),
+    ],
+  };
+  const { doc: out, meta } = prepareDocument(doc, { role: 'header', menuSlug: 'menu-principale' });
+  assert.equal(out.content[0].elements[0].settings.elementskit_nav_menu, 'menu-principale');
+  const { fields } = analyzeDocument(out, { prefix: 'x', meta });
+  const links = fields.filter((f) => f.format === 'link');
+  assert.deepEqual(links.map((f) => f.key), ['link', 'link', 'ekit_btn_url'], 'image objects are not links');
+  applyFieldValues(out, links, Object.fromEntries(links.map((f) => [f.id, '/contatti/'])));
+  assert.deepEqual(out.content[1].elements[0].settings.link, { url: '/contatti/', is_external: '' });
+});
+
+test('kit forms (MetForm, Pro Form) on any page become the Contact Form 7 shortcode', async () => {
+  const { prepareDocument } = await import('../src/elementor/prepare.js');
+  const shortcode = '[contact-form-7 id="INSERIRE_ID" title="Modulo di contatto"]';
+  const doc = { content: [sec('hero', w('heading', { title: 'Hi' })), sec('f', w('metform', { mf_form_id: 99 }), w('form', {}), w('search-form', {}))] };
+  const { doc: out } = prepareDocument(doc, { role: 'home', contact: { shortcode } });
+  assert.deepEqual(out.content[1].elements.map((e) => e.widgetType), ['shortcode', 'shortcode', 'search-form']);
+  assert.equal(out.content[1].elements[0].settings.shortcode, shortcode);
+});

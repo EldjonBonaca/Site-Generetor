@@ -111,6 +111,9 @@ function adjustCards(elements, meta, needed, allowClone) {
   return cards;
 }
 
+/** Setting holding the menu slug: "menu" (Elementor Pro, Ultimate Addons), ElementsKit uses its own key. */
+export const menuSettingKey = (widgetType) => (widgetType === 'ekit-nav-menu' ? 'elementskit_nav_menu' : 'menu');
+
 const mapIframe = (address) =>
   `<iframe src="https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
 
@@ -127,6 +130,22 @@ function wrapper(elements, widget, seed) {
   };
 }
 
+/** Contact form widgets of the kit (Pro Form, MetForm, WPForms…): their forms do not exist on the new site. */
+const isFormWidget = (type) => /form/.test(type) && !/search|login|transform|platform/.test(type);
+
+/** Every page: kit form widgets -> the Contact Form 7 shortcode (created by the WordPress plugin). */
+function replaceForms(elements, shortcode) {
+  const walk = (e) => {
+    if (!e || typeof e !== 'object') return;
+    if (e.elType === 'widget' && isFormWidget(e.widgetType || '')) {
+      e.widgetType = 'shortcode';
+      e.settings = { shortcode };
+    }
+    (e.elements || []).forEach(walk);
+  };
+  elements.forEach(walk);
+}
+
 function prepareContact(elements, { shortcode, mapEmbed, address }) {
   let hasForm = false;
   let hasMap = false;
@@ -135,7 +154,7 @@ function prepareContact(elements, { shortcode, mapEmbed, address }) {
     if (e.elType === 'widget') {
       const type = e.widgetType || '';
       const s = e.settings || {};
-      if (shortcode && /form/.test(type) && !/search|login/.test(type)) {
+      if (shortcode && isFormWidget(type)) {
         e.widgetType = 'shortcode';
         e.settings = { shortcode };
         hasForm = true;
@@ -205,6 +224,7 @@ export function prepareDocument(doc, opts = {}) {
 
   // 3. Contact page
   if (opts.role === 'contact' && opts.contact) prepareContact(elements, opts.contact);
+  else if (opts.contact?.shortcode) replaceForms(elements, opts.contact.shortcode);
 
   // 4. Gallery page: a gallery widget for all the photos
   if (opts.role === 'gallery' && opts.ensureGallery) ensureGalleryWidget(elements);
@@ -213,7 +233,7 @@ export function prepareDocument(doc, opts = {}) {
   if (opts.menuSlug) {
     const walk = (e) => {
       if (!e || typeof e !== 'object') return;
-      if (e.elType === 'widget' && /nav-menu|mega-menu/.test(e.widgetType || '')) e.settings = { ...(e.settings || {}), menu: opts.menuSlug };
+      if (e.elType === 'widget' && /nav-menu|mega-menu/.test(e.widgetType || '')) e.settings = { ...(e.settings || {}), [menuSettingKey(e.widgetType)]: opts.menuSlug };
       (e.elements || []).forEach(walk);
     };
     elements.forEach(walk);

@@ -51,7 +51,7 @@ const KNOWN_REPEATER_KEYS = {
 
 /** Widgets whose strings are code/config, never copy. */
 const SKIP_WIDGETS = new Set([
-  'html', 'shortcode', 'nav-menu', 'theme-site-logo', 'site-logo', 'template', 'global',
+  'html', 'shortcode', 'nav-menu', 'ekit-nav-menu', 'theme-site-logo', 'site-logo', 'template', 'global',
   'sidebar', 'menu-anchor', 'google_maps', 'video', 'audio', 'spacer', 'code-highlight', 'lottie',
 ]);
 
@@ -146,8 +146,11 @@ const isDynamic = (settings, key) => Boolean(settings?.__dynamic__?.[key]);
 // Main analysis
 // ---------------------------------------------------------------------------
 
-const LINK_KEY = /(^|_)link$|^url$/;
-const isLinkValue = (v) => v && typeof v === 'object' && !Array.isArray(v) && typeof v.url === 'string' && ('is_external' in v || 'nofollow' in v);
+const LINK_KEY = /(^|_)(link|url)$/;
+const IMAGE_FILE = /\.(jpe?g|png|webp|gif|svg|avif)(\?|$)/i;
+// Elementor link controls save { url, is_external, nofollow }, but kits often keep only { url }
+const isLinkValue = (v) =>
+  v && typeof v === 'object' && !Array.isArray(v) && typeof v.url === 'string' && ('is_external' in v || 'nofollow' in v || (!('id' in v) && !IMAGE_FILE.test(v.url)));
 
 /**
  * Analyse a template document.
@@ -248,7 +251,8 @@ export function analyzeDocument(doc, { prefix = 'page', heroName = null, meta = 
       const maybeLink = (path, key, value, labelSuffix) => {
         if (!isLinkValue(value) || !LINK_KEY.test(key)) return;
         const url = value.url.trim();
-        if (!url || /^(tel:|mailto:)/i.test(url)) return;
+        // An empty button link renders as "#": it gets a page of the site too
+        if ((!url && !/button|btn/.test(widget || '')) || /^(tel:|mailto:)/i.test(url)) return;
         if (widget === 'image' && settings.link_to !== 'custom') return;
         addField([...path, 'url'], url, key, labelSuffix, 'link');
       };
