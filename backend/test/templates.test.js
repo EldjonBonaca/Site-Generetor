@@ -65,6 +65,10 @@ test('buildSite: every variant builds valid documents whose marks match the anal
     {},
     { layout: { header: 'topbar', hero: 'split', features: 'cards', cta: 'split', services: 'boxed', contact: 'stacked', footer: 'light', testimonials: 'minimal', gallery: '4' } },
     { layout: { header: 'centered', hero: 'left', cta: 'none' } },
+    // Every look and layout value of the design directions
+    { style: { theme: 'dark', buttons: 'square', cards: 'accent', titles: 'bar', align: 'left', scale: 'xl', images: 'square', titleCase: 'upper' }, layout: { header: 'bold', hero: 'bottom', about: 'wide', features: 'list', services: 'overlay', testimonials: 'band', footer: 'brand', divider: 'tilt' } },
+    { style: { theme: 'light', buttons: 'pill', cards: 'tinted', titles: 'plain', scale: 'large', images: 'framed' }, layout: { hero: 'card', about: 'image-right', features: 'cards', services: 'cards', testimonials: 'cards', footer: 'light', divider: 'waves' } },
+    { style: { theme: 'dark', cards: 'outline', titles: 'line', images: 'framed' }, layout: { header: 'topbar', hero: 'split', features: 'icons', services: 'boxed', contact: 'stacked', footer: 'dark', divider: 'none' } },
   ];
   for (const v of variants) {
     const spec = sanitizeSpec(v);
@@ -100,8 +104,9 @@ test('buildSite: structure required by the prompt', () => {
   const { docs } = buildSite(sanitizeSpec({ layout: { cta: 'none' } }), sampleSite(5));
   const json = (role) => JSON.stringify(docs[role].doc);
   const count = (role, re) => (json(role).match(re) || []).length;
-  assert.equal(count('home', /"widgetType":"image-box"/g), 3, 'home: 3 featured services');
-  assert.equal(count('services', /"widgetType":"image-box"/g), 5, 'services page: one card per service');
+  const serviceSlots = (role) => [...docs[role].marks.values()].filter((m) => m.slot === 'service_list').map((m) => m.service);
+  assert.deepEqual(serviceSlots('home'), [0, 1, 2], 'home: 3 featured services');
+  assert.deepEqual(serviceSlots('services'), [0, 1, 2, 3, 4], 'services page: one card per service');
   assert.equal(count('home', /"widgetType":"testimonial"/g), 3, '3 reviews');
   assert.equal(count('about', /"widgetType":"testimonial"/g), 3, 'the same 3 reviews on About');
   assert.equal(docs.home.doc.content.length, 5, 'hero, about, why us, services, reviews (no call to action)');
@@ -123,6 +128,21 @@ test('buildSite: structure required by the prompt', () => {
   const shares = (role) => [...docs[role].marks.values()].map((m) => m.share).filter(Boolean).sort();
   assert.equal(shares('home').length, 9);
   assert.deepEqual(shares('home'), shares('about'));
+  // Reviews without photos of the customers
+  assert.equal(count('home', /"testimonial_image":\{"url":"","id":""\}/g), 3);
+  // Every text widget has its text (an empty one would show the Elementor default "Lorem ipsum")
+  const TEXT_KEYS = { heading: ['title'], 'text-editor': ['editor'], button: ['text'], 'icon-box': ['title_text', 'description_text'], testimonial: ['testimonial_content', 'testimonial_name', 'testimonial_job'] };
+  const walk = (el, role) => {
+    for (const k of TEXT_KEYS[el.widgetType] || []) assert.ok(String(el.settings[k] || '').trim(), `${role}: ${el.widgetType}.${k} is empty`);
+    el.elements.forEach((e) => walk(e, role));
+  };
+  for (const [role, d] of Object.entries(docs)) d.doc.content.forEach((el) => walk(el, role));
+  const featureBoxes = JSON.parse(json('home')).content[2].elements[1].elements.map((e) => e.elements[0].settings);
+  assert.deepEqual(featureBoxes.map((s) => s.title_text), DEFAULT_SPEC.copy.features.map((f) => f.title), '"Why choose us": the 4 strengths of the template');
+  // About: subheader, a single "Chi siamo" section, why us, reviews
+  assert.equal(docs.about.doc.content.length, 4);
+  assert.match(json('about'), /"title":"Chi siamo"/);
+  assert.doesNotMatch(json('about'), /nostra storia|missione/i);
   // Without logo: the site name
   assert.match(JSON.stringify(buildSite(sanitizeSpec({}), { ...sampleSite(), hasLogo: false }).docs.header.doc), /"title":"Edil Test"/);
 });
@@ -133,7 +153,7 @@ test('template generation: prompt and offline demo provider', async () => {
   assert.match(prompt, /\| Categoria \| `Idraulici` \|/);
   assert.match(prompt, /\| Indicazioni di stile \| `colori freschi` \|/);
   assert.match(prompt, /OUTPUT FORMAT/);
-  assert.match(prompt, /Fonts: only from this list: Poppins/);
+  assert.doesNotMatch(prompt, /DESIGN DIRECTION/, 'no direction without a plan');
   assert.doesNotMatch(prompt, /\{\{[A-Z_]+\}\}/);
   const { spec, tokens } = await generateTemplateSpec(new MockProvider({}), { category });
   assert.ok(tokens > 0);
@@ -147,4 +167,66 @@ test('template generation: prompt and offline demo provider', async () => {
   assert.equal(calls, 2);
   const never = { generate: async () => ({ text: '{"hello": 1}', usage: {} }) };
   await assert.rejects(generateTemplateSpec(never, { category }), /did not return a usable template/);
+});
+
+test('siteColors keeps texts readable whatever colors the template has', async () => {
+  const { siteColors, contrast } = await import('../src/templates/spec.js');
+  const c = siteColors({ primary: '#7DD3FC', secondary: '#FDE047', accent: '#22C55E', heading: '#9CA3AF', text: '#D1D5DB', background: '#334155', dark: '#64748B' });
+  assert.ok(contrast(c.heading, '#FFFFFF') >= 7, 'titles on white');
+  assert.ok(contrast(c.text, '#FFFFFF') >= 4.5, 'text on white');
+  assert.ok(contrast(c.background, '#000000') >= 16, 'light background');
+  assert.ok(contrast(c.dark, '#FFFFFF') >= 11, 'white text on dark');
+  assert.ok(contrast(c.primaryText, '#FFFFFF') >= 4.5, 'primary as text on white');
+  assert.equal(c.onSecondary, c.dark, 'dark text on a light button');
+  assert.equal(c.primary, '#7DD3FC', 'the brand colors are not changed');
+  // Readable colors are kept as they are
+  const ok = DEFAULT_SPEC.style.colors;
+  const d = siteColors(ok);
+  for (const k of ['heading', 'text', 'background', 'dark']) assert.equal(d[k], ok[k]);
+  assert.equal(d.onPrimary, '#FFFFFF');
+});
+
+test('templates of the same category get really different designs', async () => {
+  const { DIRECTIONS, designPlan, pickDirection } = await import('../src/templates/directions.js');
+  const { similarColor, STYLE_OPTIONS, LAYOUTS } = await import('../src/templates/spec.js');
+  // Every direction is consistent with the allowed values
+  for (const d of DIRECTIONS) {
+    for (const [h, b] of d.fonts) assert.ok(FONTS.includes(h) && FONTS.includes(b), `${d.id}: fonts ${h} / ${b}`);
+    for (const [k, v] of Object.entries(d.style)) if (STYLE_OPTIONS[k]) for (const x of v) assert.ok(STYLE_OPTIONS[k].includes(x), `${d.id}: style.${k} = ${x}`);
+    for (const [k, v] of Object.entries(d.layout)) for (const x of v) assert.ok(LAYOUTS[k].includes(x), `${d.id}: layout.${k} = ${x}`);
+  }
+
+  // Five templates for "Impresa edile", each generated knowing the ones already saved
+  const category = { name: 'Impresa edile', description: 'Costruzioni e ristrutturazioni' };
+  const provider = new MockProvider({});
+  const saved = [];
+  for (let i = 0; i < 5; i++) {
+    const { spec, direction } = await generateTemplateSpec(provider, { category, existing: saved });
+    assert.equal(spec.direction, direction.id);
+    assert.deepEqual(spec, sanitizeSpec(spec), 'valid spec');
+    saved.push(spec);
+  }
+  const distinct = (f) => new Set(saved.map(f)).size;
+  assert.equal(distinct((s) => s.direction), 5, 'five different design directions');
+  assert.equal(distinct((s) => s.style.fonts.heading), 5, 'five different title fonts');
+  for (let i = 0; i < saved.length; i++) {
+    for (let j = 0; j < i; j++) {
+      const [a, b] = [saved[i], saved[j]];
+      assert.ok(!similarColor(a.style.colors.primary, b.style.colors.primary), `templates ${j + 1} and ${i + 1}: different primary colors`);
+      const diffs = [...Object.keys(LAYOUTS).filter((k) => a.layout[k] !== b.layout[k]), ...Object.keys(STYLE_OPTIONS).filter((k) => a.style[k] !== b.style[k])];
+      assert.ok(diffs.length >= 6, `templates ${j + 1} and ${i + 1} differ only in ${diffs.join(', ')}`);
+    }
+  }
+  // The prompt tells the AI the direction, the decisions and the palettes already taken
+  const direction = pickDirection(saved, { rng: () => 0 });
+  const { prompt } = buildTemplatePrompt({ category, direction, plan: designPlan(direction, saved), existing: saved });
+  assert.match(prompt, /DESIGN DIRECTION/);
+  assert.match(prompt, new RegExp(`Primary colors already taken in this category: .*${saved[0].style.colors.primary}`));
+  // A direction chosen by the user wins; discarded drafts are avoided
+  assert.equal(pickDirection(saved, { requested: 'minimal' }).id, 'minimal');
+  assert.notEqual(pickDirection([], { exclude: ['industrial'], rng: () => 0 }).id, 'industrial');
+
+  // The builder really renders the differences
+  const docs = saved.map((spec) => JSON.stringify(buildSite(spec, sampleSite()).docs.home.doc));
+  assert.equal(new Set(docs).size, 5);
 });

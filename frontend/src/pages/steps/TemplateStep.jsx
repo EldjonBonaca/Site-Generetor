@@ -113,7 +113,7 @@ export default function TemplateStep({ project, reload }) {
             <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
               <TemplatePreview spec={current.spec} />
               <div className="space-y-4 text-sm">
-                <TemplateSwatches spec={current.spec} />
+                <TemplateSwatches spec={current.spec} direction={current.direction_name && t(current.direction_name)} />
                 {current.spec.description && <p className="text-slate-600">{current.spec.description}</p>}
                 <dl className="space-y-1.5 text-xs">
                   {Object.keys(SECTION_LABELS).map((k) => (
@@ -196,7 +196,7 @@ export default function TemplateStep({ project, reload }) {
                         <div className="flex items-center justify-between gap-3 p-3">
                           <div className="min-w-0">
                             <p className="truncate font-medium text-slate-900">{tpl.name}</p>
-                            <TemplateSwatches spec={tpl.spec} />
+                            <TemplateSwatches spec={tpl.spec} direction={tpl.direction_name && t(tpl.direction_name)} />
                           </div>
                           {selected ? (
                             <Badge color="blue">{t('Selected')}</Badge>

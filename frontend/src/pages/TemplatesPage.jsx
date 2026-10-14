@@ -203,7 +203,7 @@ export default function TemplatesPage() {
                           <IconButton icon={Trash2} label={t('Delete')} onClick={() => setToDelete(tpl)} className="hover:text-red-600" />
                         </div>
                       </div>
-                      <TemplateSwatches spec={tpl.spec} />
+                      <TemplateSwatches spec={tpl.spec} direction={tpl.direction_name && t(tpl.direction_name)} />
                     </div>
                   </li>
                 ))}

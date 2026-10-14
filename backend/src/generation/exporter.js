@@ -21,6 +21,7 @@ import { buildWxr } from './wxr.js';
 import { buildPlugin, PLUGIN_IMAGE_SCHEME } from './wp-plugin.js';
 import { docsText } from './export-docs.js';
 import { fieldValue } from './runner.js';
+import { BUILDER_VERSION } from '../templates/builder.js';
 
 const PLACEHOLDER_BASE_URL = 'https://example.com/wp-content/uploads/';
 const TEMPLATE_TYPES = new Set(['page', 'section', 'header', 'footer', 'single', 'single-page', 'single-post', 'archive', 'popup', 'error-404', 'loop-item', 'container']);
@@ -375,8 +376,13 @@ export async function exportGeneration(generationId) {
   if (!ctx.template) throw badRequest('The project has no template anymore: choose one in the Template step.');
   // Field ids belong to the template the generation was made with: generations of another template
   // (or of the old Template Kits) cannot be exported with the current one
-  if (parseJson(gen.config_json, {}).templateId !== ctx.template.id) {
+  const genConfig = parseJson(gen.config_json, {});
+  if (genConfig.templateId !== ctx.template.id) {
     throw badRequest('This generation was made with another template: run a new generation with the current one.');
+  }
+  // ...and to the version of the template builder (sections and widgets changed)
+  if (genConfig.builderVersion !== BUILDER_VERSION) {
+    throw badRequest('This generation was made with an older version of the templates: run a new generation.');
   }
 
   // Pages whose service was deleted after the generation are skipped

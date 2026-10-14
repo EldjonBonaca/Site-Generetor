@@ -4,36 +4,51 @@
  */
 import { AIProvider } from '../AIProvider.js';
 
-/** Palettes, fonts and layouts the demo provider picks from (by a hash of the category name). */
+/** Palettes the demo provider picks from (fonts, look and layouts are decided by the generator). */
 const PALETTES = [
   { primary: '#1F4E79', secondary: '#F2A541', accent: '#2E8B57', heading: '#14213D', text: '#4A5568', background: '#F3F6FA', dark: '#0F1B2D' },
   { primary: '#7A2E2E', secondary: '#D9A441', accent: '#5B7553', heading: '#2B1B17', text: '#5A4E4A', background: '#FBF6EF', dark: '#24140F' },
   { primary: '#0F766E', secondary: '#F59E0B', accent: '#0EA5E9', heading: '#0B2E2B', text: '#475569', background: '#F0FAF8', dark: '#062421' },
   { primary: '#4338CA', secondary: '#F472B6', accent: '#22C55E', heading: '#1E1B4B', text: '#4B5563', background: '#F5F5FF', dark: '#151338' },
+  { primary: '#C2410C', secondary: '#1E293B', accent: '#FACC15', heading: '#1C1917', text: '#57534E', background: '#FFF7ED', dark: '#1C1917' },
+  { primary: '#3F6212', secondary: '#D97706', accent: '#0F766E', heading: '#1A2E05', text: '#4D5544', background: '#F7FAF0', dark: '#14200A' },
+  { primary: '#334155', secondary: '#FACC15', accent: '#F97316', heading: '#0F172A', text: '#475569', background: '#F1F5F9', dark: '#0B0F19' },
+  { primary: '#9D174D', secondary: '#FBBF24', accent: '#7C3AED', heading: '#3B0A20', text: '#5B4B52', background: '#FDF2F8', dark: '#2A0716' },
+  { primary: '#0369A1', secondary: '#84CC16', accent: '#F43F5E', heading: '#0C2537', text: '#46576A', background: '#F0F8FF', dark: '#06192A' },
+  { primary: '#6D28D9', secondary: '#2DD4BF', accent: '#F59E0B', heading: '#22113F', text: '#544C66', background: '#F7F3FF', dark: '#170B2E' },
+  { primary: '#8C6A3F', secondary: '#1F2937', accent: '#B45309', heading: '#2A2118', text: '#5C5247', background: '#FAF6F0', dark: '#1D1712' },
+  { primary: '#B91C1C', secondary: '#111827', accent: '#F59E0B', heading: '#1F1111', text: '#544848', background: '#FEF5F5', dark: '#160A0A' },
 ];
-const FONT_PAIRS = [['Poppins', 'Open Sans'], ['Playfair Display', 'Lato'], ['Montserrat', 'Inter'], ['Oswald', 'Roboto']];
+const TONES = { it: ['professionale e rassicurante', 'diretto e concreto', 'caldo e familiare', 'elegante e misurato', 'energico e moderno'], en: ['professional and reassuring', 'direct and practical', 'warm and friendly', 'elegant and measured', 'energetic and modern'] };
 
-function demoTemplate(category, prompt) {
-  const h = [...String(category || 'demo')].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 7);
-  const pick = (list, salt = 0) => list[(h + salt) % list.length];
-  const [heading, body] = pick(FONT_PAIRS, 1);
+/** Hue of a color, to avoid the palettes already used in the category. */
+const hue = (hex) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b);
+  const d = max - Math.min(r, g, b);
+  if (!d) return -1;
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+};
+const near = (a, b) => {
+  const [x, y] = [hue(a), hue(b)];
+  if (x < 0 || y < 0) return x === y;
+  const diff = Math.abs(x - y);
+  return Math.min(diff, 360 - diff) < 30;
+};
+
+function demoTemplate(context, prompt) {
+  const category = context.category || 'demo';
+  const avoid = context.avoidColors || [];
+  const offset = Math.floor(Math.random() * PALETTES.length);
+  const rotated = PALETTES.map((_, i) => PALETTES[(i + offset) % PALETTES.length]);
+  const colors = rotated.find((p) => !avoid.some((c) => near(c, p.primary))) || rotated[0];
   const english = /Texts of "copy": in English/.test(prompt);
+  const tones = english ? TONES.en : TONES.it;
   return {
-    description: `Demo template for "${category}" (written by the offline demo provider).`,
-    tone: english ? 'professional and reassuring' : 'professionale e rassicurante',
-    style: { colors: pick(PALETTES), fonts: { heading, body }, headingWeight: '700', radius: pick([0, 6, 12], 2), spacing: pick(['normal', 'airy', 'compact'], 3), uppercase: h % 2 === 0 },
-    layout: {
-      header: pick(['classic', 'topbar', 'centered'], 4),
-      hero: pick(['center', 'left', 'split'], 5),
-      about: pick(['image-left', 'image-right'], 6),
-      features: pick(['icons', 'cards'], 7),
-      cta: pick(['banner', 'split'], 8),
-      services: pick(['cards', 'boxed'], 9),
-      testimonials: 'cards',
-      contact: pick(['split', 'stacked'], 10),
-      footer: 'dark',
-      gallery: '3',
-    },
+    description: `Demo template for "${category}", direction "${context.direction || '-'}" (written by the offline demo provider).`,
+    tone: tones[Math.floor(Math.random() * tones.length)],
+    style: { colors },
     icons: ['fas fa-award', 'fas fa-clock', 'fas fa-euro-sign', 'fas fa-handshake'],
     copy: english
       ? { heroTitle: `The trusted ${category} near you`, heroText: 'Quality, punctuality and clear prices: tell us what you need.', aboutTitle: 'Who we are', featuresTitle: 'Why choose us', servicesTitle: 'Our services', reviewsTitle: 'What our customers say' }
@@ -52,7 +67,7 @@ export default class MockProvider extends AIProvider {
     await new Promise((r) => setTimeout(r, 250));
     if (!options.json) return { text: 'OK', usage: { inputTokens: 5, outputTokens: 1 } };
     if (options.task === 'template') {
-      const text = JSON.stringify(demoTemplate(options.context?.category, prompt));
+      const text = JSON.stringify(demoTemplate(options.context || {}, prompt));
       return { text, usage: { inputTokens: Math.round(prompt.length / 4), outputTokens: Math.round(text.length / 4) } };
     }
 

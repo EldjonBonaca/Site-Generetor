@@ -1,19 +1,68 @@
 /**
  * AI generation of a category template: the built-in template prompt
- * (db/prompts/template-categoria-it.md) + technical instructions describing the JSON spec.
+ * (db/prompts/template-categoria-it.md) + the design direction chosen by the generator
+ * (directions.js) + technical instructions describing the JSON answer.
+ *
+ * Variety between the templates of a category is guaranteed by the system, not left to the AI:
+ * the direction, fonts, look and layouts are chosen among the ones the other templates of the
+ * category use least, and the AI is told which palettes are already taken (an answer whose primary
+ * color is of the same family as another template is asked again once).
  * The answer is sanitized (spec.js), so any usable JSON becomes a valid template.
  */
 import { extractJson } from '../ai/json.js';
 import { AIError } from '../ai/AIProvider.js';
 import { estimateTokens, languageName } from '../generation/prompt-builder.js';
 import { TEMPLATE_PROMPT } from '../generation/site-prompt.js';
-import { COLOR_KEYS, COPY_KEYS, FONTS, ICONS, LAYOUTS, SPACINGS, WEIGHTS, sanitizeSpec } from './spec.js';
+import { COLOR_KEYS, COPY_KEYS, ICONS, sanitizeSpec, similarColor } from './spec.js';
+import { applyPlan, designPlan, pickDirection } from './directions.js';
 
 const RETRIES = 2;
 
 export const TEMPLATE_SYSTEM_PROMPT =
   'You are a senior web designer working inside an automated Elementor site generator. ' +
   'You always answer with a single valid JSON object exactly as requested, without any extra text.';
+
+const LOOK_LABELS = {
+  theme: 'page theme',
+  buttons: 'button corners',
+  cards: 'card style',
+  titles: 'section title style',
+  align: 'title alignment',
+  scale: 'title size',
+  images: 'image style',
+  titleCase: 'title case',
+};
+
+/** Design direction block: what the generator decided and what the AI must avoid. */
+function directionInstructions(category, direction, plan, existing, avoidColors) {
+  const st = plan.style;
+  const look = Object.entries(LOOK_LABELS)
+    .map(([k, label]) => `${label} "${st[k]}"`)
+    .join(', ');
+  const layout = Object.entries(plan.layout)
+    .map(([k, v]) => `${k} "${v}"`)
+    .join(', ');
+  const others = existing.length
+    ? `\nOther templates of this category — your design must look clearly different from each of them:\n${existing
+        .map((s) => `- ${s.name ? `"${s.name}": ` : ''}direction "${s.direction || 'unknown'}", primary ${s.style.colors.primary}, secondary ${s.style.colors.secondary}, dark ${s.style.colors.dark}, fonts ${s.style.fonts.heading} / ${s.style.fonts.body}`)
+        .join('\n')}`
+    : '';
+  const taken = [...new Set([...existing.map((s) => s.style.colors.primary), ...avoidColors])];
+  const colors = taken.length
+    ? `\nPrimary colors already taken in this category: ${taken.join(', ')}. Choose a "primary" of a clearly different color family (hue at least 40° away, or a neutral if they are all colorful), and a "secondary" that is different too — while staying credible for "${category.name}".`
+    : '';
+  return `
+
+=== DESIGN DIRECTION (chosen by the generator: every template of a category gets a different visual identity) ===
+Direction: "${direction.name}" — ${direction.brief}
+Palette mood: ${direction.palette}. The palette must suit the category "${category.name}"; the user's style instructions (if any) refine it.
+Already decided by the generator, do not change: fonts ${plan.fonts.heading} (titles) / ${plan.fonts.body} (texts), ${look}, corner radius ${st.radius}px, spacing "${st.spacing}", title weight ${st.headingWeight}; layout of the sections: ${layout}.${
+    st.theme === 'dark'
+      ? '\nTheme "dark": the pages have a dark background ("dark" color, keep it very deep) with white texts; "heading" and "text" are only used on white elements (contact form), keep them dark.'
+      : ''
+  }${others}${colors}
+Write the "description" of the concept and the "tone" so that they match this direction.`;
+}
 
 function technicalInstructions(languageLabel) {
   const copyShape = Object.entries(COPY_KEYS)
@@ -22,22 +71,12 @@ function technicalInstructions(languageLabel) {
   return `
 
 === OUTPUT FORMAT (added automatically by the generator — it overrides any output format requested above) ===
-The generator builds the Elementor templates itself from your design decisions. Reply with ONLY one valid JSON object (no markdown, no code fences, no text before or after it) with this shape:
+The generator builds the Elementor templates itself from the design decisions above and from your answer. Reply with ONLY one valid JSON object (no markdown, no code fences, no text before or after it) with this shape:
 {
   "description": "concept of the design, 2–3 sentences",
   "tone": "tone of voice of the texts",
   "style": {
-    "colors": { ${COLOR_KEYS.map((k) => `"${k}": "#RRGGBB"`).join(', ')} },
-    "fonts": { "heading": "...", "body": "..." },
-    "headingWeight": "${WEIGHTS.join('" | "')}",
-    "radius": 0-30 (corner radius of buttons, cards and images in px),
-    "spacing": "${SPACINGS.join('" | "')}",
-    "uppercase": true | false (uppercase buttons and small labels)
-  },
-  "layout": {
-${Object.entries(LAYOUTS)
-  .map(([k, v]) => `    "${k}": "${v.join('" | "')}"`)
-  .join(',\n')}
+    "colors": { ${COLOR_KEYS.map((k) => `"${k}": "#RRGGBB"`).join(', ')} }
   },
   "icons": ["4 icons for the 4 strengths of \\"why choose us\\""],
   "copy": {
@@ -48,16 +87,20 @@ ${copyShape},
 }
 Rules:
 - Colors: 6-digit hex. "background" is a light tint for alternate sections, "dark" a deep color for the footer and image overlays; white text must be readable on "primary" and "dark", and "heading" / "text" must be readable on white.
-- Fonts: only from this list: ${FONTS.join(', ')}.
 - Icons: only from this list (Font Awesome 5 solid): ${ICONS.join(', ')}.
-- Layout values: only the listed ones. hero "center" / "left" = text over a full-width photo, "split" = text beside the photo. cta "none" = no call to action section.
-- Texts of "copy": in ${languageLabel}. "aboutText", "storyText" and "missionText" may use simple HTML (<p>, <strong>, <ul>, <li>); every other text is plain text. No business names, phone numbers, emails or addresses.`;
+- Texts of "copy": in ${languageLabel}. "aboutText" and "aboutPageText" may use simple HTML (<p>, <strong>, <ul>, <li>); every other text is plain text. No business names, phone numbers, emails or addresses, no placeholder text.
+- "aboutPageText" is the single "About us" section of the About page: history, mission, values and experience in 3–4 paragraphs, without sub-titles.
+- "features": 4 real strengths of a business of this category (short title + concrete explanation).
+- Reviews have no photo of the customer.`;
 }
 
 const LABELS = { it: '(nessuna)', en: '(none)' };
 
-/** Final prompt for a category template. */
-export function buildTemplatePrompt({ category, instructions = '', language = 'it' }) {
+/**
+ * Final prompt for a category template.
+ * @param {object} p  { category, instructions, language, direction, plan, existing: spec[], avoidColors: string[] }
+ */
+export function buildTemplatePrompt({ category, instructions = '', language = 'it', direction = null, plan = null, existing = [], avoidColors = [] }) {
   const none = LABELS[language] || LABELS.en;
   const languageLabel = languageName(language);
   const vars = {
@@ -67,30 +110,60 @@ export function buildTemplatePrompt({ category, instructions = '', language = 'i
     LINGUA: languageLabel,
   };
   const body = TEMPLATE_PROMPT.content.replace(/\{\{\s*([A-Z_]+)\s*\}\}/g, (m, name) => (name in vars ? vars[name] : m));
-  return { prompt: body + technicalInstructions(languageLabel), system: TEMPLATE_SYSTEM_PROMPT };
+  const design = direction && plan ? directionInstructions(category, direction, plan, existing, avoidColors) : '';
+  return { prompt: body + design + technicalInstructions(languageLabel), system: TEMPLATE_SYSTEM_PROMPT };
 }
 
 /**
- * Ask the provider for a template spec. Invalid JSON is retried; any parsed object is sanitized.
- * @returns {Promise<{ spec: object, tokens: number }>}
+ * Generate a template spec for a category.
+ * @param {object} opts
+ *   - category        { name, description }
+ *   - instructions    style instructions of the user
+ *   - language        language of the sample texts
+ *   - existing        specs of the saved templates of the category (each may carry `name`)
+ *   - direction       id of a direction chosen by the user (otherwise the least used one)
+ *   - exclude         directions to avoid (e.g. the drafts just generated and discarded)
+ *   - avoidColors     primary colors to avoid (same reason)
+ *   - rng             random source (tests)
+ * @returns {Promise<{ spec, tokens, direction }>}
  */
-export async function generateTemplateSpec(provider, { category, instructions = '', language = 'it' }) {
-  const { prompt, system } = buildTemplatePrompt({ category, instructions, language });
+export async function generateTemplateSpec(provider, { category, instructions = '', language = 'it', existing = [], direction: requested = '', exclude = [], avoidColors = [], rng = Math.random }) {
+  const direction = pickDirection(existing, { requested, exclude, rng });
+  const plan = designPlan(direction, existing, rng);
+  const { prompt, system } = buildTemplatePrompt({ category, instructions, language, direction, plan, existing, avoidColors });
+  const taken = [...existing.map((s) => s.style.colors.primary), ...avoidColors];
   let tokens = 0;
   let note = '';
   let lastError = null;
+  let fallback = null;
   for (let attempt = 0; attempt <= RETRIES; attempt++) {
-    const res = await provider.generate(prompt + note, { system, json: true, task: 'template', context: { category: category.name, language, instructions } });
+    const res = await provider.generate(prompt + note, {
+      system,
+      json: true,
+      temperature: 1,
+      task: 'template',
+      context: { category: category.name, language, instructions, direction: direction.id, avoidColors: taken },
+    });
     tokens += (res.usage?.inputTokens || estimateTokens(prompt)) + (res.usage?.outputTokens || estimateTokens(res.text));
     try {
       if (res.finishReason === 'length') throw new Error('The answer was cut off (max tokens reached). Increase "max tokens" in the provider settings.');
       const parsed = extractJson(res.text);
-      if (!parsed.style && !parsed.layout && !parsed.copy) throw new Error('The JSON does not contain "style", "layout" or "copy".');
-      return { spec: sanitizeSpec(parsed), tokens };
+      if (!parsed.style && !parsed.copy) throw new Error('The JSON does not contain "style" or "copy".');
+      const spec = applyPlan(sanitizeSpec(parsed), direction, plan);
+      const clash = taken.find((c) => similarColor(c, spec.style.colors.primary));
+      // Same color family as another template: ask once more, then accept (fonts, look and layouts already differ)
+      if (clash && !fallback && attempt < RETRIES) {
+        fallback = spec;
+        note = `\n\nIMPORTANT: your "primary" color ${spec.style.colors.primary} is too similar to ${clash}, already used by another template of this category. Answer again with a primary of a clearly different color family.`;
+        continue;
+      }
+      return { spec, tokens, direction };
     } catch (err) {
       lastError = err;
+      if (fallback) return { spec: fallback, tokens, direction };
       note = `\n\nIMPORTANT: your previous answer could not be used (${err.message}). Reply with ONLY the JSON object.`;
     }
   }
+  if (fallback) return { spec: fallback, tokens, direction };
   throw new AIError('invalid_output', `The AI did not return a usable template after ${RETRIES + 1} attempts: ${lastError?.message}`);
 }

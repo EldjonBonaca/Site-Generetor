@@ -10,7 +10,8 @@ import { all, get, run, parseJson } from '../db/index.js';
 import { badRequest, notFound, HttpError, LANGUAGES } from '../lib/util.js';
 import { createProvider } from '../ai/registry.js';
 import { AIError } from '../ai/AIProvider.js';
-import { COLOR_KEYS, FONTS, ICONS, LAYOUTS, SPACINGS, WEIGHTS, sanitizeSpec } from '../templates/spec.js';
+import { COLOR_KEYS, FONTS, ICONS, LAYOUTS, SPACINGS, STYLE_OPTIONS, WEIGHTS, sanitizeSpec } from '../templates/spec.js';
+import { directionById, directionList } from '../templates/directions.js';
 import { generateTemplateSpec } from '../templates/generate.js';
 import { touch } from './projects.js';
 
@@ -34,7 +35,8 @@ const requireCategory = (id) => {
 
 function serializeTemplate(row) {
   const { spec_json, ...rest } = row;
-  return { ...rest, spec: sanitizeSpec(parseJson(spec_json, {})) };
+  const spec = sanitizeSpec(parseJson(spec_json, {}));
+  return { ...rest, spec, direction_name: directionById(spec.direction)?.name || '' };
 }
 
 const requireTemplate = (id) => {
@@ -60,7 +62,9 @@ function templateName(value) {
 const language = (value) => (LANGUAGES[value] ? value : 'it');
 
 /** Allowed values of a template spec (for the template editor). */
-router.get('/template-options', (req, res) => res.json({ fonts: FONTS, icons: ICONS, layouts: LAYOUTS, spacings: SPACINGS, weights: WEIGHTS, colorKeys: COLOR_KEYS }));
+router.get('/template-options', (req, res) =>
+  res.json({ fonts: FONTS, icons: ICONS, layouts: LAYOUTS, styleOptions: STYLE_OPTIONS, spacings: SPACINGS, weights: WEIGHTS, colorKeys: COLOR_KEYS, directions: directionList() })
+);
 
 // ---------------------------------------------------------------- categories --
 
@@ -88,8 +92,11 @@ router.delete('/template-categories/:cid', (req, res) => {
 });
 
 /**
- * Generate a template for the category with the AI (not saved).
- * Body: { providerId, instructions?, language? } -> { spec, tokens, generated_by }
+ * Generate a template for the category with the AI (not saved). Its design direction, fonts, look and
+ * layouts are chosen to differ as much as possible from the saved templates of the category.
+ * Body: { providerId, instructions?, language?, direction? (id, else automatic),
+ *         exclude? (directions of discarded drafts), avoidColors? (their primary colors) }
+ * -> { spec, tokens, generated_by, direction: { id, name, summary } }
  */
 router.post('/template-categories/:cid/templates/generate', async (req, res) => {
   const cat = requireCategory(req.params.cid);
@@ -97,12 +104,18 @@ router.post('/template-categories/:cid/templates/generate', async (req, res) => 
   if (!row) throw badRequest('Select an AI provider (Settings → AI Providers to add one).');
   const provider = createProvider(row);
   try {
-    const { spec, tokens } = await generateTemplateSpec(provider, {
+    const existing = all('SELECT name, spec_json FROM site_templates WHERE category_id = ? ORDER BY id', cat.id).map((t) => ({ name: t.name, ...sanitizeSpec(parseJson(t.spec_json, {})) }));
+    const list = (v, max) => (Array.isArray(v) ? v.map(String).slice(0, max) : []);
+    const { spec, tokens, direction } = await generateTemplateSpec(provider, {
       category: cat,
       instructions: String(req.body?.instructions ?? '').slice(0, 2000),
       language: language(req.body?.language),
+      existing,
+      direction: String(req.body?.direction ?? ''),
+      exclude: list(req.body?.exclude, 20),
+      avoidColors: list(req.body?.avoidColors, 20).filter((c) => /^#[0-9a-f]{6}$/i.test(c)),
     });
-    res.json({ spec, tokens, generated_by: `${row.name} · ${row.model}` });
+    res.json({ spec, tokens, generated_by: `${row.name} · ${row.model}`, direction: { id: direction.id, name: direction.name, summary: direction.summary } });
   } catch (err) {
     if (err instanceof AIError) throw new HttpError(502, err.message);
     throw err;

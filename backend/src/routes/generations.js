@@ -8,6 +8,7 @@ import { badRequest, notFound, HttpError, slugify } from '../lib/util.js';
 import { loadContext, checkReadiness, siteLinks } from '../generation/plan.js';
 import { initPages, runGeneration, regenerateField, cancelGeneration, isRunning } from '../generation/runner.js';
 import { SITE_PROMPT } from '../generation/site-prompt.js';
+import { BUILDER_VERSION } from '../templates/builder.js';
 import { exportGeneration, pluginFile } from '../generation/exporter.js';
 import { buildPagePrompt, estimateTokens } from '../generation/prompt-builder.js';
 
@@ -82,7 +83,7 @@ router.post('/projects/:id/generations', (req, res) => {
     ctx.project.id,
     gen.providerId,
     'queued',
-    JSON.stringify({ prompt: SITE_PROMPT.name, templateId: ctx.template.id, templateName: ctx.template.name }),
+    JSON.stringify({ prompt: SITE_PROMPT.name, templateId: ctx.template.id, templateName: ctx.template.name, builderVersion: BUILDER_VERSION }),
     JSON.stringify({ pages, links: siteLinks(ctx) })
   );
   runGeneration(lastInsertRowid).catch((e) => console.error('[generation]', e)); // background job

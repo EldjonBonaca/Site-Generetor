@@ -15,6 +15,7 @@ import { TemplatePreview, TemplateSwatches } from './TemplatePreview.jsx';
 export const SECTION_LABELS = {
   header: 'Header',
   hero: 'Hero (Home)',
+  divider: 'Edge of the hero and banners',
   about: 'About section',
   features: 'Why choose us',
   cta: 'Call to action',
@@ -29,27 +30,67 @@ const VARIANT_LABELS = {
   'header.classic': 'Logo, menu and button',
   'header.centered': 'Centered logo and menu',
   'header.topbar': 'Top bar (phone, email) + menu',
+  'header.bold': 'Colored header',
   'hero.center': 'Centered text over a photo',
   'hero.left': 'Left text over a photo',
   'hero.split': 'Text beside a photo',
+  'hero.card': 'Text in a card over a photo',
+  'hero.bottom': 'Big title at the bottom of a photo',
+  'divider.curve': 'Curve',
+  'divider.tilt': 'Slant',
+  'divider.waves': 'Waves',
+  'divider.none': 'Straight',
   'about.image-left': 'Image on the left',
   'about.image-right': 'Image on the right',
-  'features.icons': 'Icons on a light background',
+  'about.wide': 'Text above a wide photo',
+  'features.icons': 'Cards on a light background',
   'features.cards': 'Cards over a photo',
+  'features.list': 'List in two columns beside the title',
   'cta.banner': 'Banner over a photo',
-  'cta.split': 'Colored band with a button',
+  'cta.split': 'Rounded colored band with a button',
   'cta.none': 'No call to action',
-  'services.cards': 'Cards',
+  'services.cards': 'Outlined cards',
   'services.boxed': 'Boxed cards on a tinted background',
+  'services.overlay': 'Text over the photos',
   'testimonials.cards': 'Cards',
   'testimonials.minimal': 'Minimal',
+  'testimonials.band': 'Colored band',
   'contact.split': 'Details beside the form',
   'contact.stacked': 'Details above the form',
   'footer.dark': 'Dark',
   'footer.light': 'Light',
+  'footer.brand': 'Brand color',
   'gallery.3': '3 columns',
   'gallery.4': '4 columns',
 };
+
+/** Look of the whole site (spec.style options). */
+export const STYLE_LABELS = { theme: 'Theme', buttons: 'Buttons', cards: 'Cards', titles: 'Section titles', align: 'Title alignment', scale: 'Title size', images: 'Images', titleCase: 'Title case' };
+const STYLE_VALUE_LABELS = {
+  'theme.light': 'Light pages',
+  'theme.dark': 'Dark pages',
+  'buttons.rounded': 'Rounded',
+  'buttons.pill': 'Pill',
+  'buttons.square': 'Square',
+  'cards.shadow': 'With shadow',
+  'cards.outline': 'Outlined',
+  'cards.tinted': 'Tinted background',
+  'cards.accent': 'Colored top border',
+  'titles.line': 'Accent line below',
+  'titles.bar': 'Colored bar on the left',
+  'titles.plain': 'Plain',
+  'align.center': 'Centered',
+  'align.left': 'Left',
+  'scale.normal': 'Normal',
+  'scale.large': 'Large',
+  'scale.xl': 'Very large',
+  'images.rounded': 'Rounded corners',
+  'images.square': 'Square corners',
+  'images.framed': 'Offset color frame',
+  'titleCase.normal': 'Normal',
+  'titleCase.upper': 'Uppercase',
+};
+export const styleLabel = (t, key, value) => t(STYLE_VALUE_LABELS[`${key}.${value}`] || value);
 
 const COLOR_LABELS = { primary: 'Primary', secondary: 'Secondary (buttons)', accent: 'Accent', heading: 'Titles', text: 'Text', background: 'Light background', dark: 'Dark (footer, overlays)' };
 const SPACING_LABELS = { compact: 'Compact', normal: 'Normal', airy: 'Airy' };
@@ -68,11 +109,17 @@ export function TemplateGenerator({ open, onClose, category, onSaved }) {
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState(null);
   const [name, setName] = useState('');
+  const [directions, setDirections] = useState([]);
+  const [direction, setDirection] = useState('');
+  // Drafts discarded in this dialog: a new generation avoids their direction and colors
+  const [discarded, setDiscarded] = useState([]);
 
   useEffect(() => {
     if (!open) return;
     setDraft(null);
+    setDiscarded([]);
     setInstructions('');
+    api.get('/template-options').then((o) => setDirections(o.directions || [])).catch(() => {});
     api
       .get('/providers')
       .then((list) => {
@@ -85,7 +132,16 @@ export function TemplateGenerator({ open, onClose, category, onSaved }) {
   const generate = async () => {
     setBusy(true);
     try {
-      const res = await api.post(`/template-categories/${category.id}/templates/generate`, { providerId: Number(providerId), instructions, language });
+      const previous = draft ? [...discarded, draft] : discarded;
+      const res = await api.post(`/template-categories/${category.id}/templates/generate`, {
+        providerId: Number(providerId),
+        instructions,
+        language,
+        direction,
+        exclude: direction ? [] : previous.map((d) => d.direction.id),
+        avoidColors: previous.map((d) => d.spec.style.colors.primary),
+      });
+      setDiscarded(previous);
       setDraft(res);
       setName((n) => n || `${category.name} – ${t('template')} ${category.template_count + 1}`);
     } catch (e) {
@@ -151,6 +207,18 @@ export function TemplateGenerator({ open, onClose, category, onSaved }) {
             <Field label={t('Style instructions (optional)')} hint={t('E.g. "elegant, dark colors, serif titles" or "bright and friendly".')}>
               {(id) => <Textarea id={id} rows={3} value={instructions} onChange={(e) => setInstructions(e.target.value)} maxLength={2000} disabled={busy} />}
             </Field>
+            <Field label={t('Design direction')} hint={t('Automatic: a style that no other template of this category uses yet, so every template looks different.')}>
+              {(id) => (
+                <Select id={id} value={direction} onChange={(e) => setDirection(e.target.value)} disabled={busy}>
+                  <option value="">{t('Automatic (different from the other templates)')}</option>
+                  {directions.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {t(d.name)}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
             <Field label={t('Language of the sample texts')}>
               {(id) => (
                 <Select id={id} value={language} onChange={(e) => setLanguage(e.target.value)} disabled={busy}>
@@ -164,6 +232,10 @@ export function TemplateGenerator({ open, onClose, category, onSaved }) {
             </Field>
             {draft && (
               <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                <p className="text-sm font-medium text-slate-800">
+                  {t('Direction')}: {t(draft.direction.name)}
+                </p>
+                <p className="text-xs text-slate-500">{t(draft.direction.summary)}</p>
                 <TemplateSwatches spec={draft.spec} />
                 {draft.spec.description && <p className="text-xs text-slate-600">{draft.spec.description}</p>}
                 <p className="text-xs text-slate-500">
@@ -314,6 +386,25 @@ export function TemplateEditor({ template, onClose, onSaved }) {
               {(id) => <input id={id} type="range" min="0" max="30" value={spec.style.radius} onChange={(e) => setStyle({ radius: Number(e.target.value) })} className="w-full accent-brand-600" />}
             </Field>
             <Toggle checked={spec.style.uppercase} onChange={(v) => setStyle({ uppercase: v })} label={t('Uppercase buttons and labels')} />
+
+            <div>
+              <p className="mb-1 text-sm font-medium text-slate-700">{t('Look of the site')}</p>
+              {template?.direction_name && <p className="mb-2 text-xs text-slate-500">{t('Direction')}: {t(template.direction_name)}</p>}
+              <div className="space-y-2">
+                {Object.entries(options.styleOptions || {}).map(([key, values]) => (
+                  <label key={key} className="grid grid-cols-[110px_1fr] items-center gap-2 text-xs text-slate-600">
+                    {t(STYLE_LABELS[key] || key)}
+                    <Select value={spec.style[key]} onChange={(e) => setStyle({ [key]: e.target.value })} className="py-1.5 text-xs">
+                      {values.map((v) => (
+                        <option key={v} value={v}>
+                          {styleLabel(t, key, v)}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+                ))}
+              </div>
+            </div>
 
             <div>
               <p className="mb-2 text-sm font-medium text-slate-700">{t('Layout of the sections')}</p>

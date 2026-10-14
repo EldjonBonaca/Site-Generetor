@@ -191,7 +191,7 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.equal(gen.pages_done, 10);
   const home = gen.pages.find((pg) => pg.key === 'home');
   assert.ok(home.seo.title);
-  assert.equal(home.fields.find((f) => f.id === 'home.s5.image_box1.title_text').value, 'Riparazione caldaie', 'service card title = service name');
+  assert.ok(home.fields.some((f) => f.id.startsWith('home.s5.heading') && f.value === 'Riparazione caldaie'), 'service card title = service name');
   const about = gen.pages.find((pg) => pg.key === 'about');
   assert.equal(about.fields.find((f) => f.id === 'about.intro.heading1.title').value, 'About Us', 'subheader title = page title');
   const shared = about.fields.filter((f) => f.source === 'shared');

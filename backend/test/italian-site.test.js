@@ -137,7 +137,9 @@ test('Italian full site: template, articles, gallery, reviews, contact form, men
     const urls = [...read(f).matchAll(/"url":"([^"]*)"/g)].map((m) => m[1]).filter((u) => /\.(jpe?g|png|webp)$/.test(u));
     scanned += urls.length;
     for (const u of urls) assert.ok(u.startsWith(baseUrl), `${f}: placeholder image ${u}`);
-    assert.doesNotMatch(read(f), /template\.invalid|"url":""/, `${f}: empty or placeholder image`);
+    // The reviews have no photo of the customer: their image is intentionally empty
+    const json = read(f).replace(/"testimonial_image":\{"url":"","id":""\}/g, '');
+    assert.doesNotMatch(json, /template\.invalid|"url":""/, `${f}: empty or placeholder image`);
   }
   assert.ok(scanned > 20, `image URLs scanned: ${scanned}`);
 
@@ -146,16 +148,25 @@ test('Italian full site: template, articles, gallery, reviews, contact form, men
   const servicesDoc = JSON.parse(servicesJson);
   assert.equal(servicesDoc.title, 'Servizi');
   assert.equal(servicesDoc.content.length, 2, 'subheader + only one section: all services');
-  assert.equal([...servicesJson.matchAll(/"widgetType":"image-box"/g)].length, 5);
+  assert.equal([...servicesJson.matchAll(/"link_to":"custom"/g)].length, 5, 'one card (linked image) per service');
   for (const s of services) {
-    assert.match(servicesJson, new RegExp(`"title_text":"${s.name}"`));
+    assert.match(servicesJson, new RegExp(`"title":"${s.name}"`));
     assert.match(servicesJson, new RegExp(`"url":"/${s.slug}/"`));
   }
   // Home: hero, chi siamo, perché sceglierci, call to action, 3 featured services, reviews
   const homeJson = read('templates/home.json');
   assert.equal(JSON.parse(homeJson).content.length, 6);
-  assert.equal([...homeJson.matchAll(/"widgetType":"image-box"/g)].length, 3);
+  assert.equal([...homeJson.matchAll(/"link_to":"custom"/g)].length, 3);
   assert.equal([...homeJson.matchAll(/"widgetType":"testimonial"/g)].length, 3);
+  assert.equal([...homeJson.matchAll(/"testimonial_image":\{"url":"","id":""\}/g)].length, 3, 'reviews without photos');
+  // "Perché sceglierci": 4 boxes written by the AI, no Elementor default text
+  const boxes = JSON.parse(homeJson).content[2].elements[1].elements.map((e) => e.elements[0].settings);
+  assert.equal(boxes.length, 4);
+  for (const b of boxes) assert.ok(b.title_text && b.description_text && !/lorem|This is the heading/i.test(b.title_text + b.description_text));
+  // Chi Siamo: one "Chi siamo" section, no "La nostra storia" / "Missione" titles
+  const aboutJson = read('templates/about.json');
+  assert.match(aboutJson, /"title":"Chi siamo"/);
+  assert.doesNotMatch(aboutJson, /nostra storia|missione e valori/i);
   // Gallery: all provided images except the logo, lightbox on
   const galleryWidget = JSON.parse(read('templates/gallery.json')).content[1].elements[0];
   assert.equal(galleryWidget.settings.wp_gallery.length, 9);

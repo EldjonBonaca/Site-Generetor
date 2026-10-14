@@ -8,7 +8,8 @@
 export const FONTS = [
   'Poppins', 'Montserrat', 'Inter', 'Roboto', 'Open Sans', 'Lato', 'Raleway', 'Nunito', 'Work Sans', 'DM Sans',
   'Rubik', 'Manrope', 'Barlow', 'Josefin Sans', 'Oswald', 'Source Sans 3', 'Playfair Display', 'Merriweather',
-  'Libre Baskerville', 'Cormorant Garamond', 'Lora',
+  'Libre Baskerville', 'Cormorant Garamond', 'Lora', 'Bebas Neue', 'Archivo', 'Roboto Slab', 'Bitter', 'Quicksand', 'Barlow Condensed',
+  'DM Serif Display', 'Space Grotesk', 'Plus Jakarta Sans', 'Fraunces',
 ];
 
 /** Font Awesome 5 free solid icons (Elementor "fa-solid" library) for the "why choose us" boxes. */
@@ -24,16 +25,40 @@ export const ICONS = [
 
 /** Layout variants of each section (the first value is the default). */
 export const LAYOUTS = {
-  header: ['classic', 'centered', 'topbar'],
-  hero: ['center', 'left', 'split'],
-  about: ['image-left', 'image-right'],
-  features: ['icons', 'cards'],
+  header: ['classic', 'centered', 'topbar', 'bold'],
+  hero: ['center', 'left', 'split', 'card', 'bottom'],
+  about: ['image-left', 'image-right', 'wide'],
+  features: ['icons', 'cards', 'list'],
   cta: ['banner', 'split', 'none'],
-  services: ['cards', 'boxed'],
-  testimonials: ['cards', 'minimal'],
+  services: ['cards', 'boxed', 'overlay'],
+  testimonials: ['cards', 'minimal', 'band'],
   contact: ['split', 'stacked'],
-  footer: ['dark', 'light'],
+  footer: ['dark', 'light', 'brand'],
   gallery: ['3', '4'],
+  divider: ['curve', 'tilt', 'waves', 'none'],
+};
+
+/**
+ * Look of the whole site (the first value is the default). Together with the layouts they make
+ * templates of the same category look really different:
+ *   theme      light pages, or dark pages with light text
+ *   buttons    corners of the buttons
+ *   cards      cards with shadow, outlined, on a tinted background, or with a colored top border
+ *   titles     section titles with an accent line below, with a colored bar on the left, or plain
+ *   align      alignment of the section titles
+ *   scale      size of the titles
+ *   images     rounded, square, or framed (offset colored block behind the photo)
+ *   titleCase  normal or uppercase titles
+ */
+export const STYLE_OPTIONS = {
+  theme: ['light', 'dark'],
+  buttons: ['rounded', 'pill', 'square'],
+  cards: ['shadow', 'outline', 'tinted', 'accent'],
+  titles: ['line', 'bar', 'plain'],
+  align: ['center', 'left'],
+  scale: ['normal', 'large', 'xl'],
+  images: ['rounded', 'square', 'framed'],
+  titleCase: ['normal', 'upper'],
 };
 
 export const SPACINGS = ['normal', 'compact', 'airy'];
@@ -45,11 +70,11 @@ export const COLOR_KEYS = ['primary', 'secondary', 'accent', 'heading', 'text', 
 export const COPY_KEYS = {
   heroKicker: 60, heroTitle: 90, heroText: 220, heroButton: 30, heroButton2: 30,
   aboutKicker: 40, aboutTitle: 80, aboutText: 600, aboutButton: 30,
-  featuresTitle: 70, featuresText: 220,
+  featuresKicker: 40, featuresTitle: 70, featuresText: 220,
   ctaTitle: 90, ctaText: 220, ctaButton: 30,
   servicesKicker: 40, servicesTitle: 70, servicesText: 220, serviceText: 160, servicesButton: 30,
-  reviewsTitle: 70,
-  storyTitle: 80, storyText: 900, missionTitle: 80, missionText: 700,
+  reviewsKicker: 40, reviewsTitle: 70,
+  aboutPageText: 1400,
   subheaderText: 160,
   contactTitle: 70, contactText: 300, formTitle: 70,
   postCtaTitle: 80, postCtaText: 200, postCtaButton: 30,
@@ -66,6 +91,7 @@ const DEFAULT_COPY = {
   aboutTitle: 'Una realtà affidabile al tuo servizio',
   aboutText: '<p>Da anni seguiamo ogni cliente con professionalità e attenzione ai dettagli, offrendo soluzioni su misura e un rapporto diretto e trasparente.</p>',
   aboutButton: 'Scopri di più',
+  featuresKicker: 'I nostri punti di forza',
   featuresTitle: 'Perché sceglierci',
   featuresText: 'I motivi per cui i nostri clienti tornano da noi e ci consigliano.',
   features: [
@@ -82,16 +108,15 @@ const DEFAULT_COPY = {
   servicesText: 'Soluzioni complete, realizzate con cura e materiali di qualità.',
   serviceText: 'Breve descrizione del servizio, dei suoi vantaggi e di a chi si rivolge.',
   servicesButton: 'Tutti i servizi',
+  reviewsKicker: 'Recensioni',
   reviewsTitle: 'Cosa dicono i nostri clienti',
   reviews: [
     { name: 'Marco Rossi', role: 'Cliente', text: 'Servizio impeccabile, personale cortese e lavoro consegnato nei tempi previsti.' },
     { name: 'Giulia Bianchi', role: 'Cliente', text: 'Professionali e disponibili: mi hanno seguita in ogni fase con grande attenzione.' },
     { name: 'Luca Verdi', role: 'Cliente', text: 'Ottimo rapporto qualità-prezzo e assistenza sempre presente anche dopo il lavoro.' },
   ],
-  storyTitle: 'La nostra storia',
-  storyText: '<p>Racconto della nascita dell’attività, dell’esperienza maturata e dei valori che guidano il lavoro di ogni giorno.</p>',
-  missionTitle: 'Missione e valori',
-  missionText: '<p>Qualità, trasparenza e attenzione al cliente: ecco cosa ci impegniamo a garantire in ogni progetto.</p>',
+  aboutPageText:
+    '<p>Siamo una realtà nata dalla passione per il nostro lavoro e cresciuta grazie alla fiducia dei clienti: ogni giorno mettiamo esperienza e competenza al servizio di chi si rivolge a noi.</p><p>Crediamo nella qualità, nella trasparenza e nel rapporto diretto con le persone: ascoltiamo ogni richiesta e proponiamo soluzioni chiare, realizzate con cura e nei tempi concordati.</p>',
   subheaderText: 'Breve frase introduttiva della pagina.',
   contactTitle: 'Contattaci',
   contactText: 'Scrivici o chiamaci: saremo felici di rispondere a ogni domanda e di preparare un preventivo gratuito.',
@@ -104,6 +129,7 @@ const DEFAULT_COPY = {
 
 export const DEFAULT_SPEC = Object.freeze({
   version: 1,
+  direction: '',
   description: '',
   tone: 'professionale, cordiale e rassicurante',
   style: {
@@ -113,6 +139,7 @@ export const DEFAULT_SPEC = Object.freeze({
     radius: 6,
     spacing: 'normal',
     uppercase: false,
+    ...Object.fromEntries(Object.entries(STYLE_OPTIONS).map(([k, v]) => [k, v[0]])),
   },
   layout: Object.fromEntries(Object.entries(LAYOUTS).map(([k, v]) => [k, v[0]])),
   icons: ['fas fa-award', 'fas fa-clock', 'fas fa-euro-sign', 'fas fa-handshake'],
@@ -156,15 +183,17 @@ export function sanitizeSpec(raw) {
   const fonts = s.fonts || {};
   return {
     version: 1,
+    direction: /^[a-z][a-z-]{0,30}$/.test(String(r.direction ?? '')) ? r.direction : '',
     description: str(r.description, 500, ''),
     tone: str(r.tone, 300, d.tone),
     style: {
       colors: Object.fromEntries(COLOR_KEYS.map((k) => [k, color(s.colors?.[k], d.style.colors[k])])),
       fonts: { heading: oneOf(fonts.heading, FONTS, d.style.fonts.heading), body: oneOf(fonts.body, FONTS, d.style.fonts.body) },
       headingWeight: oneOf(s.headingWeight, WEIGHTS),
-      radius: Math.min(30, Math.max(0, Math.round(Number(s.radius)) || 0)),
+      radius: s.radius === undefined || s.radius === null || s.radius === '' || !Number.isFinite(Number(s.radius)) ? d.style.radius : Math.min(30, Math.max(0, Math.round(Number(s.radius)))),
       spacing: oneOf(s.spacing, SPACINGS),
       uppercase: s.uppercase === true || s.uppercase === 'true',
+      ...Object.fromEntries(Object.entries(STYLE_OPTIONS).map(([k, v]) => [k, oneOf(s[k], v)])),
     },
     layout: Object.fromEntries(Object.entries(LAYOUTS).map(([k, v]) => [k, oneOf(r.layout?.[k], v)])),
     icons: list(r.icons, 4, (v, i) => icon(v, d.icons[i])),
@@ -175,14 +204,96 @@ export function sanitizeSpec(raw) {
 /** Short description of the design, used in the site prompt ({{STILE_TEMPLATE}}). */
 export function describeSpec(spec) {
   const { colors, fonts } = spec.style;
+  const st = spec.style;
   const l = spec.layout;
+  const LOOK = {
+    theme: { light: 'pagine chiare', dark: 'pagine scure con testi chiari' },
+    buttons: { rounded: 'pulsanti arrotondati', pill: 'pulsanti a pillola', square: 'pulsanti squadrati' },
+    cards: { shadow: 'card con ombra', outline: 'card con bordo sottile', tinted: 'card su fondo colorato', accent: 'card con bordo superiore colorato' },
+    titles: { line: 'titoli con linea colorata sotto', bar: 'titoli con barra colorata a sinistra', plain: 'titoli semplici' },
+    scale: { normal: 'titoli di dimensione normale', large: 'titoli grandi', xl: 'titoli molto grandi' },
+    images: { rounded: 'immagini con angoli arrotondati', square: 'immagini squadrate', framed: 'immagini con cornice colorata sfalsata' },
+  };
   return [
     spec.description,
+    `Aspetto: ${['theme', 'buttons', 'cards', 'titles', 'scale', 'images'].map((k) => LOOK[k][st[k]]).join(', ')}, titoli allineati ${st.align === 'left' ? 'a sinistra' : 'al centro'}${st.titleCase === 'upper' ? ' e in maiuscolo' : ''}.`,
     `Colori: primario ${colors.primary}, secondario ${colors.secondary}, accento ${colors.accent}, titoli ${colors.heading}, testo ${colors.text}.`,
     `Font: ${fonts.heading} (titoli), ${fonts.body} (testi).`,
-    `Layout: header ${l.header}, hero ${l.hero}, chi siamo ${l.about}, perché sceglierci ${l.features}, call to action ${l.cta}, servizi ${l.services}, recensioni ${l.testimonials}, contatti ${l.contact}, footer ${l.footer}.`,
+    `Layout: header ${l.header}, hero ${l.hero} (bordo inferiore ${l.divider}), chi siamo ${l.about}, perché sceglierci ${l.features}, call to action ${l.cta}, servizi ${l.services}, recensioni ${l.testimonials} (senza foto dei clienti), contatti ${l.contact}, footer ${l.footer}.`,
     `Tono di voce: ${spec.tone}.`,
   ]
     .filter(Boolean)
     .join(' ');
+}
+
+// ---------------------------------------------------------------------------------------------
+// Colors
+// ---------------------------------------------------------------------------------------------
+
+const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+const toHex = (parts) => `#${parts.map((v) => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+
+/** a -> b by t (0..1). */
+export const mix = (a, b, t) => toHex(rgb(a).map((v, i) => v + (rgb(b)[i] - v) * t));
+/** Light tint of a color (t = share of white). */
+export const tint = (hex, t) => mix(hex, '#FFFFFF', t);
+export const rgba = (hex, a) => `rgba(${rgb(hex).join(',')},${a})`;
+
+const luminance = (hex) => {
+  const [r, g, b] = rgb(hex).map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+/** WCAG contrast ratio of two colors (1..21). */
+export const contrast = (a, b) => {
+  const [l1, l2] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (l1 + 0.05) / (l2 + 0.05);
+};
+/** Move `hex` towards `to` until its contrast with `against` reaches `min`. */
+const ensure = (hex, against, min, to) => {
+  let out = hex;
+  for (let t = 0.1; contrast(out, against) < min && t <= 1; t += 0.1) out = mix(hex, to, t);
+  return out;
+};
+
+/**
+ * Colors actually used to build a site: the template colors, adjusted only where they would make
+ * texts unreadable (titles / text too light on white, "background" too dark, "dark" too light),
+ * plus the text color that reads best on each filled color (buttons, bands).
+ */
+export function siteColors(colors) {
+  const c = {
+    ...colors,
+    heading: ensure(colors.heading, '#FFFFFF', 7, '#000000'),
+    text: ensure(colors.text, '#FFFFFF', 4.5, '#000000'),
+    background: ensure(colors.background, '#000000', 16, '#FFFFFF'),
+    dark: ensure(colors.dark, '#FFFFFF', 11, '#000000'),
+  };
+  const on = (bg) => (contrast(bg, '#FFFFFF') >= 3 ? '#FFFFFF' : c.dark);
+  return { ...c, onPrimary: on(c.primary), onSecondary: on(c.secondary), onAccent: on(c.accent), primaryText: ensure(c.primary, '#FFFFFF', 4.5, '#000000') };
+}
+
+/** Hue (0..360) and saturation (0..1) of a color, to compare the palettes of two templates. */
+export function hueSat(hex) {
+  const [r, g, b] = rgb(hex).map((v) => v / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  const l = (max + min) / 2;
+  const sat = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  let h = 0;
+  if (d) h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return { hue: Math.round(((h * 60) + 360) % 360), sat };
+}
+
+/** Do two colors look alike (same hue family, or both nearly grey)? */
+export function similarColor(a, b) {
+  const x = hueSat(a);
+  const y = hueSat(b);
+  if (x.sat < 0.15 && y.sat < 0.15) return Math.abs(luminance(a) - luminance(b)) < 0.15;
+  if (x.sat < 0.15 || y.sat < 0.15) return false;
+  const diff = Math.abs(x.hue - y.hue);
+  return Math.min(diff, 360 - diff) < 28;
 }

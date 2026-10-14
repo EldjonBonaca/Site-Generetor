@@ -44,7 +44,7 @@ Le immagini che ti fornisco formano un **unico archivio condiviso** (`{{ELENCO_I
 
 Regole di utilizzo:
 - Le immagini indicate come "immagine in evidenza" di un servizio sono quelle usate nell'articolo e nella card di quel servizio, ma **possono essere riutilizzate liberamente** in altre sezioni (es. Chi siamo, Perché sceglierci, call to action, sfondi di sezione).
-- **Nessuna sezione deve restare senza immagine** dove il template ne prevede una (hero, Chi siamo, Perché sceglierci, call to action, card dei servizi, recensioni/avatar se previsti, sfondi, subheader). Se le immagini sono meno degli slot, riutilizza quelle disponibili scegliendo la più coerente con il contenuto della sezione, evitando per quanto possibile di ripetere la stessa immagine in sezioni vicine nella stessa pagina.
+- **Nessuna sezione deve restare senza immagine** dove il template ne prevede una (hero, Chi siamo, Perché sceglierci, call to action, card dei servizi, sfondi, subheader). Se le immagini sono meno degli slot, riutilizza quelle disponibili scegliendo la più coerente con il contenuto della sezione, evitando per quanto possibile di ripetere la stessa immagine in sezioni vicine nella stessa pagina.
 - **Nessuna immagine segnaposto del template deve rimanere nel sito**, né placeholder vuoti o immagini rotte.
 - **Galleria automatica**: la pagina Galleria deve mostrare **tutte** le immagini caricate (logo escluso), indipendentemente da dove sono usate altrove nel sito.
 
@@ -94,14 +94,14 @@ Regole generali:
 Sezioni, in quest'ordine:
 1. **Hero / prima sezione** – esattamente come nel template, con immagine `{{IMG_HOME_HERO}}` e testi adattati al sito.
 2. **Chi siamo** – breve testo di presentazione + immagine (scelta liberamente dall'archivio) + pulsante **"Scopri di più"** che porta alla pagina *Chi Siamo*.
-3. **Perché sceglierci** – punti di forza dell'attività (icone/box come da template, con eventuali immagini di sfondo o laterali prese dall'archivio).
+3. **Perché sceglierci** – 4 punti di forza dell'attività (icone/box come da template, con eventuali immagini di sfondo o laterali prese dall'archivio), ciascuno con titolo e testo scritti per `{{NOME_SITO}}`: mai testo segnaposto o "lorem ipsum".
 4. **Call to action** – *solo se prevista dal template*; con invito a contattare e link a *Contatti* o al telefono; eventuale immagine di sfondo dall'archivio.
 5. **I nostri servizi** – 3 servizi in evidenza (immagine, titolo, breve descrizione, link all'articolo del servizio) + pulsante **"Tutti i servizi"** che porta alla pagina *Servizi*.
 6. **Recensioni** – 3 recensioni (vedi sezione 5.6).
 
 ### 5.2 Chi Siamo
 1. Subheader (titolo "Chi Siamo" + `{{IMG_SUBHEADER}}`).
-2. **Chi siamo** – versione estesa: storia, missione, valori, esperienza, con immagini dall'archivio.
+2. **Chi siamo** – un'unica sezione intitolata **"Chi siamo"**, con un testo esteso che racconta storia, missione, valori ed esperienza, **senza sottotitoli** come "La nostra storia" o "La nostra missione", e un'immagine dall'archivio.
 3. **Perché sceglierci**.
 4. **Call to action** – *solo se prevista dal template*.
 5. **Recensioni** (le stesse 3 della Home).
@@ -128,7 +128,7 @@ Sezioni, in quest'ordine:
 Genera **3 recensioni di esempio** realistiche e coerenti con `{{SETTORE_CLIENTE}}`, `{{NOME_SITO}}` e i servizi offerti:
 - Ogni recensione: nome e cognome italiano di fantasia, eventuale ruolo/città, valutazione a 5 stelle e testo di 2–3 frasi, naturale e non eccessivamente promozionale.
 - Le tre recensioni devono toccare aspetti diversi (es. qualità del servizio, professionalità/puntualità, rapporto qualità-prezzo o assistenza).
-- Se il template prevede un avatar/foto per le recensioni, usa immagini dall'archivio (mai segnaposto) o l'avatar generico/iniziali previsto dal widget, senza lasciare spazi vuoti.
+- Le recensioni sono **senza foto dei clienti**: nessun avatar e nessuna immagine, solo stelle, testo, nome e ruolo/città.
 - Usa le stesse 3 recensioni in Home e in Chi Siamo.
 
 ---
@@ -152,7 +152,8 @@ Fornisci:
 5. Breve guida all'importazione: elenco dei plugin da attivare, ordine di importazione dei template, assegnazione di Header/Footer tramite Theme Builder, impostazione della Home come pagina iniziale, configurazione del form {{PLUGIN_MODULO}}.
 
 ## 8. Controlli finali
-- Nessuna immagine o testo di esempio del template rimasto; nessun placeholder immagine vuoto o rotto.
+- Nessuna immagine o testo di esempio del template rimasto (nemmeno "lorem ipsum" nei box di "Perché sceglierci"); nessun placeholder immagine vuoto o rotto.
+- Recensioni senza foto dei clienti.
 - Ogni sezione che prevede un'immagine ne contiene una.
 - La Galleria contiene tutte le immagini caricate.
 - Nessuna sezione extra oltre a quelle elencate.

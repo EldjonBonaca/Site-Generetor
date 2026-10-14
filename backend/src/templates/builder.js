@@ -3,6 +3,10 @@
  * documents of the whole site (5 pages, header, footer, single post template), using only native
  * Elementor widgets (+ the contact form shortcode). Flexbox containers, no third-party addons.
  *
+ * The spec decides the visual identity: palette and fonts, the look of the whole site
+ * (spec.style: light / dark theme, button corners, card style, title style and alignment, title
+ * size, image treatment, title case) and the layout of every section (spec.layout).
+ *
  * Everything that is not marketing copy is decided here and marked "fixed": page titles in the
  * subheaders, menus, service names and links, contact data, copyright. The AI only writes the
  * texts marked with a hint. Each mark is keyed "<elementId>:<settings path>", the same key
@@ -12,28 +16,39 @@
  *   { share }                 same text on several pages (the 3 reviews of Home and About)
  *   { slot, service }         image slot role: hero | subheader | logo | service_list | photo | gallery
  *
+ * Every text widget gets its text (sample copy of the template or final data): an empty setting
+ * would show the Elementor default ("Lorem ipsum…") and would never be given to the AI.
+ *
  * Element ids are derived from the page role and the build order, so building the same site
  * twice gives the same ids (field and slot ids stay stable between generation and export).
  */
 import crypto from 'node:crypto';
 import { telHref } from '../lib/util.js';
+import { mix, rgba, siteColors, tint } from './spec.js';
 
 /** Image of a template before a project fills it (never left in an exported site). */
 export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
 
+/**
+ * Version of the generated structure. Field ids depend on it: a generation made with another
+ * version cannot be exported (exporter.js), it has to be generated again.
+ */
+export const BUILDER_VERSION = 3;
+
 export const DOC_ROLES = ['home', 'about', 'services', 'gallery', 'contact', 'single_post', 'header', 'footer'];
 
-/** Fixed labels in the site language (footer columns, contact list). */
+/** Fixed labels in the site language. */
 const LABELS = {
-  it: { links: 'Link', services: 'Servizi', contacts: 'Contatti' },
-  en: { links: 'Links', services: 'Services', contacts: 'Contact' },
-  es: { links: 'Enlaces', services: 'Servicios', contacts: 'Contacto' },
-  fr: { links: 'Liens', services: 'Services', contacts: 'Contact' },
-  de: { links: 'Links', services: 'Leistungen', contacts: 'Kontakt' },
-  pt: { links: 'Links', services: 'Serviços', contacts: 'Contactos' },
+  it: { links: 'Link', services: 'Servizi', contacts: 'Contatti', about: 'Chi siamo', readMore: 'Scopri di più', phone: 'Telefono', email: 'Email', address: 'Indirizzo' },
+  en: { links: 'Links', services: 'Services', contacts: 'Contact', about: 'About us', readMore: 'Read more', phone: 'Phone', email: 'Email', address: 'Address' },
+  es: { links: 'Enlaces', services: 'Servicios', contacts: 'Contacto', about: 'Quiénes somos', readMore: 'Leer más', phone: 'Teléfono', email: 'Email', address: 'Dirección' },
+  fr: { links: 'Liens', services: 'Services', contacts: 'Contact', about: 'Qui sommes-nous', readMore: 'En savoir plus', phone: 'Téléphone', email: 'E-mail', address: 'Adresse' },
+  de: { links: 'Links', services: 'Leistungen', contacts: 'Kontakt', about: 'Über uns', readMore: 'Mehr erfahren', phone: 'Telefon', email: 'E-Mail', address: 'Adresse' },
+  pt: { links: 'Links', services: 'Serviços', contacts: 'Contactos', about: 'Quem somos', readMore: 'Saiba mais', phone: 'Telefone', email: 'Email', address: 'Morada' },
 };
 
-const PADDING = { compact: 60, normal: 90, airy: 120 };
+const PADDING = { compact: 64, normal: 96, airy: 128 };
+const SCALE = { normal: 1, large: 1.12, xl: 1.28 };
 
 const px = (size, unit = 'px') => ({ unit, size });
 const sides = (t, r, b, l) => ({ unit: 'px', top: String(t), right: String(r), bottom: String(b), left: String(l), isLinked: false });
@@ -41,13 +56,61 @@ const corners = (v) => ({ unit: 'px', top: String(v), right: String(v), bottom: 
 const link = (url) => ({ url, is_external: '', nofollow: '', custom_attributes: '' });
 const image = () => ({ url: TEMPLATE_IMAGE, id: '', alt: '', source: 'library' });
 const gap = (size) => ({ unit: 'px', size, column: String(size), row: String(size), isLinked: true });
-const shadow = { box_shadow_box_shadow_type: 'yes', box_shadow_box_shadow: { horizontal: 0, vertical: 12, blur: 32, spread: 0, color: 'rgba(15,27,45,0.08)' } };
+const boxShadow = (vertical, blur, alpha) => ({ horizontal: 0, vertical, blur, spread: 0, color: `rgba(15,27,45,${alpha})` });
 const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const isContactLink = (url) => /^(tel|mailto):/.test(url);
+
+/**
+ * Colors of the page surfaces for the theme of the template:
+ *   bg / alt   main and alternate section backgrounds
+ *   card/tint  card backgrounds (white or raised / tinted)
+ *   heading, text, kicker, border, iconBg, icon
+ */
+function surfaces(c, dark) {
+  if (dark) {
+    return {
+      dark: true,
+      bg: c.dark,
+      alt: mix(c.dark, '#FFFFFF', 0.04),
+      card: mix(c.dark, '#FFFFFF', 0.07),
+      tint: mix(c.dark, c.primary, 0.3),
+      heading: '#FFFFFF',
+      text: 'rgba(255,255,255,0.74)',
+      kicker: c.secondary,
+      border: 'rgba(255,255,255,0.14)',
+      iconBg: rgba(c.secondary, 0.16),
+      icon: c.secondary,
+    };
+  }
+  return {
+    dark: false,
+    bg: '#FFFFFF',
+    alt: c.background,
+    card: '#FFFFFF',
+    tint: tint(c.primary, 0.93),
+    heading: c.heading,
+    text: c.text,
+    kicker: c.primaryText,
+    border: tint(c.heading, 0.86),
+    iconBg: tint(c.primary, 0.86),
+    icon: c.primaryText,
+  };
+}
 
 /** Builder of one document: element factories + marks. */
 function createDoc(role, spec, site) {
-  const { colors: c, fonts, headingWeight, radius, spacing, uppercase } = spec.style;
-  const pad = PADDING[spacing] || PADDING.normal;
+  const st = spec.style;
+  const { fonts, headingWeight, radius } = st;
+  const c = siteColors(st.colors);
+  const ink = surfaces(c, st.theme === 'dark');
+  const pad = PADDING[st.spacing] || PADDING.normal;
+  const scale = SCALE[st.scale] || 1;
+  const btnRadius = st.buttons === 'pill' ? 50 : st.buttons === 'square' ? 0 : radius;
+  const imgRadius = st.images === 'rounded' ? Math.max(radius, 6) : 0;
+  const cardRadius = st.buttons === 'square' && st.images !== 'rounded' ? Math.min(radius, 2) : radius;
+  // Main buttons: primary color on light pages, the brighter secondary color on dark pages
+  const mainButton = ink.dark ? 'secondary' : 'primary';
+  const L = LABELS[site.lang] || LABELS.en;
   const marks = new Map();
   let n = 0;
   const id = () => crypto.createHash('md5').update(`${role}:${n++}`).digest('hex').slice(0, 7);
@@ -68,31 +131,72 @@ function createDoc(role, spec, site) {
     ...extra,
   });
   const widget = (widgetType, settings) => ({ id: id(), elType: 'widget', widgetType, settings, elements: [] });
+  /** Entrance animation (free Elementor motion effect), delayed to reveal cards one after the other. */
+  const animate = (settings, delay = 0) => Object.assign(settings, { animation: 'fadeInUp', ...(delay ? { animation_delay: delay } : {}) });
+  const background = (o) => {
+    if (o.gradient) {
+      const [from, to, angle = 135] = o.gradient;
+      return { background_background: 'gradient', background_color: from, background_color_b: to, background_gradient_type: 'linear', background_gradient_angle: px(angle, 'deg') };
+    }
+    return o.bg ? { background_background: 'classic', background_color: o.bg } : {};
+  };
+  /** Photo background (image slot) + gradient overlay [from, to, angle]. */
+  const photo = (settings, el, o) => {
+    Object.assign(settings, { background_background: 'classic', background_color: c.dark, background_image: image(), background_position: 'center center', background_size: 'cover', background_repeat: 'no-repeat' });
+    if (o.overlay) {
+      const [from, to, angle = 180] = o.overlay;
+      Object.assign(settings, {
+        background_overlay_background: 'gradient',
+        background_overlay_color: from,
+        background_overlay_color_b: to,
+        background_overlay_gradient_type: 'linear',
+        background_overlay_gradient_angle: px(angle, 'deg'),
+        background_overlay_opacity: px(1),
+      });
+    }
+    mark(el, 'background_image', { slot: o.slot, ...(o.service !== undefined ? { service: o.service } : {}) });
+  };
 
   // --- containers -------------------------------------------------------------------------
-  /** Top-level section. o: { bg, slot, overlay, opacity, minHeight, row, align, justify, padY, full, gap } */
+  /**
+   * Top-level section. o: { bg, gradient, slot, overlay: [from, to, angle], minHeight, row, align, justify, padY,
+   * full, gap, width, divider: { shape, color }, shadow, borderTop, borderBottom }
+   */
   const section = (elements, o = {}) => {
     const py = o.padY ?? pad;
     const settings = {
       content_width: o.full ? 'full' : 'boxed',
-      boxed_width: px(1200),
+      boxed_width: px(o.width || 1200),
       flex_direction: o.row ? 'row' : 'column',
       flex_wrap: o.row ? 'wrap' : 'nowrap',
-      flex_gap: gap(o.gap ?? 24),
+      flex_gap: gap(o.gap ?? 28),
       flex_align_items: o.align || (o.row ? 'center' : 'stretch'),
       flex_justify_content: o.justify || (o.row ? 'space-between' : 'center'),
-      padding: o.full ? sides(0, 0, 0, 0) : sides(py, 20, py, 20),
-      padding_mobile: o.full ? sides(0, 0, 0, 0) : sides(Math.round(py * 0.6), 16, Math.round(py * 0.6), 16),
+      padding: o.full ? sides(0, 0, 0, 0) : sides(py, 20, o.padBottom ?? py, 20),
+      padding_mobile: o.full ? sides(0, 0, 0, 0) : sides(Math.round(py * 0.6), 16, Math.round((o.padBottom ?? py) * 0.6), 16),
+      ...background(o),
     };
     if (o.minHeight) settings.min_height = px(o.minHeight, 'vh');
-    if (o.bg || o.slot) Object.assign(settings, { background_background: 'classic', background_color: o.bg || c.dark });
-    if (o.slot) Object.assign(settings, { background_image: image(), background_position: 'center center', background_size: 'cover', background_repeat: 'no-repeat' });
-    if (o.overlay) Object.assign(settings, { background_overlay_background: 'classic', background_overlay_color: o.overlay, background_overlay_opacity: px(o.opacity ?? 0.6) });
     const el = { id: id(), elType: 'container', isInner: false, settings, elements };
-    if (o.slot) mark(el, 'background_image', { slot: o.slot });
+    if (o.slot) photo(settings, el, o);
+    if (o.divider && o.divider.shape !== 'none') {
+      Object.assign(settings, {
+        shape_divider_bottom: o.divider.shape,
+        shape_divider_bottom_color: o.divider.color,
+        shape_divider_bottom_width: px(100, '%'),
+        shape_divider_bottom_height: px(o.divider.shape === 'waves' ? 60 : 70),
+        shape_divider_bottom_height_mobile: px(28),
+      });
+    }
+    if (o.shadow) Object.assign(settings, { box_shadow_box_shadow_type: 'yes', box_shadow_box_shadow: boxShadow(2, 18, 0.08), z_index: 10 });
+    if (o.borderTop) Object.assign(settings, { border_border: 'solid', border_width: sides(1, 0, 0, 0), border_color: o.borderTop });
+    if (o.borderBottom) Object.assign(settings, { border_border: 'solid', border_width: sides(0, 0, 1, 0), border_color: o.borderBottom });
     return el;
   };
-  /** Inner container (column / card / row). o: { width, tablet, row, align, justify, bg, card, gap, pad } */
+  /**
+   * Inner container (column / card / row). o: { width, tablet, maxWidth, row, align, justify, bg, gradient, card,
+   * on ('base' | 'alt' | 'photo': what the card stands on), gap, pad, overflow, anim, slot, service, overlay, minHeightPx, radius }
+   */
   const box = (elements, o = {}) => {
     const settings = {
       content_width: 'full',
@@ -101,76 +205,129 @@ function createDoc(role, spec, site) {
       flex_gap: gap(o.gap ?? 16),
       flex_align_items: o.align || (o.row ? 'center' : 'stretch'),
       flex_justify_content: o.justify || 'flex-start',
+      ...background(o),
     };
     if (o.width) Object.assign(settings, { width: px(o.width, '%'), width_tablet: px(o.tablet ?? (o.width < 45 ? 48 : 100), '%'), width_mobile: px(100, '%') });
-    if (o.bg || o.card) Object.assign(settings, { background_background: 'classic', background_color: o.bg || '#FFFFFF' });
-    if (o.card) Object.assign(settings, { border_radius: corners(radius), padding: sides(o.pad ?? 32, o.pad ?? 28, o.pad ?? 32, o.pad ?? 28), ...shadow });
-    return { id: id(), elType: 'container', isInner: true, settings, elements };
+    else if (o.maxWidth) Object.assign(settings, { width: px(o.maxWidth), width_tablet: px(100, '%'), width_mobile: px(100, '%') });
+    else settings.width = px(100, '%');
+    if (o.pad) Object.assign(settings, { padding: sides(o.pad, o.pad, o.pad, o.pad), padding_mobile: sides(Math.min(o.pad, 24), Math.min(o.pad, 22), Math.min(o.pad, 24), Math.min(o.pad, 22)) });
+    if (o.card) {
+      const look = st.cards;
+      if (!o.gradient && !o.bg) {
+        const tinted = look === 'tinted' && o.on !== 'photo';
+        // A tinted card on a tinted section would disappear: it stays white there
+        const bg = tinted ? (o.on === 'alt' ? ink.card : ink.tint) : ink.card;
+        Object.assign(settings, { background_background: 'classic', background_color: bg });
+      }
+      settings.border_radius = corners(cardRadius);
+      if (look === 'shadow') Object.assign(settings, { box_shadow_box_shadow_type: 'yes', box_shadow_box_shadow: boxShadow(10, 30, ink.dark ? 0.35 : 0.08) });
+      if (look === 'outline') Object.assign(settings, { border_border: 'solid', border_width: corners(1), border_color: ink.border });
+      if (look === 'accent') Object.assign(settings, { border_border: 'solid', border_width: sides(4, 0, 0, 0), border_color: c.secondary, box_shadow_box_shadow_type: 'yes', box_shadow_box_shadow: boxShadow(6, 20, ink.dark ? 0.3 : 0.06) });
+      Object.assign(settings, { box_shadow_hover_box_shadow_type: 'yes', box_shadow_hover_box_shadow: boxShadow(18, 44, ink.dark ? 0.45 : 0.16) });
+    }
+    if (o.radius !== undefined) settings.border_radius = corners(o.radius);
+    if (o.minHeightPx) Object.assign(settings, { min_height: px(o.minHeightPx), min_height_mobile: px(Math.round(o.minHeightPx * 0.8)) });
+    if (o.overflow) settings.overflow = 'hidden';
+    if (o.anim !== undefined && o.anim !== false) animate(settings, o.anim);
+    const el = { id: id(), elType: 'container', isInner: true, settings, elements };
+    if (o.slot) photo(settings, el, o);
+    return el;
   };
   const columns = (count) => ({ 1: 100, 2: 48, 3: 31, 4: 22.5 })[Math.min(4, Math.max(1, count))];
 
   // --- widgets ----------------------------------------------------------------------------
+  /** o: { tag, size, align, color, weight, upper, url, bar, fixed | hint, max } */
   const heading = (text, o = {}) => {
-    const size = o.size || 36;
+    const tag = o.tag || 'h2';
+    const title = tag === 'h1' || tag === 'h2';
+    const size = Math.round((o.size || 40) * (title ? scale : 1));
+    const upper = o.upper || (title && st.titleCase === 'upper');
     const el = widget('heading', {
       title: text,
-      header_size: o.tag || 'h2',
+      header_size: tag,
       align: o.align || 'left',
-      title_color: o.color || c.heading,
+      title_color: o.color || ink.heading,
+      ...(o.url ? { link: link(o.url) } : {}),
       ...typo('', fonts.heading, size, o.weight || headingWeight, {
-        typography_font_size_mobile: px(Math.max(18, Math.round(size * 0.72))),
-        typography_line_height: px(1.2, 'em'),
-        ...(o.upper ? { typography_text_transform: 'uppercase', typography_letter_spacing: px(1.5) } : {}),
+        typography_font_size_tablet: px(Math.max(18, Math.round(size * 0.82))),
+        typography_font_size_mobile: px(Math.max(18, Math.round(size * (size > 60 ? 0.55 : 0.68)))),
+        typography_line_height: px(size >= 40 ? 1.12 : 1.3, 'em'),
+        ...(upper ? { typography_text_transform: 'uppercase', typography_letter_spacing: px(o.upper ? 2 : 1) } : size >= 40 ? { typography_letter_spacing: px(-0.5) } : {}),
       }),
+      // Colored bar on the left of the title ("bar" title style)
+      ...(o.bar ? { _border_border: 'solid', _border_width: sides(0, 0, 0, 5), _border_color: c.secondary, _padding: sides(0, 0, 0, 18) } : {}),
     });
     field(el, 'title', o);
+    if (o.url) mark(el, 'link.url', { fixed: true });
     return el;
   };
-  const kicker = (text, o = {}) => heading(text, { tag: 'p', size: 14, weight: '600', color: o.color || c.secondary, upper: true, ...o });
+  /** Small label above a title. */
+  const kicker = (text, o = {}) => heading(text, { tag: 'p', size: 13, weight: '700', upper: true, ...o, color: o.color || ink.kicker });
+  /** Short accent line under a title. */
+  const line = (align = 'left', color = c.secondary) => widget('divider', { style: 'solid', weight: px(3), color, width: px(56), align, gap: px(4) });
   const text = (html, o = {}) => {
     const el = widget('text-editor', {
       editor: /^\s*</.test(html) ? html : `<p>${escapeHtml(html)}</p>`,
       align: o.align || 'left',
-      text_color: o.color || c.text,
-      ...typo('', fonts.body, o.size || 17, '400', { typography_line_height: px(1.7, 'em') }),
+      text_color: o.color || ink.text,
+      ...typo('', fonts.body, o.size || 17, '400', { typography_line_height: px(1.75, 'em') }),
     });
     field(el, 'editor', o);
     return el;
   };
+  /** variant: main | primary | secondary | outline | link */
   const button = (label, url, o = {}) => {
-    const variant = o.variant || 'primary';
-    const bg = { primary: c.primary, secondary: c.secondary, light: '#FFFFFF', outline: 'rgba(0,0,0,0)' }[variant];
-    const fg = { primary: '#FFFFFF', secondary: c.dark, light: c.primary, outline: o.outlineColor || '#FFFFFF' }[variant];
-    const el = widget('button', {
+    const variant = o.variant === 'main' || !o.variant ? mainButton : o.variant;
+    const fg = { primary: c.onPrimary, secondary: c.onSecondary, outline: o.outlineColor || ink.heading, link: o.color || ink.kicker }[variant];
+    const settings = {
       text: label,
       link: link(url),
       align: o.align || 'left',
-      background_color: bg,
       button_text_color: fg,
-      hover_color: fg,
-      button_background_hover_color: variant === 'primary' ? c.dark : variant === 'secondary' ? c.primary : bg,
-      border_radius: corners(radius),
-      text_padding: sides(15, 30, 15, 30),
-      ...(variant === 'outline' ? { border_border: 'solid', border_width: corners(2), border_color: fg } : {}),
-      ...typo('', fonts.body, 15, '600', uppercase ? { typography_text_transform: 'uppercase', typography_letter_spacing: px(1) } : {}),
-    });
+      border_radius: corners(btnRadius),
+      ...typo('', fonts.body, 15, '600', st.uppercase ? { typography_text_transform: 'uppercase', typography_letter_spacing: px(1) } : {}),
+    };
+    if (variant === 'primary') Object.assign(settings, { background_color: c.primary, button_background_hover_color: c.dark, hover_color: '#FFFFFF', text_padding: sides(16, 32, 16, 32) });
+    if (variant === 'secondary') Object.assign(settings, { background_color: c.secondary, button_background_hover_color: ink.dark ? '#FFFFFF' : c.dark, hover_color: ink.dark ? c.dark : '#FFFFFF', text_padding: sides(16, 32, 16, 32) });
+    if (variant === 'outline')
+      Object.assign(settings, {
+        background_color: 'rgba(0,0,0,0)',
+        button_background_hover_color: fg,
+        hover_color: fg === '#FFFFFF' ? c.dark : '#FFFFFF',
+        border_border: 'solid',
+        border_width: corners(2),
+        border_color: fg,
+        text_padding: sides(14, 30, 14, 30),
+      });
+    if (variant === 'link') Object.assign(settings, { background_color: 'rgba(0,0,0,0)', button_background_hover_color: 'rgba(0,0,0,0)', hover_color: ink.heading, text_padding: sides(4, 0, 4, 0) });
+    const el = widget('button', settings);
     field(el, 'text', o);
     // tel:/mailto: links are not link fields (analyze.js); site links are decided here
-    if (!/^(tel|mailto):/.test(url)) mark(el, 'link.url', { fixed: true });
+    if (!isContactLink(url)) mark(el, 'link.url', { fixed: true });
     return el;
   };
+  /** Image. o: { width (px), height (px, cropped with object-fit), mobileHeight, align, size, round, frame, url, service } */
   const picture = (slot, o = {}) => {
-    const el = widget('image', {
+    const framed = o.frame && st.images === 'framed';
+    const settings = {
       image: image(),
       image_size: o.size || 'large',
       align: o.align || 'center',
-      ...(o.width ? { width: px(o.width) } : {}),
-      ...(o.round !== false ? { image_border_radius: corners(radius) } : {}),
-    });
-    mark(el, 'image', { slot });
+      width: o.width ? px(o.width) : px(100, '%'),
+      ...(o.width ? {} : { width_mobile: px(100, '%') }),
+      ...(o.round !== false && imgRadius ? { image_border_radius: corners(imgRadius) } : {}),
+    };
+    // "framed": an offset block of the secondary color behind the photo; otherwise a soft shadow
+    if (framed) Object.assign(settings, { image_box_shadow_box_shadow_type: 'yes', image_box_shadow_box_shadow: { horizontal: 18, vertical: 18, blur: 0, spread: 0, color: c.secondary } });
+    else if (o.frame) Object.assign(settings, { image_box_shadow_box_shadow_type: 'yes', image_box_shadow_box_shadow: boxShadow(18, 40, 0.14) });
+    if (o.height) Object.assign(settings, { height: px(o.height), height_tablet: px(Math.round(o.height * 0.8)), height_mobile: px(o.mobileHeight || 260), 'object-fit': 'cover' });
+    if (o.url) Object.assign(settings, { link_to: 'custom', link: link(o.url) });
+    const el = widget('image', settings);
+    mark(el, 'image', { slot, ...(o.service !== undefined ? { service: o.service } : {}) });
+    if (o.url) mark(el, 'link.url', { fixed: true });
     return el;
   };
-  /** icon list. items: [{ text, url?, icon? }] (all fixed), o: { inline, align, color, iconColor, size } */
+  /** icon list. items: [{ text, url?, icon? }] (all fixed), o: { inline, align, color, iconColor, hover, size, weight } */
   const iconList = (items, o = {}) => {
     const el = widget('icon-list', {
       view: o.inline ? 'inline' : 'traditional',
@@ -181,195 +338,320 @@ function createDoc(role, spec, site) {
         ...(it.url ? { link: link(it.url) } : {}),
       })),
       icon_align: o.align || 'left',
-      space_between: px(o.inline ? 28 : 10),
+      space_between: px(o.inline ? 30 : 12),
       icon_color: o.iconColor || c.secondary,
-      text_color: o.color || c.text,
-      text_color_hover: o.hover || c.secondary,
+      text_color: o.color || ink.text,
+      text_color_hover: o.hover || ink.kicker,
       ...typo('icon_', fonts.body, o.size || 16, o.weight || '400'),
     });
     items.forEach((it, i) => {
       mark(el, `icon_list.${i}.text`, { fixed: true });
-      if (it.url && !/^(tel|mailto):/.test(it.url)) mark(el, `icon_list.${i}.link.url`, { fixed: true });
+      if (it.url && !isContactLink(it.url)) mark(el, `icon_list.${i}.link.url`, { fixed: true });
     });
     return el;
   };
+  /** Icon box. o: { position, align, titleSize, url, fixed | titleHint + textHint } */
   const iconBox = (icon, title, desc, o = {}) => {
+    const left = o.position === 'left';
     const el = widget('icon-box', {
       selected_icon: { value: icon, library: 'fa-solid' },
       view: 'stacked',
-      shape: 'circle',
-      position: 'top',
-      text_align: o.align || 'center',
-      title_size: 'h3',
-      primary_color: c.primary,
-      secondary_color: '#FFFFFF',
-      icon_size: px(26),
-      icon_padding: px(18),
-      title_color: o.titleColor || c.heading,
-      description_color: o.textColor || c.text,
-      ...typo('title_', fonts.heading, 20, headingWeight),
-      ...typo('description_', fonts.body, 15, '400'),
-    });
-    field(el, 'title_text', { hint: o.titleHint, max: 50 });
-    field(el, 'description_text', { hint: o.textHint, max: 170 });
-    return el;
-  };
-  const serviceCard = (service, index, desc, o = {}) => {
-    const el = widget('image-box', {
-      image: image(),
-      thumbnail_size: 'medium_large',
-      image_size: px(100, '%'),
-      image_space: px(18),
-      image_border_radius: corners(radius),
-      position: 'top',
-      text_align: 'left',
-      title_text: service.name,
+      shape: st.buttons === 'square' ? 'square' : 'circle',
+      position: o.position || 'top',
+      text_align: o.align || (left ? 'left' : 'center'),
+      title_text: title,
       description_text: desc,
-      link: link(service.url),
+      ...(o.url ? { link: link(o.url) } : {}),
       title_size: 'h3',
-      title_color: c.heading,
-      description_color: c.text,
-      ...typo('title_', fonts.heading, 21, headingWeight),
-      ...typo('description_', fonts.body, 15, '400'),
+      primary_color: ink.iconBg,
+      secondary_color: ink.icon,
+      icon_size: px(left ? 20 : 26),
+      icon_padding: px(left ? 16 : 20),
+      icon_space: px(left ? 18 : 20),
+      title_bottom_space: px(left ? 4 : 10),
+      title_color: ink.heading,
+      description_color: ink.text,
+      ...typo('title_', fonts.heading, o.titleSize || 20, headingWeight),
+      ...typo('description_', fonts.body, 15, '400', { description_typography_line_height: px(1.65, 'em') }),
     });
-    mark(el, 'image', { slot: 'service_list', service: index });
-    mark(el, 'title_text', { fixed: true });
-    mark(el, 'link.url', { fixed: true });
-    field(el, 'description_text', { hint: `short description of the service "${service.name}" for its card (1–2 sentences)`, max: 170, ...o });
+    if (o.fixed) {
+      mark(el, 'title_text', { fixed: true });
+      mark(el, 'description_text', { fixed: true });
+    } else {
+      field(el, 'title_text', { hint: o.titleHint, max: 50 });
+      field(el, 'description_text', { hint: o.textHint, max: 170 });
+    }
     return el;
   };
+  /** Card of a service: image (same height for every card) + linked title + short text + "read more", or text over the photo ("overlay"). */
+  const serviceCard = (service, index, desc, o = {}) => {
+    const hint = o.hint || `short description of the service "${service.name}" for its card (1–2 sentences)`;
+    if (spec.layout.services === 'overlay') {
+      return box(
+        [
+          heading(service.name, { tag: 'h3', size: 23, color: '#FFFFFF', url: service.url, fixed: true }),
+          text(desc, { size: 15, color: 'rgba(255,255,255,0.86)', hint, max: 170 }),
+          button(`${L.readMore} →`, service.url, { variant: 'link', color: c.secondary, fixed: true }),
+        ],
+        { width: o.width, slot: 'service_list', service: index, overlay: [rgba(c.dark, 0.05), rgba(c.dark, 0.9), 180], minHeightPx: 380, justify: 'flex-end', pad: 30, gap: 8, radius: imgRadius, anim: o.anim }
+      );
+    }
+    return box(
+      [
+        picture('service_list', { service: index, height: 230, mobileHeight: 220, round: false, url: service.url, size: 'medium_large' }),
+        box(
+          [
+            heading(service.name, { tag: 'h3', size: 21, url: service.url, fixed: true }),
+            text(desc, { size: 15, hint, max: 170 }),
+            button(`${L.readMore} →`, service.url, { variant: 'link', fixed: true }),
+          ],
+          { gap: 10, pad: 26 }
+        ),
+      ],
+      { width: o.width, card: true, on: o.on, pad: 0, overflow: true, gap: 0, anim: o.anim }
+    );
+  };
+  /** One review, without photo of the customer: quote mark, 5 stars, text, name and role. o: { align, light } */
   const review = (r, i, o = {}) => {
-    const stars = widget('star-rating', { rating_scale: '5', rating: '5', star_style: 'star_fontawesome', stars_color: c.secondary, align: 'center' });
+    const align = o.align || 'center';
+    const quote = widget('icon', { selected_icon: { value: 'fas fa-quote-left', library: 'fa-solid' }, view: 'default', primary_color: o.light ? c.secondary : tint(c.secondary, 0.25), size: px(30), align });
+    const stars = widget('star-rating', { rating_scale: '5', rating: '5', star_style: 'star_fontawesome', stars_color: c.secondary, icon_size: px(16), align });
     const el = widget('testimonial', {
       testimonial_content: r.text,
+      testimonial_image: { url: '', id: '' },
       testimonial_name: r.name,
       testimonial_job: r.role,
-      testimonial_alignment: 'center',
-      content_content_color: o.color || c.text,
-      name_text_color: o.nameColor || c.heading,
-      job_text_color: c.secondary,
-      ...typo('content_', fonts.body, 16, '400', { content_typography_font_style: 'italic' }),
+      testimonial_alignment: align,
+      content_content_color: o.light ? 'rgba(255,255,255,0.88)' : ink.text,
+      name_text_color: o.light ? '#FFFFFF' : ink.heading,
+      job_text_color: o.light ? c.secondary : ink.kicker,
+      ...typo('content_', fonts.body, 16, '400', { content_typography_font_style: 'italic', content_typography_line_height: px(1.7, 'em') }),
       ...typo('name_', fonts.heading, 17, headingWeight),
       ...typo('job_', fonts.body, 14, '400'),
     });
     field(el, 'testimonial_content', { hint: `customer review ${i + 1} of 3: realistic, 2–3 sentences, about a different aspect than the other reviews (quality, punctuality, value for money, assistance…)`, max: 300, share: `review${i + 1}.content` });
     field(el, 'testimonial_name', { hint: `first name and surname of the customer of review ${i + 1} (fictional, typical of the site country)`, max: 40, share: `review${i + 1}.name` });
     field(el, 'testimonial_job', { hint: `role or city of the customer of review ${i + 1}`, max: 40, share: `review${i + 1}.job` });
-    return [stars, el];
+    return [quote, stars, el];
   };
   const shortcode = (code) => widget('shortcode', { shortcode: code });
   const html = (code) => widget('html', { html: code });
 
-  return { c, fonts, pad, radius, marks, mark, section, box, columns, heading, kicker, text, button, picture, iconList, iconBox, serviceCard, review, shortcode, html, widget, typo };
+  return { c, ink, L, st, fonts, pad, radius, imgRadius, marks, mark, section, box, columns, heading, kicker, line, text, button, picture, iconList, iconBox, serviceCard, review, shortcode, html, widget, typo };
 }
 
 // ---------------------------------------------------------------------------------------------
 // Shared sections
 // ---------------------------------------------------------------------------------------------
 
-function subheader(b, site, role) {
+/**
+ * Title block of a section: small label, title (+ accent line or side bar, per the title style), intro text.
+ * parts: { kicker?, title, text? } each { value, hint, max } or { value, fixed }.
+ * o: { align (default: the template alignment), light (on a photo / dark band) }
+ */
+function intro(b, parts, o = {}) {
+  const bar = b.st.titles === 'bar';
+  const align = bar ? 'left' : o.align || b.st.align;
+  const light = o.light;
+  const els = [];
+  if (parts.kicker) els.push(b.kicker(parts.kicker.value, { ...parts.kicker, align, color: light ? b.c.secondary : undefined }));
+  els.push(b.heading(parts.title.value, { ...parts.title, align, bar, color: light ? '#FFFFFF' : undefined }));
+  if (b.st.titles === 'line') els.push(b.line(align));
+  if (parts.text) els.push(b.text(parts.text.value, { ...parts.text, align, color: light ? 'rgba(255,255,255,0.86)' : undefined }));
+  return align === 'center' ? b.box(els, { maxWidth: 760, gap: 12, align: 'center' }) : b.box(els, { maxWidth: 820, gap: 12, align: 'stretch' });
+}
+
+const shape = (b, color) => ({ shape: b.spec.layout.divider, color });
+
+function subheader(b, site, role, nextBg = b.ink.bg) {
+  const center = b.st.align === 'center' && b.st.titles !== 'bar';
+  const align = center ? 'center' : 'left';
   return b.section(
     [
-      b.heading(site.pages[role].title, { tag: 'h1', size: 48, color: '#FFFFFF', align: 'center', fixed: true }),
-      b.text(b.spec.copy.subheaderText, { color: 'rgba(255,255,255,0.88)', align: 'center', hint: `short sentence under the title "${site.pages[role].title}" in the page banner`, max: 140 }),
+      b.heading(site.pages[role].title, { tag: 'h1', size: 52, color: '#FFFFFF', align, fixed: true }),
+      ...(b.st.titles === 'plain' ? [] : [b.line(align)]),
+      b.text(b.spec.copy.subheaderText, { color: 'rgba(255,255,255,0.88)', align, hint: `short sentence under the title "${site.pages[role].title}" in the page banner`, max: 140 }),
     ],
-    { slot: 'subheader', overlay: b.c.dark, opacity: 0.62, padY: Math.round(b.pad * 1.2), align: 'center' }
+    {
+      slot: 'subheader',
+      overlay: center ? [rgba(b.c.dark, 0.6), rgba(b.c.dark, 0.82), 180] : [rgba(b.c.dark, 0.9), rgba(b.c.dark, 0.45), 90],
+      padY: Math.round(b.pad * 1.25),
+      gap: 14,
+      align: center ? 'center' : 'flex-start',
+      divider: shape(b, nextBg),
+    }
   );
 }
 
+const featureHints = (i) => ({ titleHint: `strength ${i + 1} of 4 of the business (short title, 2–4 words)`, textHint: `explanation of strength ${i + 1} (1–2 sentences)` });
+
 function features(b) {
   const { copy, icons, layout } = b.spec;
-  const cards = layout.features === 'cards';
-  const items = copy.features.map((f, i) => {
-    const ib = b.iconBox(icons[i], f.title, f.text, { titleHint: `strength ${i + 1} of 4 of the business (short title)`, textHint: `explanation of strength ${i + 1} (1–2 sentences)` });
-    return b.box([ib], { width: b.columns(4), card: cards, pad: 28 });
-  });
+  const parts = {
+    kicker: { value: copy.featuresKicker, hint: 'small label above the "Why choose us" title', max: 40 },
+    title: { value: copy.featuresTitle, hint: '"Why choose us" section title', max: 60 },
+    text: { value: copy.featuresText, hint: 'intro of the "why choose us" section (1 sentence)', max: 200 },
+  };
+  // "list": title on the left, the 4 strengths in two columns (icon beside the text, no cards)
+  if (layout.features === 'list') {
+    const items = copy.features.map((f, i) => b.box([b.iconBox(icons[i], f.title, f.text, { position: 'left', ...featureHints(i) })], { width: 47, tablet: 100, anim: i * 100 }));
+    return b.section([b.box([intro(b, parts, { align: 'left' })], { width: 36 }), b.box(items, { width: 58, row: true, gap: 32, align: 'flex-start', justify: 'space-between' })], {
+      row: true,
+      bg: b.ink.bg,
+      align: 'flex-start',
+    });
+  }
+  const onPhoto = layout.features === 'cards';
+  const items = copy.features.map((f, i) => b.box([b.iconBox(icons[i], f.title, f.text, featureHints(i))], { width: b.columns(4), card: true, on: onPhoto ? 'photo' : 'alt', pad: 30, anim: i * 120 }));
   return b.section(
-    [
-      b.heading(copy.featuresTitle, { align: 'center', color: cards ? '#FFFFFF' : undefined, hint: '"Why choose us" section title', max: 60 }),
-      b.text(copy.featuresText, { align: 'center', color: cards ? 'rgba(255,255,255,0.85)' : undefined, hint: 'intro of the "why choose us" section (1 sentence)', max: 200 }),
-      b.box(items, { row: true, gap: 24, align: 'stretch', justify: 'space-between' }),
-    ],
-    cards ? { slot: 'photo', overlay: b.c.dark, opacity: 0.82 } : { bg: b.c.background }
+    [intro(b, parts, { light: onPhoto }), b.box(items, { row: true, gap: 24, align: 'stretch', justify: 'space-between' })],
+    onPhoto ? { slot: 'photo', overlay: [rgba(b.c.dark, 0.9), rgba(b.c.dark, 0.78), 180], align: 'center', gap: 44 } : { bg: b.ink.alt, align: 'center', gap: 44 }
   );
 }
 
 function cta(b, site) {
   const { copy, layout } = b.spec;
   if (layout.cta === 'none') return null;
-  const title = b.heading(copy.ctaTitle, { color: '#FFFFFF', align: layout.cta === 'banner' ? 'center' : 'left', hint: 'call to action title: invite to contact the business', max: 80 });
-  const body = b.text(copy.ctaText, { color: 'rgba(255,255,255,0.9)', align: layout.cta === 'banner' ? 'center' : 'left', hint: 'call to action text (1–2 sentences)', max: 200 });
-  const btn = b.button(copy.ctaButton, site.pages.contact.url, { variant: 'secondary', align: layout.cta === 'banner' ? 'center' : 'right', hint: 'call to action button text (leads to the contact page)', max: 30 });
-  if (layout.cta === 'banner') return b.section([title, body, btn], { slot: 'photo', overlay: b.c.primary, opacity: 0.86, align: 'center' });
-  return b.section([b.box([title, body], { width: 65 }), b.box([btn], { width: 30, align: 'flex-end' })], { row: true, bg: b.c.primary, padY: Math.round(b.pad * 0.7) });
+  const banner = layout.cta === 'banner';
+  const title = b.heading(copy.ctaTitle, { size: 40, color: '#FFFFFF', align: banner ? 'center' : 'left', hint: 'call to action title: invite to contact the business', max: 80 });
+  const body = b.text(copy.ctaText, { color: 'rgba(255,255,255,0.9)', align: banner ? 'center' : 'left', size: 18, hint: 'call to action text (1–2 sentences)', max: 200 });
+  const btn = b.button(copy.ctaButton, site.pages.contact.url, { variant: 'secondary', align: banner ? 'center' : 'right', hint: 'call to action button text (leads to the contact page)', max: 30 });
+  if (banner) {
+    return b.section([b.box([title, body, btn], { maxWidth: 820, gap: 18, align: 'center', anim: 0 })], {
+      slot: 'photo',
+      overlay: [rgba(b.c.primary, 0.92), rgba(b.c.dark, 0.9), 135],
+      align: 'center',
+    });
+  }
+  // A rounded colored band floating on the page
+  return b.section(
+    [
+      b.box([b.box([title, body], { width: 64, gap: 12 }), b.box([btn], { width: 30, align: 'flex-end' })], {
+        row: true,
+        card: true,
+        gradient: [b.c.primaryText, b.c.dark, 135],
+        pad: 56,
+        justify: 'space-between',
+        anim: 0,
+      }),
+    ],
+    { bg: b.ink.bg, padY: Math.round(b.pad * 0.7) }
+  );
 }
 
 function reviews(b) {
   const { copy, layout } = b.spec;
+  const parts = {
+    kicker: { value: copy.reviewsKicker, hint: 'small label above the reviews title', max: 40 },
+    title: { value: copy.reviewsTitle, hint: 'title of the customer reviews section', max: 60 },
+  };
+  const band = layout.testimonials === 'band';
   const cards = layout.testimonials === 'cards';
+  const align = cards ? 'left' : 'center';
   return b.section(
     [
-      b.heading(copy.reviewsTitle, { align: 'center', hint: 'title of the customer reviews section', max: 60 }),
+      intro(b, parts, { light: band }),
       b.box(
-        copy.reviews.map((r, i) => b.box(b.review(r, i), { width: b.columns(3), card: cards, gap: 10, tablet: 100 })),
+        b.spec.copy.reviews.map((r, i) => b.box(b.review(r, i, { align, light: band }), { width: b.columns(3), card: cards, on: 'alt', pad: cards ? 34 : 10, gap: 12, tablet: 100, align: cards ? 'stretch' : 'center', anim: i * 120 })),
         { row: true, gap: 24, align: 'stretch', justify: 'space-between' }
       ),
     ],
-    { bg: cards ? b.c.background : '#FFFFFF' }
+    band ? { gradient: [b.c.primaryText, b.c.dark, 135], align: 'center', gap: 44 } : { bg: cards ? b.ink.alt : b.ink.bg, align: 'center', gap: 44 }
   );
 }
 
-/** Image + text row (about teaser, story, mission). */
-function mediaRow(b, imageFirst, content, o = {}) {
-  const img = b.box([b.picture('photo')], { width: 46 });
-  const txt = b.box(content, { width: 48, gap: 14 });
-  return b.section(imageFirst ? [img, txt] : [txt, img], { row: true, bg: o.bg });
+/**
+ * Image + text (about teaser on Home, "Chi siamo" on the About page): image on the left or on the
+ * right of the text, or ("wide") text on top and a wide photo below.
+ */
+function mediaRow(b, content, o = {}) {
+  const variant = b.spec.layout.about;
+  if (variant === 'wide') {
+    return b.section(
+      [b.box(content, { maxWidth: 860, gap: 16, align: 'stretch' }), b.box([b.picture('photo', { height: o.wideHeight || 460, frame: true })], { anim: 0 })],
+      { bg: o.bg || b.ink.bg, align: 'center', gap: 48 }
+    );
+  }
+  const img = b.box([b.picture('photo', { height: o.height || 460, frame: true })], { width: 46, anim: 0 });
+  const txt = b.box(content, { width: 48, gap: 16 });
+  return b.section(variant === 'image-left' ? [img, txt] : [txt, img], { row: true, bg: o.bg || b.ink.bg });
 }
+
+/** Accent line under a left-aligned title (only for the "line" title style). */
+const titleLine = (b) => (b.st.titles === 'line' ? [b.line()] : []);
 
 // ---------------------------------------------------------------------------------------------
 // Documents
 // ---------------------------------------------------------------------------------------------
 
-function home(b, site) {
+function hero(b, site) {
   const { copy, layout } = b.spec;
-  const out = [];
   const tel = `tel:${telHref(site.phone)}`;
-
-  // 1. Hero
-  const heroLeft = layout.hero !== 'center';
-  const align = heroLeft ? 'left' : 'center';
-  const onImage = layout.hero !== 'split';
-  const heroText = [
-    b.kicker(copy.heroKicker, { align, hint: 'short tagline above the main title', max: 50 }),
-    b.heading(copy.heroTitle, { tag: 'h1', size: 54, align, color: onImage ? '#FFFFFF' : undefined, hint: 'main title of the site (H1): the promise of the business, with its activity and city', max: 80 }),
+  const variant = layout.hero;
+  const onImage = variant === 'center' || variant === 'left' || variant === 'bottom';
+  const align = variant === 'center' ? 'center' : 'left';
+  const size = variant === 'bottom' ? 66 : 58;
+  const content = [
+    b.kicker(copy.heroKicker, { align, color: onImage ? b.c.secondary : undefined, hint: 'short tagline above the main title', max: 50 }),
+    b.heading(copy.heroTitle, { tag: 'h1', size, align, color: onImage ? '#FFFFFF' : undefined, hint: 'main title of the site (H1): the promise of the business, with its activity and city', max: 80 }),
     b.text(copy.heroText, { align, color: onImage ? 'rgba(255,255,255,0.9)' : undefined, size: 19, hint: 'hero subtitle (1–2 sentences)', max: 200 }),
     b.box(
       [
-        b.button(copy.heroButton, site.pages.contact.url, { variant: 'secondary', hint: 'main hero button (leads to the contact page)', max: 30 }),
-        b.button(copy.heroButton2, tel, { variant: 'outline', outlineColor: onImage ? '#FFFFFF' : b.c.primary, hint: 'second hero button: call the business by phone', max: 30 }),
+        b.button(copy.heroButton, site.pages.contact.url, { variant: onImage ? 'secondary' : 'main', hint: 'main hero button (leads to the contact page)', max: 30 }),
+        b.button(copy.heroButton2, tel, { variant: 'outline', outlineColor: onImage ? '#FFFFFF' : b.ink.heading, hint: 'second hero button: call the business by phone', max: 30 }),
       ],
-      { row: true, gap: 14, justify: heroLeft ? 'flex-start' : 'center' }
+      { row: true, gap: 14, justify: align === 'center' ? 'center' : 'flex-start' }
     ),
   ];
-  if (layout.hero === 'split') {
-    out.push(b.section([b.box(heroText, { width: 50, gap: 18 }), b.box([b.picture('hero')], { width: 46 })], { row: true, bg: b.c.background, minHeight: 75 }));
-  } else {
-    out.push(
-      b.section([b.box(heroText, { width: heroLeft ? 62 : 100, gap: 18, align: heroLeft ? 'flex-start' : 'center' })], {
-        slot: 'hero',
-        overlay: b.c.dark,
-        opacity: 0.55,
-        minHeight: 85,
-        align: heroLeft ? 'flex-start' : 'center',
-      })
-    );
+  const edge = shape(b, b.ink.bg);
+  if (variant === 'split') {
+    return b.section([b.box(content, { width: 50, gap: 20 }), b.box([b.picture('hero', { height: 540, mobileHeight: 300, frame: true })], { width: 46, anim: 0 })], {
+      row: true,
+      bg: b.ink.alt,
+      minHeight: 80,
+    });
   }
+  if (variant === 'card') {
+    // Full photo with the text in a card on the left
+    return b.section([b.box(content, { maxWidth: 620, card: true, on: 'photo', pad: 52, gap: 20, anim: 0 })], {
+      slot: 'hero',
+      overlay: [rgba(b.c.dark, 0.35), rgba(b.c.dark, 0.15), 90],
+      minHeight: 86,
+      align: 'flex-start',
+      divider: edge,
+    });
+  }
+  if (variant === 'bottom') {
+    // Big title at the bottom of a full-height photo
+    return b.section([b.box(content, { maxWidth: 900, gap: 20, align: 'flex-start', anim: 0 })], {
+      slot: 'hero',
+      overlay: [rgba(b.c.dark, 0.1), rgba(b.c.dark, 0.94), 180],
+      minHeight: 94,
+      align: 'flex-start',
+      justify: 'flex-end',
+      padBottom: Math.round(b.pad * 1.1),
+      divider: edge,
+    });
+  }
+  return b.section([b.box(content, { maxWidth: variant === 'left' ? 680 : 860, gap: 20, align: variant === 'left' ? 'flex-start' : 'center', anim: 0 })], {
+    slot: 'hero',
+    overlay: variant === 'left' ? [rgba(b.c.dark, 0.9), rgba(b.c.dark, 0.3), 90] : [rgba(b.c.dark, 0.55), rgba(b.c.dark, 0.8), 180],
+    minHeight: 88,
+    align: variant === 'left' ? 'flex-start' : 'center',
+    divider: edge,
+  });
+}
+
+function home(b, site) {
+  const { copy, layout } = b.spec;
+  const out = [hero(b, site)];
 
   // 2. About teaser
   out.push(
-    mediaRow(b, layout.about === 'image-left', [
+    mediaRow(b, [
       b.kicker(copy.aboutKicker, { hint: 'small label of the "about us" section', max: 30 }),
-      b.heading(copy.aboutTitle, { hint: '"About us" section title', max: 70 }),
+      b.heading(copy.aboutTitle, { bar: b.st.titles === 'bar', hint: '"About us" section title', max: 70 }),
+      ...titleLine(b),
       b.text(copy.aboutText, { hint: 'short presentation of the business (2–4 sentences)', max: 600 }),
       b.button(copy.aboutButton, site.pages.about.url, { hint: 'button "Scopri di più" leading to the About page', max: 30 }),
     ])
@@ -384,16 +666,22 @@ function home(b, site) {
   if (site.services.length) {
     const shown = site.services.slice(0, 3);
     const boxed = layout.services === 'boxed';
+    const left = b.st.align === 'left' || b.st.titles === 'bar';
     out.push(
       b.section(
         [
-          b.kicker(copy.servicesKicker, { align: 'center', hint: 'small label of the services section', max: 30 }),
-          b.heading(copy.servicesTitle, { align: 'center', hint: 'title of the featured services section', max: 60 }),
-          b.text(copy.servicesText, { align: 'center', hint: 'intro of the services section (1 sentence)', max: 200 }),
-          b.box(shown.map((s, i) => b.box([b.serviceCard(s, i, copy.serviceText)], { width: b.columns(shown.length), card: boxed, pad: 22 })), { row: true, gap: 24, align: 'stretch', justify: shown.length < 3 ? 'center' : 'space-between' }),
-          b.button(copy.servicesButton, site.pages.services.url, { align: 'center', hint: 'button "Tutti i servizi" leading to the Services page', max: 30 }),
+          intro(b, {
+            kicker: { value: copy.servicesKicker, hint: 'small label of the services section', max: 30 },
+            title: { value: copy.servicesTitle, hint: 'title of the featured services section', max: 60 },
+            text: { value: copy.servicesText, hint: 'intro of the services section (1 sentence)', max: 200 },
+          }),
+          b.box(
+            shown.map((s, i) => b.serviceCard(s, i, copy.serviceText, { width: b.columns(shown.length), on: boxed ? 'alt' : 'base', anim: i * 120 })),
+            { row: true, gap: 28, align: 'stretch', justify: shown.length < 3 ? 'center' : 'space-between' }
+          ),
+          b.button(copy.servicesButton, site.pages.services.url, { align: left ? 'left' : 'center', hint: 'button "Tutti i servizi" leading to the Services page', max: 30 }),
         ],
-        { bg: boxed ? b.c.background : '#FFFFFF' }
+        { bg: boxed ? b.ink.alt : b.ink.bg, align: 'center', gap: 44 }
       )
     );
   }
@@ -404,22 +692,22 @@ function home(b, site) {
 }
 
 function about(b, site) {
-  const { copy, layout } = b.spec;
-  const left = layout.about === 'image-left';
+  const { copy } = b.spec;
+  // A single "Chi siamo" section (history, mission, values in one text: no "Our story" / "Our mission" titles)
   const out = [
     subheader(b, site, 'about'),
-    mediaRow(b, left, [
-      b.heading(copy.storyTitle, { hint: 'title of the extended "about us": history of the business', max: 70 }),
-      b.text(copy.storyText, { hint: 'history and experience of the business (2 paragraphs)', max: 1000, min: 250 }),
-    ]),
     mediaRow(
       b,
-      !left,
       [
-        b.heading(copy.missionTitle, { hint: 'title about mission and values', max: 70 }),
-        b.text(copy.missionText, { hint: 'mission and values of the business (1–2 paragraphs, may use a short list)', max: 800, min: 150 }),
+        b.heading(b.L.about, { bar: b.st.titles === 'bar', fixed: true }),
+        ...titleLine(b),
+        b.text(copy.aboutPageText, {
+          hint: 'extended presentation of the business for the "About us" section of the About page: history, mission, values and experience in one flowing text of 3–4 paragraphs, WITHOUT sub-titles (no "Our story" / "Our mission" headings); it may include a short bullet list',
+          max: 1600,
+          min: 500,
+        }),
       ],
-      { bg: b.c.background }
+      { height: 540, wideHeight: 500 }
     ),
     features(b),
   ];
@@ -430,13 +718,20 @@ function about(b, site) {
 }
 
 function services(b, site) {
-  const out = [subheader(b, site, 'services')];
+  const boxed = b.spec.layout.services === 'boxed';
+  const bg = boxed ? b.ink.alt : b.ink.bg;
+  const out = [subheader(b, site, 'services', bg)];
   if (site.services.length) {
-    const boxed = b.spec.layout.services === 'boxed';
     out.push(
-      b.section([b.box(site.services.map((s, i) => b.box([b.serviceCard(s, i, b.spec.copy.serviceText, { hint: `short excerpt of the article about "${s.name}" for the services grid (1–2 sentences)` })], { width: b.columns(3), card: boxed, pad: 22 })), { row: true, gap: 30, align: 'stretch', justify: 'flex-start' })], {
-        bg: boxed ? b.c.background : '#FFFFFF',
-      })
+      b.section(
+        [
+          b.box(
+            site.services.map((s, i) => b.serviceCard(s, i, b.spec.copy.serviceText, { width: b.columns(3), on: boxed ? 'alt' : 'base', anim: (i % 3) * 120, hint: `short excerpt of the article about "${s.name}" for the services grid (1–2 sentences)` })),
+            { row: true, gap: 30, align: 'stretch', justify: 'flex-start' }
+          ),
+        ],
+        { bg }
+      )
     );
   }
   return out;
@@ -451,35 +746,62 @@ function gallery(b, site) {
     gallery_link: 'file',
     open_lightbox: 'yes',
     image_spacing: 'custom',
-    image_spacing_custom: px(14),
-    image_border_radius: corners(b.radius),
+    image_spacing_custom: px(16),
+    image_border_radius: corners(b.imgRadius),
   });
   b.mark(el, 'wp_gallery', { slot: 'gallery' });
-  return [subheader(b, site, 'gallery'), b.section([el])];
+  return [subheader(b, site, 'gallery'), b.section([el], { bg: b.ink.bg })];
 }
 
 function contactItems(site) {
   return [
-    { text: site.phone, url: `tel:${telHref(site.phone)}`, icon: 'fas fa-phone-alt' },
-    { text: site.email, url: `mailto:${site.email}`, icon: 'fas fa-envelope' },
-    { text: site.address, icon: 'fas fa-map-marker-alt' },
+    { text: site.phone, url: `tel:${telHref(site.phone)}`, icon: 'fas fa-phone-alt', label: 'phone' },
+    { text: site.email, url: `mailto:${site.email}`, icon: 'fas fa-envelope', label: 'email' },
+    { text: site.address, icon: 'fas fa-map-marker-alt', label: 'address' },
   ].filter((i) => i.text);
 }
 
 function contact(b, site) {
   const { copy, layout } = b.spec;
-  const intro = [
-    b.heading(copy.contactTitle, { align: layout.contact === 'stacked' ? 'center' : 'left', hint: 'title of the contact details section', max: 60 }),
-    b.text(copy.contactText, { align: layout.contact === 'stacked' ? 'center' : 'left', hint: 'invitation to contact the business (1–2 sentences)', max: 300 }),
-  ];
-  const form = [b.heading(copy.formTitle, { size: 26, hint: 'title above the contact form', max: 60 }), b.shortcode(site.contactShortcode)];
-  const out = [subheader(b, site, 'contact')];
-  if (layout.contact === 'stacked') {
+  const stacked = layout.contact === 'stacked';
+  const items = contactItems(site);
+  const parts = {
+    title: { value: copy.contactTitle, hint: 'title of the contact details section', max: 60 },
+    text: { value: copy.contactText, hint: 'invitation to contact the business (1–2 sentences)', max: 300 },
+  };
+  const infoBox = (it, o) => b.iconBox(it.icon, b.L[it.label], it.text, { fixed: true, url: it.url, titleSize: 17, ...o });
+  // The form card is always light: the fields of the form plugin are styled for light backgrounds
+  const form = b.box([b.heading(copy.formTitle, { size: 26, color: b.c.heading, hint: 'title above the contact form', max: 60 }), b.line(), b.shortcode(site.contactShortcode)], {
+    card: true,
+    bg: '#FFFFFF',
+    pad: 40,
+    gap: 16,
+    ...(stacked ? { maxWidth: 860 } : { width: 52 }),
+    anim: 0,
+  });
+  const out = [subheader(b, site, 'contact', b.ink.alt)];
+  if (stacked) {
     out.push(
-      b.section([...intro, b.iconList(contactItems(site), { inline: true, align: 'center', size: 17 }), b.box(form, { card: true, width: 100, tablet: 100 })], { bg: b.c.background, align: 'center' })
+      b.section(
+        [
+          intro(b, parts),
+          b.box(
+            items.map((it, i) => b.box([infoBox(it)], { width: b.columns(items.length), card: true, on: 'alt', pad: 28, anim: i * 120 })),
+            { row: true, gap: 24, align: 'stretch', justify: 'center' }
+          ),
+          form,
+        ],
+        { bg: b.ink.alt, align: 'center', gap: 40 }
+      )
     );
   } else {
-    out.push(b.section([b.box([...intro, b.iconList(contactItems(site), { size: 17 })], { width: 42, gap: 18 }), b.box(form, { width: 52, card: true })], { row: true, bg: b.c.background, align: 'flex-start' }));
+    out.push(
+      b.section([b.box([intro(b, parts, { align: 'left' }), ...items.map((it) => infoBox(it, { position: 'left' }))], { width: 42, gap: 22 }), form], {
+        row: true,
+        bg: b.ink.alt,
+        align: 'flex-start',
+      })
+    );
   }
   if (site.mapEmbed && site.address) {
     out.push(
@@ -501,19 +823,20 @@ function singlePost(b, site) {
   return [
     b.section(
       [
-        b.widget('theme-post-featured-image', { image_size: 'large', image_border_radius: corners(b.radius) }),
-        b.widget('theme-post-title', { header_size: 'h1', title_color: b.c.heading, ...b.typo('', b.fonts.heading, 40, b.spec.style.headingWeight) }),
-        b.widget('theme-post-content', { text_color: b.c.text, ...b.typo('', b.fonts.body, 17, '400') }),
+        b.widget('theme-post-featured-image', { image_size: 'large', height: px(460), height_mobile: px(240), 'object-fit': 'cover', image_border_radius: corners(b.imgRadius) }),
+        b.widget('theme-post-title', { header_size: 'h1', title_color: b.ink.heading, ...b.typo('', b.fonts.heading, 42, b.st.headingWeight, { typography_line_height: px(1.2, 'em') }) }),
+        b.line(),
+        b.widget('theme-post-content', { text_color: b.ink.text, ...b.typo('', b.fonts.body, 17, '400', { typography_line_height: px(1.8, 'em') }) }),
         b.box(
           [
-            b.heading(copy.postCtaTitle, { size: 26, hint: 'call to action at the end of every service article', max: 70 }),
-            b.text(copy.postCtaText, { hint: 'call to action text at the end of the articles (1 sentence)', max: 200 }),
-            b.button(copy.postCtaButton, site.pages.contact.url, { hint: 'button leading to the contact page', max: 30 }),
+            b.heading(copy.postCtaTitle, { size: 28, color: '#FFFFFF', hint: 'call to action at the end of every service article', max: 70 }),
+            b.text(copy.postCtaText, { color: 'rgba(255,255,255,0.9)', hint: 'call to action text at the end of the articles (1 sentence)', max: 200 }),
+            b.button(copy.postCtaButton, site.pages.contact.url, { variant: 'secondary', hint: 'button leading to the contact page', max: 30 }),
           ],
-          { card: true, bg: b.c.background, gap: 14 }
+          { card: true, gradient: [b.c.primaryText, b.c.dark, 135], pad: 44, gap: 14 }
         ),
       ],
-      { gap: 28 }
+      { gap: 28, width: 900, bg: b.ink.bg }
     ),
   ];
 }
@@ -523,49 +846,69 @@ const menuItems = (site) => ['home', 'about', 'services', 'gallery', 'contact'].
 /** Logo image, or the site name when the project has no logo. */
 function brand(b, site, o = {}) {
   if (site.hasLogo) return b.picture('logo', { width: o.width || 180, align: o.align || 'left', size: 'medium', round: false });
-  return b.heading(site.siteName, { tag: 'p', size: 24, align: o.align || 'left', color: o.color || b.c.primary, fixed: true });
+  return b.heading(site.siteName, { tag: 'p', size: 24, align: o.align || 'left', color: o.color || b.ink.kicker, fixed: true });
 }
 
 function header(b, site) {
   const { copy, layout } = b.spec;
   const out = [];
+  // "bold": a header in the primary color; otherwise the color of the pages
+  const bold = layout.header === 'bold';
+  const bg = bold ? b.c.primary : b.ink.bg;
+  const menuColor = bold ? b.c.onPrimary : b.ink.heading;
+  const hover = bold ? b.c.secondary : b.ink.kicker;
+  const menu = (align) => b.iconList(menuItems(site), { inline: true, align, color: menuColor, hover, weight: '600', size: 15 });
+  const frame = b.ink.dark || bold ? { borderBottom: b.ink.border } : { shadow: true };
   if (layout.header === 'topbar') {
     out.push(
-      b.section([b.iconList(contactItems(site).slice(0, 2), { inline: true, color: '#FFFFFF', iconColor: b.c.secondary, size: 14 })], { row: true, bg: b.c.dark, padY: 8, justify: 'flex-end' })
+      b.section([b.iconList(contactItems(site).slice(0, 2), { inline: true, color: '#FFFFFF', iconColor: b.c.secondary, hover: b.c.secondary, size: 14 })], {
+        row: true,
+        bg: b.ink.dark ? '#000000' : b.c.dark,
+        padY: 9,
+        justify: 'flex-end',
+      })
     );
   }
   if (layout.header === 'centered') {
-    out.push(b.section([brand(b, site, { align: 'center' }), b.iconList(menuItems(site), { inline: true, align: 'center', color: b.c.heading, weight: '600' })], { bg: '#FFFFFF', padY: 18, align: 'center', gap: 14 }));
+    out.push(b.section([brand(b, site, { align: 'center', color: menuColor }), menu('center')], { bg, padY: 18, align: 'center', gap: 14, ...frame }));
     return out;
   }
   out.push(
     b.section(
       [
-        b.box([brand(b, site)], { width: 22, tablet: 40 }),
-        b.box([b.iconList(menuItems(site), { inline: true, align: 'center', color: b.c.heading, weight: '600' })], { width: 54, tablet: 100 }),
-        b.box([b.button(copy.headerButton, site.pages.contact.url, { align: 'right', hint: 'header button leading to the contact page', max: 25 })], { width: 20, tablet: 40, align: 'flex-end' }),
+        b.box([brand(b, site, { color: bold ? b.c.onPrimary : undefined })], { width: 22, tablet: 40 }),
+        b.box([menu('center')], { width: 54, tablet: 100 }),
+        b.box([b.button(copy.headerButton, site.pages.contact.url, { variant: bold ? 'secondary' : 'main', align: 'right', hint: 'header button leading to the contact page', max: 25 })], { width: 20, tablet: 40, align: 'flex-end' }),
       ],
-      { row: true, bg: '#FFFFFF', padY: 16 }
+      { row: true, bg, padY: 16, ...frame }
     )
   );
   return out;
 }
 
 function footer(b, site) {
-  const dark = b.spec.layout.footer === 'dark';
-  const color = dark ? 'rgba(255,255,255,0.8)' : b.c.text;
-  const titleColor = dark ? '#FFFFFF' : b.c.heading;
-  const L = LABELS[site.lang] || LABELS.en;
-  const colTitle = (t) => b.heading(t, { tag: 'h4', size: 18, color: titleColor, fixed: true });
+  const variant = b.spec.layout.footer;
+  const light = variant === 'light';
+  const deep = b.ink.dark ? mix(b.c.dark, '#000000', 0.4) : b.c.dark;
+  const style = light ? { bg: b.ink.alt } : variant === 'brand' ? { gradient: [b.c.primaryText, b.c.dark, 135] } : { bg: deep };
+  const color = light ? b.ink.text : 'rgba(255,255,255,0.78)';
+  const titleColor = light ? b.ink.heading : '#FFFFFF';
+  const hover = light ? b.ink.kicker : b.c.secondary;
+  const colTitle = (t) => [b.heading(t, { tag: 'h4', size: 18, color: titleColor, fixed: true }), b.line('left')];
+  const list = (items) => b.iconList(items, { color, hover, iconColor: b.c.secondary });
   const cols = [
     b.box([brand(b, site, { color: titleColor })], { width: 22 }),
-    b.box([colTitle(L.links), b.iconList(menuItems(site), { color })], { width: 22 }),
+    b.box([...colTitle(b.L.links), list(menuItems(site))], { width: 22, gap: 12 }),
   ];
-  if (site.services.length) cols.push(b.box([colTitle(L.services), b.iconList(site.services.map((s) => ({ text: s.name, url: s.url })), { color })], { width: 22 }));
-  cols.push(b.box([colTitle(L.contacts), b.iconList(contactItems(site), { color })], { width: 22 }));
+  if (site.services.length) cols.push(b.box([...colTitle(b.L.services), list(site.services.map((s) => ({ text: s.name, url: s.url })))], { width: 22, gap: 12 }));
+  cols.push(b.box([...colTitle(b.L.contacts), list(contactItems(site))], { width: 22, gap: 12 }));
   return [
-    b.section(cols, { row: true, bg: dark ? b.c.dark : b.c.background, align: 'flex-start', padY: Math.round(b.pad * 0.8) }),
-    b.section([b.text(`<p>${escapeHtml(site.copyright)}</p>`, { align: 'center', size: 14, color, fixed: true })], { bg: dark ? b.c.dark : b.c.background, padY: 18 }),
+    b.section(cols, { row: true, ...style, align: 'flex-start', padY: Math.round(b.pad * 0.8) }),
+    b.section([b.text(`<p>${escapeHtml(site.copyright)}</p>`, { align: 'center', size: 14, color, fixed: true })], {
+      ...(variant === 'brand' ? { bg: b.c.dark } : style),
+      padY: 20,
+      borderTop: light ? b.ink.border : 'rgba(255,255,255,0.12)',
+    }),
   ];
 }
 
@@ -574,7 +917,8 @@ const DOC_TYPES = { header: 'header', footer: 'footer', single_post: 'single-pos
 
 /** Elementor global colors and fonts (merged into the active Elementor kit by the WordPress plugin). */
 export function globalStyles(spec) {
-  const { colors, fonts, headingWeight } = spec.style;
+  const { fonts, headingWeight } = spec.style;
+  const colors = siteColors(spec.style.colors);
   const font = (_id, title, family, weight) => ({ _id, title, typography_typography: 'custom', typography_font_family: family, typography_font_weight: weight });
   return {
     system_colors: [
