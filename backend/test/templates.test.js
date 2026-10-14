@@ -122,7 +122,14 @@ test('buildSite: structure required by the prompt', () => {
   for (const t of ['"title":"Link"', '"title":"Servizi"', '"title":"Contatti"', 'Servizio 5', '/servizio-5/', '/galleria/', 'mailto:info@ediltest.it', '© 2026 Edil Test']) {
     assert.ok(footer.includes(t), `footer: ${t}`);
   }
-  assert.match(json('header'), /"view":"inline"/, 'header menu');
+  // Header: logo, menu and button on one line; hamburger menu (HTML widget) below 1025px
+  const head = docs.header.doc.content.at(-1);
+  assert.equal(head.settings.flex_wrap, 'nowrap', 'header on one line');
+  assert.deepEqual(head.elements.map((e) => e.settings.css_classes), ['esg-hd-brand', 'esg-hd-nav', 'esg-hd-cta']);
+  const nav = head.elements[1].elements[0];
+  assert.equal(nav.widgetType, 'html');
+  assert.ok(docs.header.marks.get(`${nav.id}:html`).fixed, 'the menu is not written by the AI');
+  for (const t of ['href="/chi-siamo/"', 'href="/galleria/"', 'class="esg-nav-toggle"', 'aria-expanded="false"', '@media (max-width:1024px)', 'esg-nav-cta']) assert.ok(nav.settings.html.includes(t), `header menu: ${t}`);
   assert.doesNotMatch(JSON.stringify(Object.values(docs).map((d) => d.doc)), /nav-menu|uael|ultimate|elementskit|jeg/i, 'only native Elementor widgets');
   // Reviews are shared between Home and About
   const shares = (role) => [...docs[role].marks.values()].map((m) => m.share).filter(Boolean).sort();

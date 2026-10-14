@@ -403,18 +403,11 @@ export function TemplatePreview({ spec, compact = false, className }) {
   return (
     <div className={cx('overflow-hidden rounded-lg border border-slate-200 text-left select-none', compact && 'pointer-events-none h-72', className)} style={{ background: ink.bg }} aria-hidden="true">
       {l.header === 'topbar' && <div className="flex justify-end gap-3 px-3 py-0.5 text-[6px] text-white/80" style={{ background: dark ? '#000' : c.dark }}>☎ 000 000 000 · ✉ info@…</div>}
-      {l.header === 'centered' ? (
-        <div className="relative z-10 flex flex-col items-center gap-1.5 py-2 shadow-sm" style={{ background: headerBg }}>
-          {logo}
-          {menu(menuColor)}
-        </div>
-      ) : (
-        <div className="relative z-10 flex items-center justify-between px-3 py-2 shadow-sm" style={{ background: headerBg }}>
-          {logo}
-          {menu(menuColor)}
-          {btn(bold ? c.secondary : mainBg, copy.headerButton)}
-        </div>
-      )}
+      <div className="relative z-10 flex items-center gap-3 px-3 py-2 shadow-sm" style={{ background: headerBg }}>
+        <div className="shrink-0">{logo}</div>
+        <div className={cx('flex min-w-0 flex-1', l.header === 'centered' ? 'justify-center' : 'justify-end')}>{menu(menuColor)}</div>
+        <div className="shrink-0">{btn(bold ? c.secondary : mainBg, copy.headerButton)}</div>
+      </div>
       {hero}
       {order.map((id) => (
         <Fragment key={id}>{SECTIONS[id] || null}</Fragment>

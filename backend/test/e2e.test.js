@@ -261,7 +261,7 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   const header = zip.readAsText(root + 'templates/header.json');
   assert.equal(JSON.parse(header).type, 'header');
   assert.match(header, /rossi-idraulica-logo\.webp/);
-  for (const url of ['/about-us/', '/services/', '/gallery/', '/contact/']) assert.ok(header.includes(`"url": "${url}"`), `header menu: ${url}`);
+  for (const url of ['/about-us/', '/services/', '/gallery/', '/contact/']) assert.ok(header.includes(`href=\\"${url}\\"`), `header menu: ${url}`);
   const footer = zip.readAsText(root + 'templates/footer.json');
   for (const t of ['Riparazione caldaie', '/bagni-su-misura/', 'mailto:info@rossi-idraulica.it', `© ${new Date().getFullYear()} Rossi Idraulica. All rights reserved.`]) assert.ok(footer.includes(t), `footer: ${t}`);
   const contact = zip.readAsText(root + 'templates/contact.json');

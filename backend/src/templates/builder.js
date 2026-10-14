@@ -38,18 +38,18 @@ export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
  * Version of the generated structure. Field ids depend on it: a generation made with another
  * version cannot be exported (exporter.js), it has to be generated again.
  */
-export const BUILDER_VERSION = 4;
+export const BUILDER_VERSION = 5;
 
 export const DOC_ROLES = ['home', 'about', 'services', 'gallery', 'contact', 'single_post', 'header', 'footer'];
 
 /** Fixed labels in the site language. */
 const LABELS = {
-  it: { links: 'Link', services: 'Servizi', contacts: 'Contatti', about: 'Chi siamo', readMore: 'Scopri di più', phone: 'Telefono', email: 'Email', address: 'Indirizzo', otherServices: 'Altri servizi' },
-  en: { links: 'Links', services: 'Services', contacts: 'Contact', about: 'About us', readMore: 'Read more', phone: 'Phone', email: 'Email', address: 'Address', otherServices: 'Other services' },
-  es: { links: 'Enlaces', services: 'Servicios', contacts: 'Contacto', about: 'Quiénes somos', readMore: 'Leer más', phone: 'Teléfono', email: 'Email', address: 'Dirección', otherServices: 'Otros servicios' },
-  fr: { links: 'Liens', services: 'Services', contacts: 'Contact', about: 'Qui sommes-nous', readMore: 'En savoir plus', phone: 'Téléphone', email: 'E-mail', address: 'Adresse', otherServices: 'Autres services' },
-  de: { links: 'Links', services: 'Leistungen', contacts: 'Kontakt', about: 'Über uns', readMore: 'Mehr erfahren', phone: 'Telefon', email: 'E-Mail', address: 'Adresse', otherServices: 'Weitere Leistungen' },
-  pt: { links: 'Links', services: 'Serviços', contacts: 'Contactos', about: 'Quem somos', readMore: 'Saiba mais', phone: 'Telefone', email: 'Email', address: 'Morada', otherServices: 'Outros serviços' },
+  it: { menu: 'Menu', links: 'Link', services: 'Servizi', contacts: 'Contatti', about: 'Chi siamo', readMore: 'Scopri di più', phone: 'Telefono', email: 'Email', address: 'Indirizzo', otherServices: 'Altri servizi' },
+  en: { menu: 'Menu', links: 'Links', services: 'Services', contacts: 'Contact', about: 'About us', readMore: 'Read more', phone: 'Phone', email: 'Email', address: 'Address', otherServices: 'Other services' },
+  es: { menu: 'Menú', links: 'Enlaces', services: 'Servicios', contacts: 'Contacto', about: 'Quiénes somos', readMore: 'Leer más', phone: 'Teléfono', email: 'Email', address: 'Dirección', otherServices: 'Otros servicios' },
+  fr: { menu: 'Menu', links: 'Liens', services: 'Services', contacts: 'Contact', about: 'Qui sommes-nous', readMore: 'En savoir plus', phone: 'Téléphone', email: 'E-mail', address: 'Adresse', otherServices: 'Autres services' },
+  de: { menu: 'Menü', links: 'Links', services: 'Leistungen', contacts: 'Kontakt', about: 'Über uns', readMore: 'Mehr erfahren', phone: 'Telefon', email: 'E-Mail', address: 'Adresse', otherServices: 'Weitere Leistungen' },
+  pt: { menu: 'Menu', links: 'Links', services: 'Serviços', contacts: 'Contactos', about: 'Quem somos', readMore: 'Saiba mais', phone: 'Telefone', email: 'Email', address: 'Morada', otherServices: 'Outros serviços' },
 };
 
 const PADDING = { compact: 64, normal: 96, airy: 128 };
@@ -168,7 +168,7 @@ function createDoc(role, spec, site) {
 
   // --- containers -------------------------------------------------------------------------
   /**
-   * Top-level section. o: { bg, gradient, slot, overlay: [from, to, angle], minHeight, row, align, justify, padY,
+   * Top-level section. o: { bg, gradient, slot, overlay: [from, to, angle], minHeight, row, wrap (false: one line), align, justify, padY,
    * full, gap, width, divider: { shape, color }, shadow, borderTop, borderBottom }
    */
   const section = (elements, o = {}) => {
@@ -177,7 +177,7 @@ function createDoc(role, spec, site) {
       content_width: o.full ? 'full' : 'boxed',
       boxed_width: px(o.width || 1200),
       flex_direction: o.row ? 'row' : 'column',
-      flex_wrap: o.row ? 'wrap' : 'nowrap',
+      flex_wrap: o.row && o.wrap !== false ? 'wrap' : 'nowrap',
       flex_gap: gap(o.gap ?? 28),
       flex_align_items: o.align || (o.row ? 'center' : 'stretch'),
       flex_justify_content: o.justify || (o.row ? 'space-between' : 'center'),
@@ -204,7 +204,7 @@ function createDoc(role, spec, site) {
     return el;
   };
   /**
-   * Inner container (column / card / row). o: { width, tablet, maxWidth, row, align, justify, bg, gradient, card,
+   * Inner container (column / card / row). o: { width, tablet, mobile, maxWidth, row, align, justify, bg, gradient, card,
    * on ('base' | 'alt' | 'photo': what the card stands on), gap, pad, overflow, anim, slot, service, overlay, minHeightPx, radius }
    */
   const box = (elements, o = {}) => {
@@ -217,7 +217,7 @@ function createDoc(role, spec, site) {
       flex_justify_content: o.justify || 'flex-start',
       ...background(o),
     };
-    if (o.width) Object.assign(settings, { width: px(o.width, '%'), width_tablet: px(o.tablet ?? (o.width < 45 ? 48 : 100), '%'), width_mobile: px(100, '%') });
+    if (o.width) Object.assign(settings, { width: px(o.width, '%'), width_tablet: px(o.tablet ?? (o.width < 45 ? 48 : 100), '%'), width_mobile: px(o.mobile ?? 100, '%') });
     else if (o.maxWidth) Object.assign(settings, { width: px(o.maxWidth), width_tablet: px(100, '%'), width_mobile: px(100, '%') });
     else settings.width = px(100, '%');
     if (o.pad) Object.assign(settings, { padding: sides(o.pad, o.pad, o.pad, o.pad), padding_mobile: sides(Math.min(o.pad, 24), Math.min(o.pad, 22), Math.min(o.pad, 24), Math.min(o.pad, 22)) });
@@ -317,7 +317,7 @@ function createDoc(role, spec, site) {
     if (!isContactLink(url)) mark(el, 'link.url', { fixed: true });
     return el;
   };
-  /** Image. o: { width (px), height (px, cropped with object-fit), mobileHeight, align, size, round, frame, url, service } */
+  /** Image. o: { width (px), mobileWidth (px), height (px, cropped with object-fit), mobileHeight, align, size, round, frame, url, service } */
   const picture = (slot, o = {}) => {
     const framed = o.frame && st.images === 'framed';
     const settings = {
@@ -325,7 +325,7 @@ function createDoc(role, spec, site) {
       image_size: o.size || 'large',
       align: o.align || 'center',
       width: o.width ? px(o.width) : px(100, '%'),
-      ...(o.width ? {} : { width_mobile: px(100, '%') }),
+      ...(o.width ? (o.mobileWidth ? { width_mobile: px(o.mobileWidth) } : {}) : { width_mobile: px(100, '%') }),
       ...(o.round !== false && imgRadius ? { image_border_radius: corners(imgRadius) } : {}),
     };
     // "framed": an offset block of the secondary color behind the photo; otherwise a soft shadow
@@ -1075,8 +1075,95 @@ const menuItems = (site) => ['home', 'about', 'services', 'gallery', 'contact'].
 
 /** Logo image, or the site name when the project has no logo. */
 function brand(b, site, o = {}) {
-  if (site.hasLogo) return b.picture('logo', { width: o.width || 180, align: o.align || 'left', size: 'medium', round: false });
+  if (site.hasLogo) return b.picture('logo', { width: o.width || 180, mobileWidth: o.mobileWidth, align: o.align || 'left', size: 'medium', round: false });
   return b.heading(site.siteName, { tag: 'p', size: 24, align: o.align || 'left', color: o.color || b.ink.kicker, fixed: true });
+}
+
+const escapeAttr = (s) => escapeHtml(s).replace(/"/g, '&quot;');
+
+/** Script of the hamburger menu (registered once per page): open / close, outside tap, Escape, current page, CTA text. */
+const NAV_SCRIPT = `(function(){if(window.esgNav)return;window.esgNav=1;
+function set(n,open){n.classList.toggle('is-open',open);var t=n.querySelector('.esg-nav-toggle');if(t)t.setAttribute('aria-expanded',open?'true':'false');}
+document.addEventListener('click',function(e){var x=e.target;if(!x.closest)return;
+document.querySelectorAll('.esg-nav.is-open').forEach(function(n){if(!n.contains(x)||x.closest('.esg-nav-list a'))set(n,false);});
+var t=x.closest('.esg-nav-toggle');if(t){var n=t.closest('.esg-nav');set(n,!n.classList.contains('is-open'));}});
+document.addEventListener('keydown',function(e){if(e.key!=='Escape')return;document.querySelectorAll('.esg-nav.is-open').forEach(function(n){set(n,false);var t=n.querySelector('.esg-nav-toggle');if(t)t.focus();});});
+function init(){var here=location.pathname.replace(/\\/+$/,'');
+document.querySelectorAll('.esg-nav-list a').forEach(function(a){if(a.pathname.replace(/\\/+$/,'')===here)a.setAttribute('aria-current','page');});
+var src=document.querySelector('.esg-hd-cta .elementor-button-text');
+document.querySelectorAll('.esg-nav-cta a').forEach(function(a){if(src&&src.textContent.trim())a.textContent=src.textContent.trim();});}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();})();`;
+
+/**
+ * Navigation of the header (Elementor HTML widget, no Pro or addon needed): the 5 pages in a row on
+ * desktop; below 1025px a hamburger button opening a dropdown panel (with the call to action on
+ * phones, where the header button is hidden). The style also keeps the header on one line:
+ * logo and button take their width, the menu the rest.
+ * o: { justify ('flex-end' | 'center'), color, hover, button: { text, url } }
+ */
+function navMenu(b, site, o) {
+  const { st, c, ink, fonts } = b;
+  const upper = st.titleCase === 'upper';
+  const radius = st.buttons === 'pill' ? 50 : st.buttons === 'square' ? 0 : b.radius;
+  const panelBg = ink.dark ? ink.card : '#FFFFFF';
+  const ctaBg = ink.dark ? c.secondary : c.primary;
+  const vars = {
+    '--esg-justify': o.justify,
+    '--esg-color': o.color,
+    '--esg-hover': o.hover,
+    '--esg-panel': panelBg,
+    '--esg-panel-color': ink.heading,
+    '--esg-panel-hover': ink.dark ? rgba(c.secondary, 0.14) : tint(c.primary, 0.92),
+    '--esg-line': ink.border,
+    '--esg-cta-bg': ctaBg,
+    '--esg-cta-color': ink.dark ? c.onSecondary : c.onPrimary,
+    '--esg-radius': `${Math.min(radius, 12)}px`,
+  };
+  const style = Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(';');
+  const items = menuItems(site).map((m) => `<li><a href="${escapeAttr(m.url)}">${escapeHtml(m.text)}</a></li>`).join('');
+  const css = `.esg-header{position:relative;z-index:100}
+.esg-header .esg-hd-brand,.esg-header .esg-hd-cta{flex:0 0 auto!important;width:auto!important;max-width:none}
+.esg-header .esg-hd-nav{flex:1 1 auto!important;width:auto!important;min-width:0}
+.esg-nav{position:relative;display:flex;justify-content:var(--esg-justify);align-items:center;font-family:"${fonts.body}",sans-serif}
+.esg-nav-list{list-style:none;margin:0;padding:0;display:flex;flex-wrap:nowrap;align-items:center;gap:6px ${upper ? 26 : 30}px}
+.esg-nav-list li{margin:0;padding:0}
+.esg-nav-list a{position:relative;display:block;padding:8px 0;color:var(--esg-color);font-size:${upper ? 13 : 15}px;font-weight:600;line-height:1.3;${upper ? 'text-transform:uppercase;letter-spacing:1px;' : ''}text-decoration:none;white-space:nowrap;transition:color .2s}
+.esg-nav-list a::after{content:"";position:absolute;left:0;right:0;bottom:2px;height:2px;background:var(--esg-hover);transform:scaleX(0);transform-origin:left;transition:transform .25s}
+.esg-nav-list a:hover,.esg-nav-list a:focus-visible,.esg-nav-list a[aria-current=page]{color:var(--esg-hover)}
+.esg-nav-list a:hover::after,.esg-nav-list a:focus-visible::after,.esg-nav-list a[aria-current=page]::after{transform:scaleX(1)}
+.esg-nav-toggle,.esg-nav-list .esg-nav-cta{display:none}
+@media (max-width:1024px){
+.esg-header .esg-hd-nav{flex:0 0 auto!important;order:3}
+.esg-header .esg-hd-cta{margin-left:auto}
+.esg-nav-toggle{display:inline-flex;align-items:center;justify-content:center;width:46px;height:46px;padding:0;margin:0;border:1px solid var(--esg-line);border-radius:var(--esg-radius);background:transparent;color:var(--esg-color);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.esg-nav-toggle:hover,.esg-nav-toggle:focus{background:transparent;color:var(--esg-color)}
+.esg-nav-toggle:focus-visible{outline:2px solid var(--esg-hover);outline-offset:2px}
+.esg-nav-bars{position:relative;display:block;width:22px;height:16px}
+.esg-nav-bars span{position:absolute;left:0;width:100%;height:2px;border-radius:2px;background:currentColor;transition:transform .25s,opacity .2s,top .25s}
+.esg-nav-bars span:nth-child(1){top:0}.esg-nav-bars span:nth-child(2){top:7px}.esg-nav-bars span:nth-child(3){top:14px}
+.esg-nav.is-open .esg-nav-bars span:nth-child(1){top:7px;transform:rotate(45deg)}
+.esg-nav.is-open .esg-nav-bars span:nth-child(2){opacity:0}
+.esg-nav.is-open .esg-nav-bars span:nth-child(3){top:7px;transform:rotate(-45deg)}
+.esg-nav-list{position:absolute;top:calc(100% + 14px);right:0;z-index:9999;width:min(320px,calc(100vw - 32px));flex-direction:column;align-items:stretch;gap:2px;padding:10px;background:var(--esg-panel);border:1px solid var(--esg-line);border-radius:var(--esg-radius);box-shadow:0 18px 44px rgba(15,27,45,.2);opacity:0;visibility:hidden;transform:translateY(-8px);transition:opacity .2s,transform .2s,visibility .2s}
+.esg-nav.is-open .esg-nav-list{opacity:1;visibility:visible;transform:none}
+.esg-nav-list a{padding:12px 14px;color:var(--esg-panel-color);border-radius:var(--esg-radius);white-space:normal}
+.esg-nav-list a::after{display:none}
+.esg-nav-list a:hover,.esg-nav-list a:focus-visible,.esg-nav-list a[aria-current=page]{color:var(--esg-panel-color);background:var(--esg-panel-hover)}
+}
+@media (max-width:767px){
+.esg-header .esg-hd-cta{display:none!important}
+.esg-header .esg-hd-nav{margin-left:auto}
+.esg-nav-list .esg-nav-cta{display:block;margin-top:8px}
+.esg-nav-list .esg-nav-cta a,.esg-nav-list .esg-nav-cta a:hover{background:var(--esg-cta-bg);color:var(--esg-cta-color);text-align:center}
+}`;
+  const html =
+    `<nav class="esg-nav" style="${style}" aria-label="${escapeAttr(b.L.menu)}">` +
+    `<button type="button" class="esg-nav-toggle" aria-expanded="false" aria-controls="esg-nav-list" aria-label="${escapeAttr(b.L.menu)}"><span class="esg-nav-bars" aria-hidden="true"><span></span><span></span><span></span></span></button>` +
+    `<ul id="esg-nav-list" class="esg-nav-list">${items}<li class="esg-nav-cta"><a href="${escapeAttr(o.button.url)}">${escapeHtml(o.button.text)}</a></li></ul>` +
+    `</nav>\n<style>\n${css}\n</style>\n<script>\n${NAV_SCRIPT}\n</script>`;
+  const el = b.html(html);
+  b.mark(el, 'html', { fixed: true });
+  return el;
 }
 
 function header(b, site) {
@@ -1087,7 +1174,6 @@ function header(b, site) {
   const bg = bold ? b.c.primary : b.ink.bg;
   const menuColor = bold ? b.c.onPrimary : b.ink.heading;
   const hover = bold ? b.c.secondary : b.ink.kicker;
-  const menu = (align) => b.iconList(menuItems(site), { inline: true, align, color: menuColor, hover, weight: '600', size: 15 });
   const frame = b.ink.dark || bold ? { borderBottom: b.ink.border } : { shadow: true };
   if (layout.header === 'topbar') {
     out.push(
@@ -1099,18 +1185,16 @@ function header(b, site) {
       })
     );
   }
-  if (layout.header === 'centered') {
-    out.push(b.section([brand(b, site, { align: 'center', color: menuColor }), menu('center')], { bg, padY: 18, align: 'center', gap: 14, ...frame }));
-    return out;
-  }
+  // Logo, menu and button on one line (never wrapping); "centered": the menu in the middle, otherwise next to the button
+  const button = { text: copy.headerButton, url: site.pages.contact.url };
   out.push(
     b.section(
       [
-        b.box([brand(b, site, { color: bold ? b.c.onPrimary : undefined })], { width: 22, tablet: 40 }),
-        b.box([menu('center')], { width: 54, tablet: 100 }),
-        b.box([b.button(copy.headerButton, site.pages.contact.url, { variant: bold ? 'secondary' : 'main', align: 'right', hint: 'header button leading to the contact page', max: 25 })], { width: 20, tablet: 40, align: 'flex-end' }),
+        b.box([brand(b, site, { color: bold ? b.c.onPrimary : undefined, mobileWidth: 140 })], { width: 20, tablet: 30, mobile: 60, css: 'esg-hd-brand' }),
+        b.box([navMenu(b, site, { justify: layout.header === 'centered' ? 'center' : 'flex-end', color: menuColor, hover, button })], { width: 56, tablet: 15, mobile: 30, css: 'esg-hd-nav' }),
+        b.box([b.button(button.text, button.url, { variant: bold ? 'secondary' : 'main', align: 'right', hint: 'header button leading to the contact page', max: 25 })], { width: 20, tablet: 40, align: 'flex-end', css: 'esg-hd-cta' }),
       ],
-      { row: true, bg, padY: 16, ...frame }
+      { row: true, wrap: false, bg, padY: 16, gap: 20, ...frame, css: 'esg-header' }
     )
   );
   return out;

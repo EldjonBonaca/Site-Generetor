@@ -88,9 +88,9 @@ export const SECTION_LABELS = {
 };
 
 const VARIANT_LABELS = {
-  'header.classic': 'Logo, menu and button',
-  'header.centered': 'Centered logo and menu',
-  'header.topbar': 'Top bar (phone, email) + menu',
+  'header.classic': 'Logo, menu on the right and button',
+  'header.centered': 'Logo, centered menu and button',
+  'header.topbar': 'Top bar (phone, email) + logo, menu and button',
   'header.bold': 'Colored header',
   'hero.center': 'Centered text over a photo',
   'hero.left': 'Left text over a photo',

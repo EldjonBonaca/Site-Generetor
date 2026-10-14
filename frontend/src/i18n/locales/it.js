@@ -159,6 +159,10 @@ export default {
   'Same text as on the page "{page}": edit it there.': 'Stesso testo della pagina "{page}": modificalo lì.',
   'Fixed by the template': 'Fissati dal template',
   'Edge of the hero and banners': 'Bordo di hero e banner',
+  // Export and errors
+  'Export ready: the download has started. The final checks are in the zip.': 'Export pronto: il download è partito. I controlli finali sono nello zip.',
+  'Something went wrong on this page': 'Qualcosa è andato storto in questa pagina',
+  'Back to the main page': 'Torna alla pagina principale',
   // Industry analysis and Home sections
   'Industry analysis': 'Analisi del settore',
   Done: 'Fatta',
@@ -257,9 +261,9 @@ export default {
   Reviews: 'Recensioni',
   'Contact page': 'Pagina Contatti',
   Footer: 'Footer',
-  'Logo, menu and button': 'Logo, menu e pulsante',
-  'Centered logo and menu': 'Logo e menu centrati',
-  'Top bar (phone, email) + menu': 'Barra superiore (telefono, email) + menu',
+  'Logo, menu on the right and button': 'Logo, menu a destra e pulsante',
+  'Logo, centered menu and button': 'Logo, menu centrato e pulsante',
+  'Top bar (phone, email) + logo, menu and button': 'Barra superiore (telefono, email) + logo, menu e pulsante',
   'Centered text over a photo': 'Testo centrato su foto',
   'Left text over a photo': 'Testo a sinistra su foto',
   'Text beside a photo': 'Testo accanto a una foto',

@@ -1,7 +1,8 @@
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Bot, FolderKanban, Images, LayoutTemplate, Languages } from 'lucide-react';
 import { useT, LOCALES } from './i18n/index.jsx';
 import { cx } from './components/ui.jsx';
+import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import ProjectsPage from './pages/ProjectsPage.jsx';
 import ProjectWizard from './pages/ProjectWizard.jsx';
 import TemplatesPage from './pages/TemplatesPage.jsx';
@@ -10,6 +11,7 @@ import ProvidersPage from './pages/ProvidersPage.jsx';
 
 export default function App() {
   const { t, locale, setLocale } = useT();
+  const { pathname } = useLocation();
   const nav = [
     { to: '/projects', label: t('Projects'), icon: FolderKanban },
     { to: '/gallery', label: t('Gallery'), icon: Images },
@@ -53,15 +55,17 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-        <Routes>
-          <Route path="/" element={<Navigate to="/projects" replace />} />
-          <Route path="/projects" element={<ProjectsPage />} />
-          <Route path="/projects/:id/*" element={<ProjectWizard />} />
-          <Route path="/gallery" element={<GalleryPage />} />
-          <Route path="/templates" element={<TemplatesPage />} />
-          <Route path="/settings/providers" element={<ProvidersPage />} />
-          <Route path="*" element={<Navigate to="/projects" replace />} />
-        </Routes>
+        <ErrorBoundary t={t} resetKey={pathname}>
+          <Routes>
+            <Route path="/" element={<Navigate to="/projects" replace />} />
+            <Route path="/projects" element={<ProjectsPage />} />
+            <Route path="/projects/:id/*" element={<ProjectWizard />} />
+            <Route path="/gallery" element={<GalleryPage />} />
+            <Route path="/templates" element={<TemplatesPage />} />
+            <Route path="/settings/providers" element={<ProvidersPage />} />
+            <Route path="*" element={<Navigate to="/projects" replace />} />
+          </Routes>
+        </ErrorBoundary>
       </main>
     </div>
   );

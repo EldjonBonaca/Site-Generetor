@@ -74,7 +74,9 @@ Regole generali:
 
 ### Header
 - Creato come template separato (Theme Builder → Header), secondo lo stile del template.
-- Contiene: logo `{{LOGO}}`, menu di navigazione con le 5 pagine (Home, Chi Siamo, Servizi, Galleria, Contatti).
+- Contiene: logo `{{LOGO}}`, menu di navigazione con le 5 pagine (Home, Chi Siamo, Servizi, Galleria, Contatti) e un pulsante verso *Contatti*.
+- **Desktop**: logo, menu e pulsante allineati in orizzontale sulla stessa riga, con spaziature e proporzioni coerenti.
+- **Mobile e tablet**: il menu diventa un **menu hamburger** che si apre e si chiude al tocco; logo e pulsante dell'hamburger restano allineati sulla stessa riga. Sul telefono il pulsante verso *Contatti* si trova dentro il menu aperto.
 - Se il template lo prevede, mostra anche telefono ed email.
 
 ### Footer

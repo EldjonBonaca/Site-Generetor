@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Download, FileArchive, FileCode, FileJson, FileSpreadsheet, FileText, Image, ListChecks, PackageCheck, Plug } from 'lucide-react';
 import { api } from '../../api.js';
 import { useT } from '../../i18n/index.jsx';
@@ -17,11 +17,11 @@ const ym = () => {
 export default function DownloadStep({ project, setProject }) {
   const { t } = useT();
   const toast = useToast();
+  const navigate = useNavigate();
   const [baseUrl, setBaseUrl] = useState(project.image_base_url);
   const [gens, setGens] = useState(null);
   const [genId, setGenId] = useState(null);
   const [exporting, setExporting] = useState(false);
-  const [result, setResult] = useState(null);
 
   useEffect(() => {
     api
@@ -55,16 +55,19 @@ export default function DownloadStep({ project, setProject }) {
 
   const exportZip = async () => {
     setExporting(true);
-    setResult(null);
     try {
       const r = await api.post(`/generations/${genId}/export`);
-      setResult(r);
-      toast(t('Export ready'));
-      // Start the download right away
-      window.location.href = r.download;
+      // Start the download (attachment: the page stays), then back to the main page
+      const a = document.createElement('a');
+      a.href = r.download;
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast(t('Export ready: the download has started. The final checks are in the zip.'));
+      navigate('/projects');
     } catch (e) {
       toast(e.message, 'error');
-    } finally {
       setExporting(false);
     }
   };
@@ -72,7 +75,7 @@ export default function DownloadStep({ project, setProject }) {
   const selected = gens?.find((g) => g.id === genId);
   const it = project.language === 'it';
   const contents = [
-    [Plug, result?.plugin || t('<site>-site.zip'), t('WordPress plugin: upload and activate it, it creates the 5 pages, the service articles, images, menu, contact form, header and footer')],
+    [Plug, t('<site>-site.zip'), t('WordPress plugin: upload and activate it, it creates the 5 pages, the service articles, images, menu, contact form, header and footer')],
     [FileJson, 'templates/*.json', t('Header, footer, single post and every page as importable Elementor templates')],
     [FileCode, 'wordpress-import.xml', t('Service articles (category, text, featured image), pages and navigation menu for Tools → Import')],
     [Image, 'images/', t('Renamed and optimized images')],
@@ -141,7 +144,7 @@ export default function DownloadStep({ project, setProject }) {
                   <Button variant="primary" size="lg" icon={Download} onClick={exportZip} loading={exporting} disabled={!genId || !validUrl}>
                     {t('Export & download zip')}
                   </Button>
-                  {selected?.output_file && !result && (
+                  {selected?.output_file && (
                     <>
                       <a href={`/api/generations/${selected.id}/plugin`}>
                         <Button size="lg" icon={Plug}>{t('Download WordPress plugin')}</Button>
@@ -152,35 +155,6 @@ export default function DownloadStep({ project, setProject }) {
                     </>
                   )}
                 </div>
-                {result && (
-                  <>
-                    <Alert kind="success" title={t('Export ready: {pages} templates, {posts} articles, {images} images', { pages: result.pages, posts: result.posts, images: result.images })}>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <a href={result.pluginDownload}>
-                          <Button variant="primary" icon={Plug}>
-                            {t('Download WordPress plugin')} ({result.plugin})
-                          </Button>
-                        </a>
-                        <a href={result.download}>
-                          <Button>{t('Download zip again')}</Button>
-                        </a>
-                      </div>
-                      <p className="mt-2 text-xs">{t('In WordPress: Plugins → Add New Plugin → Upload Plugin → Activate. The plugin then creates the site by itself.')}</p>
-                    </Alert>
-                    <div>
-                      <p className="mb-2 text-sm font-medium text-slate-700">{t('Final checks')}</p>
-                      <ul className="space-y-1.5">
-                        {result.checks.map((c, i) => (
-                          <li key={i}>
-                            <Alert kind={c.level === 'ok' ? 'success' : c.level}>
-                              <span className="whitespace-pre-line">{c.message.replace(/**/g, '').replace(/`/g, '')}</span>
-                            </Alert>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </>
-                )}
               </div>
             )}
           </Card>
