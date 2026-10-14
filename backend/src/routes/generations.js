@@ -46,17 +46,17 @@ router.get('/projects/:id/plan', (req, res) => {
   const ctx = loadContext(req.params.id);
   if (!ctx) throw notFound('Project');
   const readiness = checkReadiness(ctx);
-  if (!ctx.kit) return res.json({ pages: [], estimatedTokens: 0, readiness });
+  if (!ctx.template) return res.json({ pages: [], estimatedTokens: 0, readiness });
   const links = siteLinks(ctx);
   let total = 0;
   const pages = initPages(ctx).map((p) => {
-    const aiFields = p.fields.filter((f) => f.source !== 'auto');
+    const aiFields = p.fields.filter((f) => f.source === 'ai');
     const service = p.serviceId ? ctx.services.find((s) => s.id === p.serviceId) : null;
     const { prompt, system } = buildPagePrompt({ promptContent: SITE_PROMPT.content, project: ctx.project, services: ctx.services, service, fields: aiFields, pageTitle: p.title, role: p.role, links, ctx });
     // input + output (values ≈ max length of each field) + SEO
     const est = estimateTokens(prompt + system) + Math.ceil(aiFields.reduce((s, f) => s + (f.maxLength || 80) + f.id.length + 6, 0) / 3.5) + 80;
     total += est;
-    return { key: p.key, title: p.title, role: p.role, aiFields: aiFields.length, autoFields: p.fields.length - aiFields.length, slots: p.slotCount, prompt: SITE_PROMPT.name, estimatedTokens: est };
+    return { key: p.key, title: p.title, role: p.role, aiFields: aiFields.length, autoFields: p.fields.filter((f) => f.source === 'auto').length, sharedFields: p.fields.filter((f) => f.source === 'shared').length, slots: p.slotCount, prompt: SITE_PROMPT.name, estimatedTokens: est };
   });
   res.json({ pages, estimatedTokens: total, readiness, links });
 });
@@ -76,13 +76,13 @@ router.post('/projects/:id/generations', (req, res) => {
 
   const gen = ctx.settings.generation;
   const pages = initPages(ctx);
-  if (!pages.length) throw badRequest('No pages to generate: check the template mapping.');
+  if (!pages.length) throw badRequest('No pages to generate: choose a template.');
   const { lastInsertRowid } = run(
     'INSERT INTO generations (project_id, provider_id, status, config_json, output_json) VALUES (?, ?, ?, ?, ?)',
     ctx.project.id,
     gen.providerId,
     'queued',
-    JSON.stringify({ prompt: SITE_PROMPT.name }),
+    JSON.stringify({ prompt: SITE_PROMPT.name, templateId: ctx.template.id, templateName: ctx.template.name }),
     JSON.stringify({ pages, links: siteLinks(ctx) })
   );
   runGeneration(lastInsertRowid).catch((e) => console.error('[generation]', e)); // background job
@@ -114,7 +114,7 @@ router.patch('/generations/:gid/pages/:key', (req, res) => {
   if (!page) throw notFound('Page');
   for (const [id, value] of Object.entries(req.body?.fields || {})) {
     const f = page.fields.find((x) => x.id === id);
-    if (!f || typeof value !== 'string') continue;
+    if (!f || f.source === 'shared' || typeof value !== 'string') continue;
     f.value = value.slice(0, 20000);
     f.source = 'manual';
   }

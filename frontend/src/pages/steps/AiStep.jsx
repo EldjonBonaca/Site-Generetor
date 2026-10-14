@@ -127,7 +127,7 @@ export default function AiStep({ project, setProject }) {
           actions={<Badge color="blue">{sitePrompt.name}</Badge>}
         >
           {!plan.pages.length ? (
-            <Alert kind="info">{t('Select a kit and map its templates first, then you can preview the final prompt of each page.')}</Alert>
+            <Alert kind="info">{t('Choose a template first, then you can preview the final prompt of each page.')}</Alert>
           ) : (
             <div className="flex flex-wrap items-end gap-3">
               <Field label={t('Preview the final prompt of')} className="min-w-64 flex-1">

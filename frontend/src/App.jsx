@@ -4,7 +4,7 @@ import { useT, LOCALES } from './i18n/index.jsx';
 import { cx } from './components/ui.jsx';
 import ProjectsPage from './pages/ProjectsPage.jsx';
 import ProjectWizard from './pages/ProjectWizard.jsx';
-import KitsPage from './pages/KitsPage.jsx';
+import TemplatesPage from './pages/TemplatesPage.jsx';
 import GalleryPage from './pages/GalleryPage.jsx';
 import ProvidersPage from './pages/ProvidersPage.jsx';
 
@@ -13,7 +13,7 @@ export default function App() {
   const nav = [
     { to: '/projects', label: t('Projects'), icon: FolderKanban },
     { to: '/gallery', label: t('Gallery'), icon: Images },
-    { to: '/kits', label: t('Template Kits'), icon: LayoutTemplate },
+    { to: '/templates', label: t('Templates'), icon: LayoutTemplate },
     { to: '/settings/providers', label: t('AI Providers'), icon: Bot },
   ];
 
@@ -58,7 +58,7 @@ export default function App() {
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/projects/:id/*" element={<ProjectWizard />} />
           <Route path="/gallery" element={<GalleryPage />} />
-          <Route path="/kits" element={<KitsPage />} />
+          <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/settings/providers" element={<ProvidersPage />} />
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Routes>

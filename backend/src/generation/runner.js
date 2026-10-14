@@ -8,7 +8,7 @@ import { createProvider } from '../ai/registry.js';
 import { AIError } from '../ai/AIProvider.js';
 import { extractJson, validateValues } from '../ai/json.js';
 import { buildPagePrompt, estimateTokens } from './prompt-builder.js';
-import { loadContext, buildPages, analyzePage, buildReplacements, classifyField, siteLinks, fallbackLink } from './plan.js';
+import { loadContext, buildPages, analyzePage, classifyField, siteLinks, fallbackLink } from './plan.js';
 import { SITE_PROMPT } from './site-prompt.js';
 import { sleep, stripHtml } from '../lib/util.js';
 
@@ -31,13 +31,16 @@ function linkHint(field, fields) {
   return sibling ? `link of "${stripHtml(sibling.original).slice(0, 60)}"` : null;
 }
 
-/** Initial page entries (fields with original text, auto-filled contact/structural fields). */
+/**
+ * Initial page entries. Fields filled by the template builder are 'auto'. A text that appears on
+ * several pages (the 3 reviews of Home and About) is written by the AI on the first page only: the
+ * other copies are 'shared' and always show the value of that first field (sharedFrom).
+ */
 export function initPages(ctx) {
-  const replacements = buildReplacements(ctx);
   const pages = buildPages(ctx);
+  const owners = new Map(); // share key -> { page, field }
   return pages.map((page) => {
     const { fields, slots } = analyzePage(ctx, page);
-    const state = {};
     return {
       ...page,
       status: 'pending',
@@ -45,26 +48,37 @@ export function initPages(ctx) {
       tokens: 0,
       slotCount: slots.length,
       fields: fields.map((f) => {
-        const cls = classifyField(f, ctx, replacements, page, state);
-        const service = f.card != null ? ctx.services[f.card] : null;
-        const hint = [f.hint, service && `service card of "${service.name}"`, f.format === 'link' && linkHint(f, fields)].filter(Boolean).join('; ') || undefined;
-        return {
+        const cls = classifyField(f);
+        const hint = [f.hint, f.format === 'link' && linkHint(f, fields)].filter(Boolean).join('; ') || undefined;
+        const entry = {
           id: f.id,
           label: f.label,
           widget: f.widget,
           format: f.format,
           maxLength: f.maxLength,
           minLength: f.minLength,
-          card: f.card,
           hint,
           original: f.original,
           value: cls.source === 'auto' ? cls.value : null,
           source: cls.source,
         };
+        if (f.share && cls.source === 'ai') {
+          const owner = owners.get(f.share);
+          if (owner) Object.assign(entry, { source: 'shared', sharedFrom: { page: owner.page, field: owner.field } });
+          else owners.set(f.share, { page: page.key, field: f.id });
+        }
+        return entry;
       }),
       seo: { title: '', description: '', slug: page.slug },
     };
   });
+}
+
+/** Current value of a field, following 'shared' fields to the field they copy. */
+export function fieldValue(pages, field) {
+  if (field.source !== 'shared') return field.value;
+  const owner = pages.find((p) => p.key === field.sharedFrom.page)?.fields.find((f) => f.id === field.sharedFrom.field);
+  return owner ? owner.value : null;
 }
 
 /** Call the provider, retrying transient errors with backoff. */
@@ -146,7 +160,7 @@ async function generateFields({ provider, ctx, page, promptRow, fields, log, ext
 
 /** Fill all AI fields (+ SEO) of a page, in chunks. Mutates `page`. */
 export async function generatePage({ provider, ctx, page, promptRow, log, onlyFieldIds = null }) {
-  const targets = page.fields.filter((f) => (onlyFieldIds ? onlyFieldIds.includes(f.id) : f.source !== 'auto'));
+  const targets = page.fields.filter((f) => f.source !== 'shared' && (onlyFieldIds ? onlyFieldIds.includes(f.id) : f.source !== 'auto'));
   const wantSeo = !onlyFieldIds ? page.slug !== null : onlyFieldIds.some((id) => id.startsWith('_seo.'));
   const seoFields = wantSeo
     ? [
@@ -270,7 +284,7 @@ export async function runGeneration(generationId, { pageKeys = null } = {}) {
       }
       page.status = 'running';
       save(id, state);
-      log('info', `Generating "${page.title}" (${page.fields.filter((f) => f.source !== 'auto').length} fields)...`);
+      log('info', `Generating "${page.title}" (${page.fields.filter((f) => f.source !== 'auto' && f.source !== 'shared').length} fields)...`);
       try {
         await generatePage({ provider, ctx, page, promptRow: SITE_PROMPT, log });
         page.status = 'done';
@@ -320,7 +334,9 @@ export async function regenerateField(generationId, pageKey, fieldId) {
   const page = state.output.pages.find((p) => p.key === pageKey);
   if (!page) throw new Error('Page not found in this generation.');
   const isSeo = fieldId.startsWith('_seo.');
-  if (!isSeo && !page.fields.some((f) => f.id === fieldId)) throw new Error('Field not found.');
+  const target = page.fields.find((f) => f.id === fieldId);
+  if (!isSeo && !target) throw new Error('Field not found.');
+  if (target?.source === 'shared') throw new Error('This text is the same as on another page: regenerate it there.');
 
   const ctx = loadContext(gen.project_id);
   const provider = getProvider(gen.provider_id);

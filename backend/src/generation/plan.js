@@ -1,18 +1,18 @@
 /**
  * Project context + page plan shared by the generation runner, the exporter and the API.
+ * The Elementor documents of a project are built from its template (templates/builder.js).
  */
-import path from 'node:path';
 import { get, all, parseJson } from '../db/index.js';
-import { config } from '../config.js';
-import { analyzeDocument, defaultSlotRoles, looksLikePhone, EMAIL_IN_TEXT } from '../elementor/analyze.js';
-import { prepareDocument } from '../elementor/prepare.js';
-import { loadTemplate } from '../elementor/kit.js';
-import { isValidEmail, isValidPhone, slugify, stripHtml, telHref } from '../lib/util.js';
+import { analyzeDocument } from '../elementor/analyze.js';
+import { buildSite } from '../templates/builder.js';
+import { sanitizeSpec } from '../templates/spec.js';
+import { isValidEmail, isValidPhone, slugify, telHref } from '../lib/util.js';
 import { galleryPool } from '../lib/images.js';
 
 /** The only pages of the site. Services are published as articles (role 'post'). */
 export const SITE_PAGE_ROLES = ['home', 'about', 'services', 'gallery', 'contact'];
-export const PAGE_ROLES = [...SITE_PAGE_ROLES, 'single_post', 'header', 'footer', 'ignore'];
+/** Documents built from the template: the 5 pages + the theme parts. */
+export const TEMPLATE_ROLES = [...SITE_PAGE_ROLES, 'single_post', 'header', 'footer'];
 const ROLE_ORDER = { home: 0, about: 1, services: 2, gallery: 3, contact: 4, post: 5, single_post: 6, header: 7, footer: 8 };
 
 /** Page titles in the site language (slugs are derived from them: /chi-siamo/, /contatti/ ...). */
@@ -27,10 +27,26 @@ const PAGE_TITLES = {
 const RIGHTS = { it: 'Tutti i diritti riservati.', en: 'All rights reserved.', es: 'Todos los derechos reservados.', fr: 'Tous droits réservés.', de: 'Alle Rechte vorbehalten.', pt: 'Todos os direitos reservados.' };
 const MENU_NAME = { it: 'Menu principale', en: 'Main menu', es: 'Menú principal', fr: 'Menu principal', de: 'Hauptmenü', pt: 'Menu principal' };
 const SERVICES_CATEGORY = { it: 'Servizi', en: 'Services', es: 'Servicios', fr: 'Services', de: 'Leistungen', pt: 'Serviços' };
+const FORM_TITLE = { it: 'Modulo di contatto', en: 'Contact form', es: 'Formulario de contacto', fr: 'Formulaire de contact', de: 'Kontaktformular', pt: 'Formulário de contacto' };
 
 export const pageTitle = (lang, role) => (PAGE_TITLES[lang] || PAGE_TITLES.en)[role];
 export const servicesCategory = (lang) => SERVICES_CATEGORY[lang] || SERVICES_CATEGORY.en;
 export const oneLine = (s) => String(s || '').replace(/\s*\n+\s*/g, ', ').trim();
+
+/**
+ * Contact form plugins. The contact page gets a placeholder shortcode (INSERIRE_ID) that the
+ * WordPress plugin replaces with the form it creates. MetForm is the one required by the prompt.
+ */
+export const CONTACT_FORM_PLUGINS = {
+  metform: { name: 'MetForm', placeholder: () => '[metform form_id="INSERIRE_ID"]' },
+  cf7: { name: 'Contact Form 7', placeholder: (title) => `[contact-form-7 id="INSERIRE_ID" title="${title}"]` },
+};
+
+export function contactForm(ctx) {
+  const plugin = ctx.settings.contactForm === 'cf7' ? 'cf7' : 'metform';
+  const title = FORM_TITLE[ctx.project.language] || FORM_TITLE.en;
+  return { plugin, name: CONTACT_FORM_PLUGINS[plugin].name, title, placeholder: CONTACT_FORM_PLUGINS[plugin].placeholder(title) };
+}
 
 /** Exact size (px) of the Home hero and of the page subheader images: they are cropped to it. */
 export const DEFAULT_CROP_SIZES = { hero: { width: 1920, height: 1080 }, subheader: { width: 1920, height: 600 } };
@@ -38,15 +54,31 @@ export const DEFAULT_CROP_SIZES = { hero: { width: 1920, height: 1080 }, subhead
 export function defaultSettings(settings = {}) {
   return {
     subheaderPerPage: false,
-    replaceAllEmails: true,
-    replaceAllImages: true, // no demo image may remain in the site
-    contactShortcode: '[contact-form-7 id="INSERIRE_ID" title="Modulo di contatto"]',
+    contactForm: 'metform', // metform | cf7
     mapEmbed: true,
     menuName: '',
     ...settings,
     image: { seoRename: true, maxWidth: 1920, convertWebp: true, quality: 82, ...DEFAULT_CROP_SIZES, ...(settings.image || {}) },
-    demoValues: { brand: '', address: '', ignored: [], custom: [], ...(settings.demoValues || {}) },
     generation: { providerId: null, ...(settings.generation || {}) },
+  };
+}
+
+/** A saved template with its category (null when missing). */
+export function loadTemplateRow(id) {
+  const row = id
+    ? get(
+        `SELECT t.*, c.name AS category_name, c.description AS category_description
+         FROM site_templates t JOIN template_categories c ON c.id = t.category_id WHERE t.id = ?`,
+        id
+      )
+    : null;
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    language: row.language,
+    category: { id: row.category_id, name: row.category_name, description: row.category_description },
+    spec: sanitizeSpec(parseJson(row.spec_json, {})),
   };
 }
 
@@ -56,29 +88,9 @@ export function loadContext(projectId) {
   const settings = defaultSettings(parseJson(project.settings_json, {}));
   const services = all('SELECT * FROM services WHERE project_id = ? ORDER BY position, id', projectId);
   const images = all('SELECT * FROM images WHERE project_id = ? ORDER BY id', projectId);
-  const kitRow = project.kit_id ? get('SELECT * FROM kits WHERE id = ?', project.kit_id) : null;
-  const kit = kitRow
-    ? {
-        ...kitRow,
-        manifest: parseJson(kitRow.manifest_json, {}),
-        info: parseJson(kitRow.templates_json, { templates: [], contacts: { emails: [], phones: [] } }),
-        dir: path.join(config.storageDir, kitRow.extracted_path),
-      }
-    : null;
-  const mappings = kit ? all('SELECT * FROM kit_mappings WHERE project_id = ? AND kit_id = ?', projectId, kit.id) : [];
+  const template = loadTemplateRow(project.template_id);
   const menuName = settings.menuName || MENU_NAME[project.language] || MENU_NAME.en;
-  return { project, settings, services, images, kit, mappings, menu: { name: menuName, slug: slugify(menuName) } };
-}
-
-export function mappingFor(ctx, templateId) {
-  const m = ctx.mappings.find((x) => x.template_id === templateId);
-  const t = ctx.kit?.info.templates.find((x) => x.id === templateId);
-  const role = m?.page_role ?? t?.suggestedRole ?? 'ignore';
-  return {
-    role: PAGE_ROLES.includes(role) ? role : 'ignore', // 'service' / 'other' pages of older projects are no longer generated
-    slotOverrides: parseJson(m?.image_slots_json, {}),
-    options: { removedSections: [], ...parseJson(m?.options_json, {}) },
-  };
+  return { project, settings, services, images, template, menu: { name: menuName, slug: slugify(menuName) } };
 }
 
 /** Copyright line: the one set by the user, or "© <year> <site>. All rights reserved." in the site language. */
@@ -90,35 +102,50 @@ export function copyrightText(project) {
 /** Slug of a site page in the site language ('' for the home page). */
 export const pageSlug = (lang, role) => (role === 'home' ? '' : slugify(pageTitle(lang, role)));
 
-/**
- * List the pages to generate from the kit mapping: one template per role (the 5 site pages,
- * header, footer, single post template) + one article per service.
- */
-export function buildPages(ctx) {
-  if (!ctx.kit) return [];
-  const lang = ctx.project.language;
-  const pages = [];
-  const seen = new Set();
+/** Data of the site the template is applied to (input of templates/builder.js). */
+export function siteInfo(ctx) {
+  const { project } = ctx;
+  const lang = project.language;
+  return {
+    lang,
+    siteName: project.site_name,
+    phone: project.phone,
+    email: project.email,
+    address: oneLine(project.address),
+    copyright: copyrightText(project),
+    hasLogo: ctx.images.some((i) => i.role === 'logo'),
+    mapEmbed: ctx.settings.mapEmbed !== false,
+    contactShortcode: contactForm(ctx).placeholder,
+    pages: Object.fromEntries(SITE_PAGE_ROLES.map((r) => [r, { title: pageTitle(lang, r), url: r === 'home' ? '/' : `/${pageSlug(lang, r)}/` }])),
+    services: ctx.services.map((s) => ({ name: s.name || s.slug, url: `/${s.slug}/` })),
+  };
+}
 
-  for (const t of ctx.kit.info.templates) {
-    if (!t.valid) continue;
-    const { role } = mappingFor(ctx, t.id);
-    if (role === 'ignore' || seen.has(role)) continue;
-    seen.add(role);
+/** The Elementor documents of the project (built once per context). */
+export function builtSite(ctx) {
+  if (!ctx.template) return null;
+  ctx.built ||= buildSite(ctx.template.spec, siteInfo(ctx));
+  return ctx.built;
+}
+
+/** The pages to generate: the template documents (5 pages, single post, header, footer) + one article per service. */
+export function buildPages(ctx) {
+  if (!ctx.template) return [];
+  const lang = ctx.project.language;
+  const pages = TEMPLATE_ROLES.map((role) => {
     const key = role.replace('_', '-');
     const noUrl = role === 'header' || role === 'footer' || role === 'single_post';
-    pages.push({
+    return {
       key,
       role,
       title: pageTitle(lang, role),
-      templateId: t.id,
-      templateTitle: t.title,
+      templateId: ctx.template.id,
+      templateTitle: ctx.template.name,
       serviceId: null,
       prefix: key.replace(/-/g, '_'),
       slug: noUrl ? null : pageSlug(lang, role),
-    });
-  }
-
+    };
+  });
   for (const s of ctx.services) {
     pages.push({ key: `post-${s.slug || s.id}`, role: 'post', title: s.name, templateId: null, templateTitle: null, serviceId: s.id, prefix: 'post', slug: s.slug });
   }
@@ -138,7 +165,7 @@ export function siteLinks(ctx, pages = buildPages(ctx)) {
   return links;
 }
 
-/** Best internal URL for a demo link / button text when the AI did not provide a valid one. */
+/** Best internal URL for a link / button text when no valid one is available. */
 export function fallbackLink(text, links) {
   const s = String(text || '').toLowerCase();
   const find = (role) => links.find((l) => l.role === role)?.url;
@@ -163,87 +190,50 @@ function postFields(ctx) {
       widget: 'post',
       key: 'content',
       section: 0,
-      card: null,
       label: 'Article text',
       maxLength: 2500,
       minLength: 300,
       hint: `full article about the service: what it includes, who it is for, benefits (SEO). At least 300 characters of text (ideally 1200–2000). HTML with <h2>, <p>, <ul>/<li>. The last paragraph is a call to action linking to the contact page: <a href="${cUrl}">…</a>`,
     },
-    { id: 'post.excerpt', path: null, original: '', format: 'text', widget: 'post', key: 'excerpt', section: 0, card: null, label: 'Excerpt', maxLength: 160, hint: 'short summary of the article (used in service grids)' },
+    { id: 'post.excerpt', path: null, original: '', format: 'text', widget: 'post', key: 'excerpt', section: 0, label: 'Excerpt', maxLength: 160, hint: 'short summary of the article (used in service grids)' },
   ];
 }
 
-/** Load, prepare and analyse the template of a page. Returns a fresh document every call. */
+/**
+ * Build and analyse the document of a page. Returns a fresh document every call, its fields
+ * (with the builder marks: fixed / hint / limits / share) and the role of each image slot.
+ */
 export function analyzePage(ctx, page) {
-  if (!page.templateId) return { doc: null, fields: postFields(ctx), slots: [], slotRoles: {}, widgets: {}, contacts: { emails: [], phones: [] }, cardCount: 0 };
-  const raw = loadTemplate(ctx.kit.dir, page.templateId);
-  if (!raw) throw new Error(`Template "${page.templateId}" cannot be read.`);
-  const { slotOverrides, options } = mappingFor(ctx, page.templateId);
-  const { doc, meta, cardCount } = prepareDocument(raw, {
-    role: page.role,
-    removedSections: options.removedSections,
-    serviceCount: ctx.services.length,
-    ensureGallery: galleryPool(ctx.images).length > 0,
-    contact: { shortcode: ctx.settings.contactShortcode, mapEmbed: ctx.settings.mapEmbed, address: oneLine(ctx.project.address) },
-    menuSlug: ctx.menu.slug,
-  });
+  if (!page.templateId) return { doc: null, fields: postFields(ctx), slots: [], slotRoles: {}, widgets: {}, contacts: { emails: [], phones: [] } };
+  const entry = builtSite(ctx)?.docs[page.role];
+  if (!entry) throw new Error(`The template has no "${page.role}" document.`);
+  const doc = structuredClone(entry.doc);
   const heroName = page.role === 'home' ? 'hero' : ['header', 'footer', 'single_post'].includes(page.role) ? null : 'intro';
-  const analysis = analyzeDocument(doc, { prefix: page.prefix, heroName, meta });
-  const slotRoles = { ...defaultSlotRoles(analysis.slots, page.role), ...slotOverrides };
-  return { doc, ...analysis, slotRoles, cardCount };
+  const analysis = analyzeDocument(doc, { prefix: page.prefix, heroName });
+  for (const f of analysis.fields) {
+    const m = entry.marks.get(f.ref) || {};
+    if (m.fixed) f.fixed = true;
+    if (m.hint) f.hint = m.hint;
+    if (m.max) f.maxLength = m.max;
+    if (m.min) f.minLength = m.min;
+    if (m.share) f.share = m.share;
+  }
+  const slotRoles = {};
+  for (const s of analysis.slots) {
+    const m = entry.marks.get(s.id) || {};
+    slotRoles[s.id] = m.slot || 'photo';
+    if (m.service != null) s.service = m.service;
+  }
+  return { doc, ...analysis, slotRoles };
 }
-
-/** Demo value -> project value replacement pairs. */
-export function buildReplacements(ctx) {
-  const { project, settings, kit } = ctx;
-  const ignored = new Set(settings.demoValues.ignored || []);
-  const pairs = [];
-  if (settings.demoValues.brand) pairs.push({ from: settings.demoValues.brand, to: project.site_name });
-  if (settings.demoValues.address) pairs.push({ from: settings.demoValues.address, to: oneLine(project.address) });
-  for (const p of kit?.info.contacts?.phones || []) if (!ignored.has(p) && project.phone) pairs.push({ from: p, to: project.phone });
-  for (const e of kit?.info.contacts?.emails || []) if (!ignored.has(e) && project.email) pairs.push({ from: e, to: project.email });
-  for (const c of settings.demoValues.custom || []) if (c?.from) pairs.push({ from: c.from, to: c.to ?? '' });
-  return pairs;
-}
-
-const COPYRIGHT_RE = /©|&copy;|copyright|all rights reserved|tutti i diritti|todos los derechos|tous droits|alle rechte/i;
-const keepWrapper = (original, plain, value) => (original.includes(plain) && plain ? original.replace(plain, value) : /<[a-z]/i.test(original) ? `<p>${value}</p>` : value);
 
 /**
- * Fields filled deterministically instead of by the AI:
- *  - pure phone / email / demo values, copyright line
- *  - subheader title of inner pages = page title
- *  - service cards: title = service name, link = service URL
- * `state` tracks per-page "first heading" decisions. Returns { source: 'auto', value } or { source: 'ai' }.
+ * Fields the template builder already filled with their final value (page titles, menus, service
+ * names, contact data, copyright, links) are not sent to the AI.
+ * Returns { source: 'auto', value } or { source: 'ai' }.
  */
-export function classifyField(field, ctx, replacements, page = null, state = {}) {
-  const { project } = ctx;
-  const service = field.card != null ? ctx.services[field.card] : null;
-
-  if (field.format === 'link') {
-    if (service) return { source: 'auto', value: `/${service.slug}/` };
-    return { source: 'ai' };
-  }
-
-  const plain = stripHtml(field.original).trim();
-  if (COPYRIGHT_RE.test(plain)) return { source: 'auto', value: keepWrapper(field.original, plain, copyrightText(project)) };
-  const exact = replacements.find((r) => r.from.trim() === plain);
-  if (exact) return { source: 'auto', value: keepWrapper(field.original, plain, exact.to) };
-  if (project.email && plain.match(EMAIL_IN_TEXT)?.[0] === plain) return { source: 'auto', value: project.email };
-  if (project.phone && /^[+\d\s().-]+$/.test(plain) && looksLikePhone(plain)) return { source: 'auto', value: project.phone };
-
-  // Service card title
-  if (service && (field.key === 'title_text' || field.widget === 'heading' || field.key === 'title') && !state[`card${field.card}`]) {
-    state[`card${field.card}`] = true;
-    return { source: 'auto', value: service.name };
-  }
-
-  // Subheader title of inner pages = page title
-  const inner = page && !['home', 'header', 'footer', 'single_post', 'post'].includes(page.role);
-  if (inner && field.section === 0 && field.widget === 'heading' && !state.subheader) {
-    state.subheader = true;
-    return { source: 'auto', value: page.title };
-  }
+export function classifyField(field) {
+  if (field.fixed) return { source: 'auto', value: field.original };
   return { source: 'ai' };
 }
 
@@ -268,11 +258,12 @@ export function checkReadiness(ctx) {
   const byRole = (r) => ctx.images.filter((i) => i.role === r);
   if (!byRole('hero_home').length) add('images', 'warning', 'Home hero image (hero_home) is missing.');
   if (!byRole('subheader').length) add('images', 'warning', 'Subheader image is missing.');
+  if (!byRole('logo').length) add('images', 'warning', 'Logo is missing: header and footer show the site name instead.');
   for (const s of ctx.services) {
     if (!ctx.images.some((i) => i.role === 'service' && i.service_id === s.id)) add('images', 'warning', `Service "${s.name || '?'}" has no image.`);
   }
   if (ctx.images.some((i) => i.role && !i.alt_text.trim())) add('images', 'warning', 'Some assigned images have no ALT text.');
-  if (!galleryPool(ctx.images).length) add('images', 'warning', 'Upload some photos: the Gallery page shows all of them.');
+  if (!galleryPool(ctx.images).length) add('images', 'warning', 'Upload some photos: the Gallery page shows all of them and they fill the images of every section.');
   for (const [role, kind, label] of [['hero_home', 'hero', 'Home hero'], ['subheader', 'subheader', 'Subheader']]) {
     const { width, height } = { ...DEFAULT_CROP_SIZES[kind], ...ctx.settings.image[kind] };
     for (const img of byRole(role).filter((i) => i.mime !== 'image/svg+xml' && i.width && (i.width < width || i.height < height))) {
@@ -280,17 +271,7 @@ export function checkReadiness(ctx) {
     }
   }
 
-  if (!ctx.kit) add('kit', 'error', 'Select or upload an Elementor Template Kit.');
-  else {
-    const pages = buildPages(ctx);
-    const roles = ctx.kit.info.templates.map((t) => mappingFor(ctx, t.id).role);
-    if (!pages.some((pg) => pg.role === 'home')) add('kit', 'error', 'Map a template to the Home page.');
-    if (!roles.includes('gallery')) add('kit', 'warning', 'No template mapped to the Gallery page: the WordPress plugin creates it with a standard WordPress gallery of all photos.');
-    for (const role of ['about', 'services', 'contact'].filter((r) => !roles.includes(r))) {
-      add('kit', 'warning', `No template mapped to the ${pageTitle('en', role)} page: the WordPress plugin creates it empty.`);
-    }
-    if ((roles.includes('header') || roles.includes('footer')) && !byRole('logo').length) add('images', 'warning', 'Logo is missing (used in header and footer).');
-  }
+  if (!ctx.template) add('template', 'error', 'Choose a category and one of its saved templates (or generate a new one).');
 
   const providerId = ctx.settings.generation.providerId;
   const provider = providerId ? get('SELECT id FROM ai_providers WHERE id = ?', providerId) : null;

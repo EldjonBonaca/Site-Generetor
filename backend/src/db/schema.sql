@@ -1,15 +1,27 @@
 -- SQLite schema. Kept close to standard SQL so it can be ported to PostgreSQL
 -- (INTEGER PRIMARY KEY AUTOINCREMENT -> SERIAL/IDENTITY, TEXT JSON -> JSONB).
 
-CREATE TABLE IF NOT EXISTS kits (
-  id             INTEGER PRIMARY KEY AUTOINCREMENT,
-  name           TEXT NOT NULL,
-  file_path      TEXT NOT NULL,           -- original uploaded zip (never modified)
-  extracted_path TEXT NOT NULL,           -- safe extraction folder
-  format         TEXT NOT NULL,           -- template-kit | website-kit | loose
-  manifest_json  TEXT NOT NULL DEFAULT '{}',
-  templates_json TEXT NOT NULL DEFAULT '[]', -- parsed template summary
-  created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+-- Templates: categories (e.g. Plumbers, Restaurants) and the templates generated for them.
+-- A template is a design spec (colors, fonts, layout variants, icons, tone, sample texts) that
+-- templates/builder.js turns into the Elementor documents of each site.
+CREATE TABLE IF NOT EXISTS template_categories (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL COLLATE NOCASE UNIQUE,
+  description TEXT NOT NULL DEFAULT '',     -- what the businesses of the category do (sent to the AI)
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS site_templates (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  category_id  INTEGER NOT NULL REFERENCES template_categories(id) ON DELETE CASCADE,
+  name         TEXT NOT NULL,
+  instructions TEXT NOT NULL DEFAULT '',    -- style instructions given when it was generated
+  language     TEXT NOT NULL DEFAULT 'it',  -- language of the sample texts
+  spec_json    TEXT NOT NULL DEFAULT '{}',
+  generated_by TEXT NOT NULL DEFAULT '',    -- provider · model
+  tokens_used  INTEGER NOT NULL DEFAULT 0,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS projects (
@@ -24,8 +36,8 @@ CREATE TABLE IF NOT EXISTS projects (
   notes          TEXT NOT NULL DEFAULT '',
   image_base_url TEXT NOT NULL DEFAULT '',
   copyright      TEXT NOT NULL DEFAULT '',
-  kit_id         INTEGER REFERENCES kits(id) ON DELETE SET NULL,
-  settings_json  TEXT NOT NULL DEFAULT '{}', -- image options, replacements, generation choices
+  template_id    INTEGER REFERENCES site_templates(id) ON DELETE SET NULL,
+  settings_json  TEXT NOT NULL DEFAULT '{}', -- image options, contact form, menu, generation choices
   status         TEXT NOT NULL DEFAULT 'draft', -- draft | generated
   created_at     TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
@@ -55,17 +67,6 @@ CREATE TABLE IF NOT EXISTS images (
   target_page   TEXT,                     -- subheader per page (optional): page role, e.g. 'about'
   alt_text      TEXT NOT NULL DEFAULT '',
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS kit_mappings (
-  id               INTEGER PRIMARY KEY AUTOINCREMENT,
-  project_id       INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  kit_id           INTEGER NOT NULL REFERENCES kits(id) ON DELETE CASCADE,
-  template_id      TEXT NOT NULL,
-  page_role        TEXT NOT NULL DEFAULT 'ignore', -- home | service | services | about | gallery | contact | single_post | header | footer | other | ignore
-  image_slots_json TEXT NOT NULL DEFAULT '{}',     -- { slotId: role } overrides
-  options_json     TEXT NOT NULL DEFAULT '{}',     -- { removedSections: [elementId] }
-  UNIQUE (project_id, kit_id, template_id)
 );
 
 CREATE TABLE IF NOT EXISTS ai_providers (
@@ -101,6 +102,7 @@ CREATE TABLE IF NOT EXISTS generations (
 CREATE INDEX IF NOT EXISTS idx_services_project ON services(project_id);
 CREATE INDEX IF NOT EXISTS idx_images_project ON images(project_id);
 CREATE INDEX IF NOT EXISTS idx_generations_project ON generations(project_id);
+CREATE INDEX IF NOT EXISTS idx_site_templates_category ON site_templates(category_id);
 
 -- Gallery: reusable image library organized by categories, shared by all projects.
 -- Images picked for a project are copied into `images` (library_image_id keeps the link).

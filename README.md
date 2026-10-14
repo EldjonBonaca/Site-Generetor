@@ -1,10 +1,12 @@
 # Elementor Site Generator
 
-A local web app that turns **site data + images + an Elementor Template Kit** into ready‑to‑import Elementor files, with the text written by the AI provider you choose (Claude, ChatGPT, Gemini or any OpenAI‑compatible API).
+A local web app that turns **site data + images + a reusable category template** into ready‑to‑import Elementor files, with the text written by the AI provider you choose (Claude, ChatGPT, Gemini or any OpenAI‑compatible API).
+
+There are no Template Kits to upload: you create **categories** (e.g. *Plumbers*, *Restaurants*), and for each category the AI **generates templates** that you preview, save and reuse in every project of that category.
 
 The site always has **5 pages: Home, About Us, Services, Gallery and Contact**. Services are published as WordPress articles, and the Gallery shows every uploaded photo.
 
-The app produces a **downloadable zip** with a **WordPress plugin** (`<site>-site.zip`): upload and activate it, and it creates the whole site by itself (images in the Media Library, the 5 Elementor pages, one article per service, menu, header/footer, contact form). The zip also contains everything needed to import the site manually (kit, single templates, optimized images, `wordpress-import.xml`, `content.md`, `seo.csv`, `INSTRUCTIONS.md`).
+The app produces a **downloadable zip** with a **WordPress plugin** (`<site>-site.zip`): upload and activate it, and it creates the whole site by itself (images in the Media Library, the 5 Elementor pages, one article per service, menu, header/footer, MetForm contact form). The zip also contains everything needed to import the site manually (single templates, optimized images, `wordpress-import.xml`, `content.md`, `seo.csv`, `INSTRUCTIONS.md`).
 
 ---
 
@@ -23,15 +25,14 @@ On first start the backend creates `backend/.env` with a random `ENCRYPTION_KEY`
 
 ### Try the whole flow in 2 minutes (no API key needed)
 
-1. **AI Providers → Add provider → "Demo (offline mock)"**. It fills fields with placeholder text and makes no network calls.
-2. **Projects → New project**: fill in the site data and add 2–3 services.
-3. **Images**: upload a few pictures and assign *Home hero*, *Subheader* and one image per service.
-4. **Template Kit**: upload `samples/sample-elementor-kit.zip`. Under *Demo values to replace*, enter the brand `Plumbix` and the address `123 Demo Street, Springfield`.
-5. **AI**: pick the demo provider.
-6. **Generate & Preview → Generate**, then edit any text.
-7. **Download**: click **Export & download zip**, then **Download WordPress plugin**. In WordPress (with Elementor active): *Plugins → Add New Plugin → Upload Plugin → Activate*.
-
-Rebuild the sample kit at any time with `npm run sample-kit`.
+1. **AI Providers → Add provider → "Demo (offline mock)"**. It designs a sample template and fills fields with placeholder text, without network calls.
+2. **Templates → New category** (e.g. `Plumbers`) **→ Generate template → Generate → Save template**.
+3. **Projects → New project**: fill in the site data and add 2–3 services.
+4. **Images**: upload a few pictures and assign *Home hero*, *Subheader*, *Logo* and one image per service.
+5. **Template**: pick the category and click **Use** on the saved template (or generate one right there).
+6. **AI**: pick the demo provider.
+7. **Generate & Preview → Generate**, then edit any text.
+8. **Download**: click **Export & download zip**, then **Download WordPress plugin**. In WordPress (with Elementor active): *Plugins → Add New Plugin → Upload Plugin → Activate*.
 
 ### Other commands
 
@@ -39,8 +40,7 @@ Rebuild the sample kit at any time with `npm run sample-kit`.
 |---|---|
 | `npm run dev` | Backend (auto‑restart on changes) + Vite dev server |
 | `npm start` | Builds the UI and serves everything from the backend on http://localhost:4000 |
-| `npm test` | Backend unit + end‑to‑end tests (mock provider, sample kit, temporary storage) |
-| `npm run sample-kit` | Regenerates `samples/sample-elementor-kit.zip` |
+| `npm test` | Backend unit + end‑to‑end tests (mock provider, temporary storage) |
 
 ---
 
@@ -52,11 +52,31 @@ Rebuild the sample kit at any time with `npm run sample-kit`.
 |---|---|---|
 | `PORT` | `4000` | API port (the Vite dev server proxies `/api` to it) |
 | `ENCRYPTION_KEY` | auto‑generated | 64 hex chars (32 bytes) used for AES‑256‑GCM encryption of API keys. **If you lose or change it, saved API keys can't be decrypted** (just enter them again). |
-| `STORAGE_DIR` | `../storage` | SQLite DB, uploaded images, kits and exports |
+| `STORAGE_DIR` | `../storage` | SQLite DB, uploaded images and exports |
 | `MAX_IMAGE_MB` | `15` | Max size of each uploaded image |
-| `MAX_KIT_MB` | `150` | Max size of a kit zip |
 | `AI_TIMEOUT_MS` | `180000` | Timeout of a single AI request |
 | `DEFAULT_LANGUAGE` | `it` | Site language of new projects (can be changed per project) |
+
+---
+
+## Templates (categories)
+
+The **Templates** page in the top menu manages the design of the sites:
+
+- **Categories**: one per kind of business (*Plumbers*, *Restaurants*, *Dentists*…), with an optional description of what those businesses do (sent to the AI). They can be renamed or deleted; deleting a category deletes its templates, and the projects that used them must choose another template.
+- **Generate template**: the AI designs a template for the category, following the built-in template prompt ([`backend/src/db/prompts/template-categoria-it.md`](backend/src/db/prompts/template-categoria-it.md), read-only). You can add style instructions (*"elegant, dark colors"*) and choose the language of the sample texts. The result is shown as a sketch of the Home page: **regenerate** until you like it, then **save** it with a name. Nothing is saved before that.
+- **Saved templates** are reused by every project of the category. They can be edited (name, colors, fonts, title weight, corner radius, spacing, layout of each section, icons, tone of voice), duplicated or deleted. Editing a template changes every project that uses it.
+
+A template is a small **design spec**, not Elementor JSON written by the AI:
+
+| Part | Content |
+|---|---|
+| `style` | 7 colors (primary, secondary, accent, titles, text, light background, dark), title and text fonts (from a list of Google Fonts), title weight, corner radius, spacing, uppercase buttons |
+| `layout` | one variant per section: header (classic / centered / top bar with phone and email), hero (centered or left text over a photo / text beside a photo), about (image left/right), why choose us (icons / cards over a photo), call to action (banner / colored band / none), services (cards / boxed), reviews (cards / minimal), contact (details beside / above the form), footer (dark / light), gallery columns |
+| `icons` | 4 Font Awesome icons for *Why choose us* |
+| `tone`, `copy` | tone of voice and sample texts of every section (only a guide of tone and length: every project rewrites them) |
+
+The AI answer is validated ([`templates/spec.js`](backend/src/templates/spec.js)): unknown fonts, icons, layouts or invalid colors fall back to defaults, so any answer becomes a usable template. The builder ([`templates/builder.js`](backend/src/templates/builder.js)) then turns the spec + the data of a project into the Elementor documents, using **only native Elementor widgets** (flexbox containers, heading, text, button, image, icon box, image box, icon list, testimonial, star rating, image gallery, shortcode, HTML) — no addon, no UAE.
 
 ---
 
@@ -66,10 +86,11 @@ This is **the** prompt of the system ([`backend/src/db/prompts/sito-completo-it.
 
 Its Italian variables are filled automatically:
 
-- **Site data:** `{{NOME_SITO}}`, `{{TELEFONO}}`, `{{EMAIL}}`, `{{INDIRIZZO}}`, `{{INDIRIZZO_URL_ENCODED}}`, `{{TESTO_COPYRIGHT}}`
+- **Site data:** `{{NOME_SITO}}`, `{{SETTORE_CLIENTE}}` (the project industry, or the template category), `{{TELEFONO}}`, `{{EMAIL}}`, `{{INDIRIZZO}}`, `{{INDIRIZZO_URL_ENCODED}}`, `{{TESTO_COPYRIGHT}}`
 - **Services:** `{{SERVIZIO_1}}`…`{{SERVIZIO_N}}`
-- **Images:** `{{LOGO}}`, `{{IMG_HOME_HERO}}`, `{{IMG_SUBHEADER}}`, `{{IMG_SERVIZIO_n}}`, `{{ELENCO_IMMAGINI_GALLERIA}}` (each becomes the exported file name plus its ALT text)
-- **Kit:** `{{NOME_FILE_TEMPLATE_KIT}}`
+- **Images:** `{{ELENCO_IMMAGINI}}` (the shared archive: every photo, logo excluded), `{{LOGO}}`, `{{IMG_HOME_HERO}}`, `{{IMG_SUBHEADER}}`, `{{IMG_SERVIZIO_n}}`, `{{ALTRE_IMMAGINI}}` (photos without a specific use), `{{ELENCO_IMMAGINI_GALLERIA}}` (each becomes the exported file name plus its ALT text)
+- **Template:** `{{NOME_TEMPLATE}}`, `{{CATEGORIA_TEMPLATE}}`, `{{STILE_TEMPLATE}}` (colors, fonts, layouts and tone of voice of the template)
+- **Contact form:** `{{PLUGIN_MODULO}}` (MetForm, or Contact Form 7 if chosen in the Template step)
 
 A line containing `{{SERVIZIO_N}}` is repeated for every service after the last numbered one. Lines that refer to a service that doesn't exist are removed.
 
@@ -77,18 +98,20 @@ The generator builds the files itself; the AI only writes the texts. This is how
 
 | Prompt requirement | How the generator handles it |
 |---|---|
-| Pages Home, Chi Siamo, Servizi, Galleria, Contatti | These are the only pages generated. Kit step: map one template to each of Home / About / Services overview / Gallery / Contact (mapping a second template to a role un-maps the first). Titles and slugs follow the site language (`/chi-siamo/`, `/servizi/`, `/galleria/`, `/contatti/`). A page without a template is still created by the plugin (empty; the Gallery gets a WordPress gallery of all photos). |
-| "Remove all sections not listed" | Kit step → **Sections**: uncheck the sections to drop (per template). |
-| Subheader with the page title on inner pages | The first heading of the first section is set to the page title, and its background gets the subheader image. |
-| Replace **all** images | Option *Replace all demo images* (on by default): every slot gets one of your images. Testimonial avatars and a missing logo are removed. Final checks verify that no demo image URL is left. |
-| Galleria with all images + lightbox | The Gallery page shows **every uploaded photo** (all images except the logo), with lightbox enabled. If its template has no gallery widget, an Elementor *Image Gallery* is added after the subheader. The same photos also fill the free image slots of the other pages (service photos included), starting from a different photo on each page. |
-| Home: 3 featured services; Servizi: grid with all services | Service cards are detected automatically. Home keeps up to the template's cards; the Services page is cloned or trimmed to one card per service. Each card gets the service name, image and link to its article. |
-| Buttons "Scopri di più", "Tutti i servizi"… point to the right page | Link fields are filled by the AI, choosing only from the site's URLs (validated; with a fallback). Cards link to their service automatically. Links can be edited in the preview. |
-| Services as **articles** (category "Servizi", featured image, ≥ 300 characters, CTA to Contatti) | Always articles (there are no per-service pages). Each article's text is validated at ≥ 300 characters. `wordpress-import.xml` (WXR) contains the category, articles, featured images, empty pages and the menu. A kit "Single post" template is exported for the Theme Builder. |
-| Header and footer as separate templates, menu, copyright | Header and footer are exported as theme templates, and nav-menu widgets point to "Menu principale" (created by the XML). The footer copyright line comes from *Site data → Copyright*. |
-| Contatti: `tel:`/`mailto:`, CF7 shortcode, Google Maps | Contact links are rewritten. The template form is replaced by a Shortcode widget with `[contact-form-7 id="INSERIRE_ID" title="Modulo di contatto"]` (editable). The map widget gets your address, or a Maps iframe is added. |
-| Output: templates, articles, menu, import guide | WordPress plugin `<site>-site.zip` (see [The WordPress plugin](#the-wordpress-plugin)), plus `templates/*.json`, `wordpress-import.xml`, `menu.md`, `ISTRUZIONI.md` (in Italian for Italian sites) for the manual import |
-| Final checks | `CONTROLLI.md` and the Download step list leftover demo images/texts, wrong links, emails that differ from yours, short articles and missing featured images. Responsive layout must still be checked by hand. |
+| Pages Home, Chi Siamo, Servizi, Galleria, Contatti | The template builder always creates these 5 pages, the header, the footer and the single post template, with exactly the sections listed in the prompt. Titles and slugs follow the site language (`/chi-siamo/`, `/servizi/`, `/galleria/`, `/contatti/`). |
+| Style of the template | Colors, fonts, spacing, radius and layout variants come from the chosen template; its colors and fonts are also set as Elementor global colors / fonts. The tone of voice is described to the AI (`{{STILE_TEMPLATE}}`). |
+| Subheader with the page title on inner pages | The first section of every inner page is a banner with the page title (fixed, not written by the AI) over the subheader image. |
+| Shared image archive, no section without image | Every image slot is filled: hero, subheader, logo and service cards with their image, every other slot (about, why choose us, call to action, story, mission) with the photos of the archive round-robin, starting from a different photo on each page so neighbouring sections don't repeat the same one. A missing hero/subheader/service image is replaced by a photo of the archive. Final checks verify that no placeholder image is left. |
+| Galleria with all images + lightbox | The Gallery page shows **every uploaded photo** (all images except the logo) in an Elementor *Image Gallery* with lightbox. |
+| Home: 3 featured services; Servizi: grid with all services | Home shows up to 3 service cards, the Services page one card per service. Each card has the service name, image and link to its article (fixed), and a short description written by the AI. |
+| Buttons "Scopri di più", "Tutti i servizi"… point to the right page | Every link is set by the builder (Chi Siamo, Servizi, Contatti, articles, `tel:`); the AI only writes the button texts. Links can still be changed in the preview. |
+| 3 reviews, the same in Home and Chi Siamo | The AI writes the 3 reviews (text, name, role/city) on the Home page; the About page always shows the same ones (marked *Shared* in the preview, edited on Home). No avatar: nothing is left empty. |
+| Services as **articles** (category "Servizi", featured image, ≥ 300 characters, CTA to Contatti) | Always articles (there are no per-service pages). Each article's text is validated at ≥ 300 characters. `wordpress-import.xml` (WXR) contains the category, articles, featured images, empty pages and the menu. The single post template (Theme Builder) ends with a call to action to the contact page. |
+| Header and footer as separate templates, footer in 4 columns | Header: logo, menu with the 5 pages (Elementor icon list, so no Pro widget is needed), button or top bar with phone and email depending on the template. Footer: logo · **Link** (5 pages) · **Servizi** (every service, linked to its article) · **Contatti** (address, `mailto:`, `tel:`), then the copyright from *Site data → Copyright*. |
+| Contatti: `tel:`/`mailto:`, form, Google Maps | Contact details with `tel:`/`mailto:` links, a Shortcode widget with the **MetForm** placeholder `[metform form_id="INSERIRE_ID"]` (or the Contact Form 7 one) and a Google Maps iframe with your address. |
+| Plugins: no UAE, native widgets | The template uses only native Elementor widgets and MetForm. The WordPress plugin never installs Ultimate Addons for Elementor: without Elementor Pro it displays header and footer itself. |
+| Output: templates, articles, menu, import guide | WordPress plugin `<site>-site.zip` (see [The WordPress plugin](#the-wordpress-plugin)), plus `templates/*.json`, `wordpress-import.xml`, `menu.md`, `ISTRUZIONI.md` (in Italian for Italian sites, with the plugins to activate) for the manual import |
+| Final checks | `CONTROLLI.md` and the Download step list leftover placeholder images and sample texts, wrong links, emails that differ from yours, short articles and missing featured images. Responsive layout must still be checked by hand. |
 
 ---
 
@@ -102,18 +125,16 @@ The project wizard autosaves at every step. The sidebar shows ✓ / ⚠ / ✕ fo
    - `hero_home`: only one
    - `subheader`: one, or one per page if you enable that option
    - `service:<slug>`: one per service
-   - `logo`
+   - `logo` (without logo, header and footer show the site name)
    - `gallery` (no specific spot)
 
    Every image except the logo is a site photo: it appears in the Gallery and can fill image slots on any page. Each image also has an ALT text (typed or generated by the AI) and an editable file name. **SEO rename** names files like `plumber-london-boiler-repair.webp`. Resizing and WEBP conversion are applied on export.
-4. **Template Kit**: upload a kit or reuse one from the library, then map one template to each role (Home, About, Services overview, Gallery, Contact, Single post, Header, Footer). Other templates are ignored.
-   - Expand a template to choose what replaces each image slot.
-   - Phones and emails found in the kit are detected automatically. You can add the kit's demo brand and address and any custom replacements.
+4. **Template**: choose the category of the business and one of its saved templates, or **Generate template** right there (it is saved in the category). The selected template is shown with its sections; *Edit design* changes it for every project that uses it. The same step sets the **contact form plugin** (MetForm by default, or Contact Form 7), the menu name and the Google map.
 5. **AI**: choose the provider. The built-in site prompt is used automatically; you can preview the final prompt of each page with the variables already replaced.
-6. **Generate & Preview**: shows the plan with the estimated token usage, then a live progress bar and log. Afterwards you get an editable preview of every field and the SEO fields, and can regenerate a single field or a whole page.
+6. **Generate & Preview**: shows the plan with the estimated token usage, then a live progress bar and log. Afterwards you get an editable preview of every field and the SEO fields, and can regenerate a single field or a whole page. Fields filled by the template (titles, menus, contacts, links) are marked *Template*; the reviews of the About page are marked *Shared*.
 7. **Download**: export the zip and download the WordPress plugin. The images base URL is only needed for the manual import.
 
-Kits and AI providers are global, so every project can reuse them.
+Templates and AI providers are global, so every project can reuse them. A generation belongs to the template it was made with: after changing template, run a new generation before exporting.
 
 ### Gallery (reusable image library)
 
@@ -137,98 +158,89 @@ website-maker/
 │   │   ├── server.js         # entry point (listens on 127.0.0.1)
 │   │   ├── app.js            # express app, routes, error handler, static UI in prod
 │   │   ├── config.js         # env, storage paths, encryption key bootstrap
-│   │   ├── db/               # node:sqlite connection, schema.sql, the site prompt (prompts/)
-│   │   ├── lib/              # crypto (AES-GCM), safe zip extraction, utils
-│   │   ├── routes/           # projects+services, images, kits, providers, site prompt preview, generations
+│   │   ├── db/               # node:sqlite connection, schema.sql, the built-in prompts (prompts/)
+│   │   ├── lib/              # crypto (AES-GCM), images, uploads, zip, utils
+│   │   ├── routes/           # projects+services, images, library, templates, providers, prompts, generations
 │   │   ├── ai/
 │   │   │   ├── AIProvider.js # common interface + HTTP/timeout/error normalization
 │   │   │   ├── registry.js   # auto-discovers adapters in ./providers
 │   │   │   ├── json.js       # robust JSON extraction/validation of AI answers
 │   │   │   └── providers/    # anthropic, openai, gemini, openai-compatible, mock
+│   │   ├── templates/
+│   │   │   ├── spec.js       # template design spec: allowed values, validation, description
+│   │   │   ├── generate.js   # AI generation of a category template (template prompt + JSON spec)
+│   │   │   └── builder.js    # spec + site data -> Elementor documents (+ field/slot marks, global styles)
 │   │   ├── elementor/
-│   │   │   ├── kit.js        # read Template Kit / Website Kit / loose JSON
 │   │   │   ├── analyze.js    # find text fields + image slots (with exact JSON paths)
 │   │   │   └── apply.js      # write texts, images, contacts back (structure untouched)
 │   │   └── generation/
 │   │       ├── plan.js       # project context, page plan, readiness check
 │   │       ├── prompt-builder.js  # {{variables}} + automatic JSON instructions
-│   │       ├── runner.js     # background job: chunks, retries, progress, log
-│   │       ├── exporter.js   # images, templates, kit rebuild, content.md, seo.csv, INSTRUCTIONS.md
-│   │       ├── wp-plugin.js  # packages the WordPress plugin (data + images)
+│   │       ├── runner.js     # background job: chunks, retries, shared fields, progress, log
+│   │       ├── exporter.js   # images, templates, content.md, seo.csv, INSTRUCTIONS.md
+│   │       ├── wp-plugin.js  # packages the WordPress plugin (data + images + contact form)
 │   │       └── wp-plugin/plugin.php  # generic plugin code: creates the site in WordPress
-│   ├── scripts/make-sample-kit.js
 │   └── test/                 # node:test unit + e2e tests
 ├── frontend/                 # React 19 + Vite + Tailwind CSS v4
 │   └── src/
-│       ├── pages/            # Projects, Wizard (+ steps/), Kits, Providers
-│       ├── components/       # UI primitives, toasts, step issues
+│       ├── pages/            # Projects, Wizard (+ steps/), Templates, Gallery, Providers
+│       ├── components/       # UI primitives, template preview/dialogs, toasts, step issues
 │       ├── hooks/useAutosave.js
 │       └── i18n/             # gettext-style i18n (English source strings + locales/)
-├── samples/sample-elementor-kit.zip
-└── storage/                  # created at runtime (DB, images, kits, output) — gitignored
+└── storage/                  # created at runtime (DB, images, output) — gitignored
 ```
 
 ### Data model
 
 These are the tables from the spec, plus a few practical columns:
 
-- `projects`: also has `kit_id`, `settings_json` (image options and crop sizes, demo replacements, chosen provider) and `status`
+- `projects`: also has `template_id`, `settings_json` (image options and crop sizes, contact form plugin, menu, map, chosen provider) and `status`
 - `services`
 - `images`: also has `original_name`, `mime`, `width`, `height`, `size`, `target_page` and `library_image_id` (the Gallery image it was copied from)
+- `template_categories` and `site_templates`: the categories and their saved templates (`spec_json`, `instructions`, `language`, `generated_by`, `tokens_used`)
 - `library_categories` and `library_images`: the Gallery library (files in `storage/library/`)
-- `kits`: also has `format`, `extracted_path` and `templates_json`
-- `kit_mappings`: also has `image_slots_json`
 - `ai_providers`: also has `key_hint` and `models_json`
-- `generations`: also has `progress`, `log_json`, `config_json` and `error`
+- `generations`: also has `progress`, `log_json`, `config_json` (prompt and template used) and `error`
 
-The schema is plain SQL in [`backend/src/db/schema.sql`](backend/src/db/schema.sql) and can be ported to PostgreSQL easily.
+The schema is plain SQL in [`backend/src/db/schema.sql`](backend/src/db/schema.sql) and can be ported to PostgreSQL easily. Databases created by earlier versions keep their old `kits` / `kit_mappings` tables and `projects.kit_id`: they are no longer used (projects made with a Template Kit must choose a template).
 
 ### How the Elementor processing works
 
-1. **Kit reading** ([`elementor/kit.js`](backend/src/elementor/kit.js)). The zip is extracted safely and `manifest.json` is located, even when nested in a folder. Two layouts are supported:
-   - *Template Kit*: `manifest.templates[]` + `templates/*.json`
-   - *Website Kit*: `manifest.templates{}` / `manifest.content{}` + `templates/<id>.json` and `content/page/<id>.json`
-
-   If neither layout is found, any JSON with an Elementor `content` array is used. Roles are guessed from titles and types, and you can change them. **The original zip is never modified.**
-2. **Analysis** ([`elementor/analyze.js`](backend/src/elementor/analyze.js)) walks the element tree:
-   - **Text fields**: known keys of core and Pro widgets (heading, text‑editor, button, icon‑box, image‑box, icon‑list, tabs, accordion, testimonial, price‑table, flip‑box, CTA…), plus a heuristic for third‑party widgets that skips config values such as `h2`, `left` or colors.
-   - **Image slots**: image controls, background images and galleries.
-
-   Each item records its exact JSON path. Field IDs are readable, e.g. `home.hero.heading1.title` or `service.s2.icon_list1.icon_list3_text`.
+1. **Build** ([`templates/builder.js`](backend/src/templates/builder.js)). The template spec and the project data (pages, services, contacts, logo, contact form) become the Elementor documents. Everything that is not marketing copy is decided here and **marked**: page titles in the subheaders, menus, service names and links, contact data, copyright (*fixed*); the texts the AI must write (*hint* and length limits); the reviews shared by Home and About (*share*); the role of each image slot. Element ids are derived from the build order, so the same project always gives the same ids.
+2. **Analysis** ([`elementor/analyze.js`](backend/src/elementor/analyze.js)) walks the element tree and finds every text field and image slot with its exact JSON path. Field IDs are readable, e.g. `home.hero.heading2.title`; each field and slot is matched to its builder mark through `<elementId>:<settings path>`.
 3. **Generation** ([`generation/runner.js`](backend/src/generation/runner.js)). The site prompt is rendered with the variables. The generator then appends technical instructions: reply only with a JSON object, these exact keys, a length limit per field, plus `_seo.title` / `_seo.description`.
    - Long pages are split into chunks of 45 fields.
-   - Invalid or incomplete JSON is **retried up to 2 times**. After that, missing fields keep their original text and a readable error is logged.
+   - Invalid or incomplete JSON is **retried up to 2 times**. After that, missing fields keep the template sample text and a readable error is logged.
    - Rate limits, timeouts and 5xx errors are retried with backoff. Fatal errors (invalid key, unknown model) stop the run immediately.
-   - Fields that contain only a phone number or email are filled automatically and never sent to the AI.
-4. **Export** ([`generation/exporter.js`](backend/src/generation/exporter.js)) rebuilds everything from the original kit:
-   - It sets only the targeted string values and image objects, so element IDs, styles and settings stay untouched.
-   - It replaces `tel:` and `mailto:` links, the detected demo phones and emails, the demo brand and address, and any custom replacements, everywhere.
+   - Fixed fields are never sent to the AI; shared fields are written once (on Home).
+4. **Export** ([`generation/exporter.js`](backend/src/generation/exporter.js)) rebuilds the documents and writes the values and images into them:
+   - Only the targeted string values and image objects are set, so element IDs, styles and settings stay untouched.
+   - `tel:` / `mailto:` links and stray emails in AI texts become the site ones.
    - Images get the URL `<base URL>/<file name>` with `id: ''` in the manual-import files, and `esg-image://<file name>` in the WordPress plugin (which replaces it with the uploaded attachment).
 
 ### Image slot roles
 
 | Role | Filled with |
 |---|---|
-| `hero` | the `hero_home` image (default: first background of the Home page) |
-| `subheader` | the subheader image, or the page‑specific one if enabled (default: first background of inner pages) |
-| `service_list` | the image of the card's service (default for service cards on Home and Services) |
-| `logo` | the logo (default: first image in header and footer) |
-| `gallery` | single images: the photos round‑robin (a different starting photo on each page). Gallery widgets: all photos (lightbox on) |
-| `keep` | untouched (default for testimonial and team photos). With *Replace all demo images* on, they are removed instead |
-| `remove` | image removed (empty) |
+| `hero` | the `hero_home` image, cropped (a photo of the archive if missing) |
+| `subheader` | the subheader image, or the page‑specific one if enabled, cropped (a photo of the archive if missing) |
+| `service_list` | the image of the card's service (a photo of the archive if missing) |
+| `logo` | the logo (only placed when the project has one) |
+| `photo` | the photos of the shared archive, round-robin from a different starting photo on each page |
+| `gallery` | gallery widget: all photos (lightbox on) |
 
 ### The WordPress plugin
 
-Built by [`generation/wp-plugin.js`](backend/src/generation/wp-plugin.js) from the generic PHP file [`generation/wp-plugin/plugin.php`](backend/src/generation/wp-plugin/plugin.php) (only the header and a per-project namespace are filled in). The zip contains `data/site.json` (pages, articles, images, menu, templates, kit styles, admin texts in the site language), `data/elementor/*.json` and the optimized images. Inside these documents images are referenced as `esg-image://<file>`.
+Built by [`generation/wp-plugin.js`](backend/src/generation/wp-plugin.js) from the generic PHP file [`generation/wp-plugin/plugin.php`](backend/src/generation/wp-plugin/plugin.php) (only the header and a per-project namespace are filled in). The zip contains `data/site.json` (pages, articles, images, menu, templates, contact form, template colors/fonts, admin texts in the site language), `data/elementor/*.json` and the optimized images. Inside these documents images are referenced as `esg-image://<file>`.
 
 It requires Elementor (`Requires Plugins: elementor`); Elementor Pro is optional. Activating it opens **Tools → Site &lt;name&gt;**, which starts by itself and runs in AJAX steps (a few images per request, so slow hosts don't time out):
 
-0. installs and activates from wordpress.org what the site needs: **Ultimate Addons for Elementor** (header/footer without Elementor Pro), **Contact Form 7**, and the **Hello Elementor** theme when the active theme is a block theme (block themes do not show Elementor headers/footers; classic themes are kept);
+0. installs and activates from wordpress.org what the site needs: **MetForm** (or **Contact Form 7**) and the **Hello Elementor** theme when the active theme is a block theme, or when Elementor Pro is not active (classic themes are kept with Pro). **Ultimate Addons for Elementor is never installed**;
 1. copies the bundled images into the Media Library (with ALT texts and thumbnails);
-2. creates the services category, the menu and, if Contact Form 7 is active, a contact form whose shortcode replaces the `INSERIRE_ID` placeholder (mail sent to the site email);
-3. creates the 5 pages with `_elementor_data`: each `esg-image://` becomes the attachment id + URL, nav-menu widgets point to the menu, internal links become absolute;
+2. creates the services category, the menu and the contact form — a MetForm form (name, email, phone, message, privacy consent, send button; notifications to the site email) or a Contact Form 7 form — whose shortcode replaces the `INSERIRE_ID` placeholder;
+3. creates the 5 pages with `_elementor_data`: each `esg-image://` becomes the attachment id + URL, internal links become absolute;
 4. creates one article per service (category, featured image, excerpt, Yoast / Rank Math title and description);
-5. creates the header and footer: with Elementor Pro as Theme Builder templates (display conditions included); **without Pro** as Ultimate Addons for Elementor templates shown on the entire site, converting the Pro-only widgets (Nav Menu → UAE Navigation Menu, Site Logo, Site Title). It also merges the kit's global colors/fonts into the active Elementor kit;
+5. creates the header, footer and single post template: with Elementor Pro as Theme Builder templates (display conditions included); **without Pro** header and footer are saved as Elementor sections and **displayed by the plugin itself** on every page and article (Hello Elementor hooks), so the plugin must stay active. It also sets the template colors/fonts as the Elementor global colors and fonts;
 6. sets the site title, logo, Home as static front page and "Post name" permalinks, then clears the Elementor CSS cache.
 
 It records the ids it creates (option `esg_site_<hash>`), so **Update the website** updates the same posts instead of duplicating them. Pages or articles with the same slug are reused, and only the menu items it added are replaced. Unchanged images are not uploaded twice.
@@ -285,34 +297,35 @@ Missing strings fall back to English. A partial Italian locale is included as an
   - Images are validated by content (decoded with sharp), not by extension.
   - SVGs with scripts or event handlers are rejected, and every image is served with a sandboxed CSP.
   - Size limits apply to all uploads.
-- **Zip files**: protected against zip‑slip (absolute paths, `..`, drive letters) and zip bombs (entry count and total uncompressed size).
-- **AI HTML**: `<script>`, `<iframe>`, `on*` attributes and `javascript:` URLs are stripped from AI‑written HTML.
+- **AI output**: template specs are validated against fixed lists (fonts, icons, layouts, hex colors); `<script>`, `<iframe>`, `on*` attributes and `javascript:` URLs are stripped from AI‑written HTML.
 - **Network**: the server listens on `127.0.0.1` only and refuses cross‑origin write requests.
-- **No third‑party calls**: the only external requests go to the AI provider you selected. Demo images referenced by a kit are never loaded by the UI.
+- **No third‑party calls**: the only external requests go to the AI provider you selected. Template previews only name the fonts (nothing is loaded from Google Fonts).
 
 ---
 
 ## Decisions where the spec was open
 
 - **Stack**: Node.js + Express backend, React + Vite + Tailwind frontend, SQLite through Node's built‑in `node:sqlite`. One `npm run dev` starts everything.
-- **Images in templates** (manual import): images are referenced by the configurable base URL. When Elementor imports a template, it downloads each referenced image into the Media Library, so the images must be online at that URL first. `INSTRUCTIONS.md` explains this, including the duplicate images it creates. Images are **not** embedded in the kit, because neither kit format supports that reliably.
-- **Demo values**: demo phones and emails are detected automatically. The kit's demo brand name and address can't be detected reliably, so you enter them in the Kit step.
+- **Templates instead of Template Kits**: the AI designs a validated *spec* (colors, fonts, layout variants, icons, tone, sample texts) and a deterministic builder produces the Elementor JSON. Asking the AI for whole Elementor documents would be slow, expensive and easy to break; with a spec every saved template always produces valid, consistent pages with exactly the sections of the prompt.
+- **Contact form**: MetForm, as the prompt requires; Contact Form 7 can be chosen per project. The form is created by the WordPress plugin and inserted through its shortcode.
+- **Header and footer without Elementor Pro**: displayed by the generated plugin (Hello Elementor hooks) instead of an addon, because the prompt excludes UAE.
+- **Images in templates** (manual import): images are referenced by the configurable base URL. When Elementor imports a template, it downloads each referenced image into the Media Library, so the images must be online at that URL first. `INSTRUCTIONS.md` explains this, including the duplicate images it creates.
 - **ALT text generation** is text‑only: it uses the image role, the service name and the business data. No image is sent to the AI.
 - **SEO data**: each page request also asks for `_seo.title` and `_seo.description`. Slugs come from the role or the service slug and are editable in the preview.
-- **Mock provider**: an extra "Demo (offline mock)" provider for testing the workflow without keys.
-- **Prompt**: one built-in prompt for every site (see above); earlier versions let you upload and choose prompts per page type.
+- **Mock provider**: an extra "Demo (offline mock)" provider for testing the workflow without keys (it also designs demo templates).
+- **Prompts**: one built-in prompt for every site and one for every template (see above); earlier versions let you upload and choose prompts per page type.
 - **Hero and subheader size**: the images placed in the Home hero and in the page subheaders are cropped to an exact size (default 1920×1080 and 1920×600, editable in the Images step) with sharp's *attention* strategy, which keeps the most interesting part of the photo. The crops are extra files (`<name>-hero.webp`, `<name>-subheader.webp`); the gallery keeps the full photo. Photos smaller than the target are enlarged, and the Images step warns about them.
 
 ## Known limitations
 
-- **Dynamic content**: text driven by dynamic tags is left untouched (e.g. site title, ACF fields). So are nav menus, forms' backend settings, shortcodes and the HTML widget.
-- **Third‑party widgets**: text in widgets from ElementsKit, JetElements and similar addons is detected heuristically, so a field may occasionally be missed or included by mistake. You can review every field in the preview.
-- **Section removal** is manual (Kit step → Sections): the generator cannot know which kit section corresponds to "Perché sceglierci" or "Recensioni".
-- **Service cards** are detected heuristically (image‑box / CTA / flip‑box, or image + heading + button). In legacy section layouts, extra cards are added as new rows.
+- **Fixed structure**: templates change the design, not the structure: the sections are always the ones of the prompt.
+- **Template preview** is a sketch drawn in the app (fonts named, photos drawn as gradients); the exact result is visible after importing into WordPress.
+- **Header menu** is an Elementor icon list (works without Elementor Pro): on mobile it wraps instead of becoming a hamburger menu.
+- **MetForm forms** are created with MetForm's own widgets and settings; if a future MetForm version stores them differently, recreate the form in MetForm and put its shortcode in the contact page.
 - **Pages created by `wordpress-import.xml` are empty**: their Elementor content is inserted from `templates/*.json` (Elementor data is not embedded in the XML, for reliability).
 - **Links** assume permalinks set to "Post name" (`/chi-siamo/`, `/<service>/`).
-- **Text links** inside text-editor HTML written by the AI are not validated (button and list links are).
-- **Header and footer without Elementor Pro** are shown by Ultimate Addons for Elementor (installed by the plugin; the host must allow installing plugins). The single post template still needs Pro: without it the theme shows the articles, with the service photo at the top. With the manual import, header and footer need Elementor Pro (Theme Builder).
+- **Text links** inside text-editor HTML written by the AI are not validated (button and list links are set by the template).
+- **Without Elementor Pro** the single post template is not used: the theme shows the articles, with the service photo at the top; header and footer need the generated plugin to stay active. With the manual import, header and footer need Elementor Pro (Theme Builder).
 - **The plugin overwrites**: running it again replaces the content of the pages and articles it created (and of existing ones with the same slug), so edit the site in the generator and re-export rather than in WordPress, or stop running the plugin once you start editing in WordPress.
 - **Duplicate images (manual import only)**: Elementor's importer creates its own copy of each referenced image, so each image appears twice in the Media Library (see `INSTRUCTIONS.md`). The plugin does not have this problem.
 - **Restarts**: a generation interrupted by a server restart is marked as failed and must be started again.
@@ -321,8 +334,7 @@ Missing strings fall back to English. A partial Italian locale is included as an
 ## Possible future developments
 
 - Direct publishing through the WordPress REST API (the plugin already does this work, but it has to be uploaded by hand).
+- More section variants per template, and a rendered preview of the real Elementor pages.
 - Vision models for ALT texts and for automatic image‑to‑slot matching.
-- Rewriting internal links to the generated page slugs.
-- Visual preview of the generated page (rendering the Elementor JSON).
 - Multi‑user mode with authentication and PostgreSQL.
 - Streaming progress (SSE) instead of polling, and parallel page generation with rate‑limit awareness.

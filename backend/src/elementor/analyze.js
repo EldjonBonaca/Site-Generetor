@@ -151,20 +151,19 @@ const isLinkValue = (v) => v && typeof v === 'object' && !Array.isArray(v) && ty
 
 /**
  * Analyse a template document.
- * @param {object|Array} doc  parsed template JSON (possibly prepared by prepare.js)
+ * @param {object|Array} doc  parsed template JSON
  * @param {object} opts
  *   - prefix:   field id prefix (e.g. "home")
  *   - heroName: label for the 1st section ("hero")
- *   - meta:     WeakMap(element -> { origIndex, cloneN, card }) written by prepare.js, so that
- *               field ids stay stable when sections are removed and cards are known
  * @returns {{ fields: Field[], slots: Slot[], widgets: Record<string, number>, contacts: {emails:string[], phones:string[]} }}
  *
- * Field = { id, path, original, format: 'text'|'html'|'link', widget, key, section, card, label, maxLength }
- * Slot  = { id, path, key, kind: 'background'|'image'|'gallery', url, section, card, elType, widget, label }
- *   Slot ids are "<elementId>:<settings path>" so they survive section removal / reordering.
+ * Field = { id, ref, path, original, format: 'text'|'html'|'link', widget, key, section, label, maxLength }
+ *   ref = "<elementId>:<settings path>" (e.g. "a1b2c3d:icon_list.0.text"), the key used by the template builder marks.
+ * Slot  = { id, path, key, kind: 'background'|'image'|'gallery', url, section, elType, widget, label }
+ *   Slot ids are "<elementId>:<settings path>" (same format as field.ref).
  *   A gallery slot is a whole array of images (gallery widgets).
  */
-export function analyzeDocument(doc, { prefix = 'page', heroName = null, meta = null } = {}) {
+export function analyzeDocument(doc, { prefix = 'page', heroName = null } = {}) {
   const fields = [];
   const slots = [];
   const widgets = {};
@@ -190,15 +189,11 @@ export function analyzeDocument(doc, { prefix = 'page', heroName = null, meta = 
   };
 
   elements.forEach((top, topIndex) => {
-    const m = meta?.get(top) || {};
-    const idx = m.origIndex ?? topIndex;
-    let sectionName = idx === 0 && heroName ? heroName : `s${idx + 1}`;
-    if (m.cloneN) sectionName += `_${m.cloneN}`;
+    const sectionName = topIndex === 0 && heroName ? heroName : `s${topIndex + 1}`;
     const counters = {};
 
-    const walk = (el, elPath, card) => {
+    const walk = (el, elPath) => {
       if (!el || typeof el !== 'object') return;
-      const elCard = meta?.get(el)?.card ?? card;
       const widget = el.elType === 'widget' ? el.widgetType || 'widget' : null;
       const settings = el.settings && typeof el.settings === 'object' && !Array.isArray(el.settings) ? el.settings : {};
       const sPath = [...elPath, 'settings'];
@@ -215,13 +210,13 @@ export function analyzeDocument(doc, { prefix = 'page', heroName = null, meta = 
         const plainLen = original.replace(/<[^>]+>/g, '').trim().length;
         fields.push({
           id: uniqueId(`${prefix}.${sectionName}.${wslug}${counters[wslug]}.${labelSuffix}`),
+          ref: `${elKey}:${path.slice(sPath.length).join('.')}`,
           path,
           original,
           format: format || (HTML_TAG.test(original) || key === 'editor' ? 'html' : 'text'),
           widget,
           key,
           section: topIndex,
-          card: elCard ?? null,
           label: `${widget} · ${key.replace(/_/g, ' ')}`,
           maxLength: format === 'link' ? 200 : Math.max(20, Math.round(plainLen * 1.4)),
         });
@@ -237,7 +232,6 @@ export function analyzeDocument(doc, { prefix = 'page', heroName = null, meta = 
           kind,
           url,
           section: topIndex,
-          card: elCard ?? null,
           elType: el.elType,
           widget: el.widgetType || null,
           label: `${el.widgetType || el.elType} · ${key.replace(/_/g, ' ')}${kind === 'gallery' ? ` (${getAtPath(doc, path).length} images)` : ''}`,
@@ -310,10 +304,10 @@ export function analyzeDocument(doc, { prefix = 'page', heroName = null, meta = 
       };
       scanContactLinks(settings);
 
-      (el.elements || []).forEach((child, i) => walk(child, [...elPath, 'elements', i], elCard));
+      (el.elements || []).forEach((child, i) => walk(child, [...elPath, 'elements', i]));
     };
 
-    walk(top, [...basePath, topIndex], null);
+    walk(top, [...basePath, topIndex]);
   });
 
   return {
@@ -323,79 +317,3 @@ export function analyzeDocument(doc, { prefix = 'page', heroName = null, meta = 
     contacts: { emails: [...emails], phones: [...phones] },
   };
 }
-
-/**
- * Summary of the top-level sections (for the "remove sections" UI):
- * [{ id, index, label, widgets }]
- */
-export function listSections(doc) {
-  return getRoot(doc).elements.map((el, index) => {
-    const texts = [];
-    const types = new Set();
-    const walk = (e) => {
-      if (!e || typeof e !== 'object') return;
-      if (e.elType === 'widget') {
-        types.add(e.widgetType);
-        const s = e.settings || {};
-        const t = s.title || s.title_text || s.heading || (typeof s.editor === 'string' ? s.editor : '');
-        if (typeof t === 'string' && t.trim()) texts.push(t.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
-      }
-      (e.elements || []).forEach(walk);
-    };
-    walk(el);
-    return { id: el.id || String(index), index, label: texts[0]?.slice(0, 80) || `${el.elType} #${index + 1}`, widgets: [...types].slice(0, 6) };
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Default image-slot roles
-// ---------------------------------------------------------------------------
-
-const CARD_WIDGETS = new Set(['image-box', 'call-to-action', 'flip-box']);
-const PERSON_WIDGETS = /testimonial|team|author|reviews/;
-export { CARD_WIDGETS };
-
-export const isPersonSlot = (s) => PERSON_WIDGETS.test(s.widget || '') || /avatar|author|testimonial/i.test(s.key);
-
-/**
- * Suggest which slot receives which project image, depending on the page role.
- * Roles: hero | subheader | service_list | logo | gallery | keep | remove
- *  - home:     first background (or image) of the first section -> hero
- *  - inner pages: first background of the first section -> subheader
- *  - service cards (home / services) -> service_list (image of the card's service)
- *  - header/footer: first image widget -> logo
- *  - testimonial / team photos -> keep (replaced/removed when "replace all images" is on)
- *  - gallery widgets -> gallery (all photos)
- *  - every other slot -> gallery (filled round-robin with the photos)
- */
-export function defaultSlotRoles(slots, pageRole) {
-  const roles = {};
-  for (const s of slots) roles[s.id] = 'gallery';
-  if (!slots.length) return roles;
-
-  const firstSection = slots.filter((s) => s.section === 0 && s.kind !== 'gallery');
-  const firstBg = firstSection.find((s) => s.kind === 'background');
-
-  if (pageRole === 'header' || pageRole === 'footer') {
-    const logo = slots.find((s) => s.kind === 'image');
-    if (logo) roles[logo.id] = 'logo';
-    return roles;
-  }
-
-  for (const s of slots) if (isPersonSlot(s)) roles[s.id] = 'keep';
-  // Cards: either detected by prepare.js (card index) or card widgets
-  const cardSlots = (except) => slots.filter((s) => s.id !== except && s.kind !== 'gallery' && (s.card != null || CARD_WIDGETS.has(s.widget)));
-
-  if (pageRole === 'home') {
-    const hero = firstBg || firstSection[0] || slots.find((s) => s.kind === 'background') || slots[0];
-    roles[hero.id] = 'hero';
-    for (const s of cardSlots(hero.id)) roles[s.id] = 'service_list';
-    return roles;
-  }
-
-  if (firstBg) roles[firstBg.id] = 'subheader';
-  if (pageRole === 'services') for (const s of cardSlots(firstBg?.id)) roles[s.id] = 'service_list';
-  return roles;
-}
-
-export const SLOT_ROLES = ['hero', 'subheader', 'service_list', 'logo', 'gallery', 'keep', 'remove'];

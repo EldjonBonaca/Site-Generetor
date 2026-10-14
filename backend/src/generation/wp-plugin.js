@@ -1,7 +1,7 @@
 /**
  * WordPress plugin that builds the whole site when activated (see wp-plugin/plugin.php):
  *   <slug>/<slug>.php          plugin code (generic; only header + namespace are filled in)
- *   <slug>/data/site.json      pages, articles, images, menu, templates, kit styles, admin texts
+ *   <slug>/data/site.json      pages, articles, images, menu, templates, contact form, template styles, admin texts
  *   <slug>/data/elementor/*.json  Elementor documents (images referenced as esg-image://<file>)
  *   <slug>/images/*            the optimized images, imported into the Media Library
  */
@@ -11,6 +11,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { AdmZip } from '../lib/zip.js';
 import { slugify } from '../lib/util.js';
+import { contactForm } from './plan.js';
 
 export const PLUGIN_IMAGE_SCHEME = 'esg-image://';
 const PHP_TEMPLATE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'wp-plugin', 'plugin.php');
@@ -43,17 +44,17 @@ const UI = {
     viewSite: 'Visita il sito',
     edit: 'modifica',
     noTemplate: 'Pagina "{title}": nessun template Elementor, la pagina è stata creata senza layout.',
-    noPro: 'Header e footer non visibili: Elementor Pro non è attivo e Ultimate Addons for Elementor non è stato installato. Installalo da Plugin → Aggiungi nuovo e clicca "Aggiorna il sito".',
-    uaeNotice: 'Elementor Pro non è necessario: header e footer vengono mostrati su tutto il sito con il plugin gratuito Ultimate Addons for Elementor, che viene installato automaticamente.',
-    uaeReady: 'Header e footer pubblicati su tutto il sito con Ultimate Addons for Elementor.',
+    hfNotice: 'Elementor Pro non è necessario: senza Pro header e footer vengono mostrati su tutto il sito da questo plugin, che quindi deve restare attivo.',
+    hfReady: 'Header e footer pubblicati su tutto il sito (mostrati da questo plugin: lascialo attivo).',
+    hfTheme: 'Senza Elementor Pro header e footer vengono mostrati solo con il tema Hello Elementor: attivalo e clicca "Aggiorna il sito".',
     pluginReady: 'Plugin "{name}" installato e attivato.',
     installFailed: 'Impossibile installare o attivare "{name}" ({error}). Installalo a mano da Plugin → Aggiungi nuovo, poi clicca "Aggiorna il sito".',
-    themeSwitched: 'Tema "Hello Elementor" attivato: il tema a blocchi precedente non mostra header e footer di Elementor.',
+    themeSwitched: 'Tema "Hello Elementor" attivato: è il tema per cui è pensato il template (header e footer di Elementor).',
     conditions: 'Condizioni di visualizzazione di header/footer non aggiornate: aprile in Template → Theme Builder e ripubblicale.',
-    noCf7: 'Contact Form 7 non è attivo: il modulo di contatto non è stato creato.',
-    cf7Created: 'Modulo di contatto "{title}" creato in Contact Form 7.',
+    noForm: '{plugin} non è attivo: il modulo di contatto non è stato creato. Installalo e clicca "Aggiorna il sito".',
+    formCreated: 'Modulo di contatto "{title}" creato in {plugin} (le richieste arrivano a {email}).',
     permalinks: 'Permalink impostati su "Nome articolo".',
-    globalStyles: 'Colori e font del Template Kit applicati al kit Elementor del sito.',
+    globalStyles: 'Colori e font del template applicati al kit Elementor del sito.',
   }),
   en: (name) => ({
     menuTitle: `Site ${name}`,
@@ -80,17 +81,17 @@ const UI = {
     viewSite: 'View the website',
     edit: 'edit',
     noTemplate: 'Page "{title}": no Elementor template, the page was created without a layout.',
-    noPro: 'Header and footer are not displayed: Elementor Pro is not active and Ultimate Addons for Elementor could not be installed. Install it from Plugins → Add New Plugin, then click "Update the website".',
-    uaeNotice: 'Elementor Pro is not needed: the header and footer are shown on the whole site by the free Ultimate Addons for Elementor plugin, which is installed automatically.',
-    uaeReady: 'Header and footer published on the whole site with Ultimate Addons for Elementor.',
+    hfNotice: 'Elementor Pro is not needed: without Pro the header and footer are shown on the whole site by this plugin, so keep it active.',
+    hfReady: 'Header and footer published on the whole site (shown by this plugin: keep it active).',
+    hfTheme: 'Without Elementor Pro the header and footer are shown only with the Hello Elementor theme: activate it, then click "Update the website".',
     pluginReady: 'Plugin "{name}" installed and activated.',
     installFailed: 'Could not install or activate "{name}" ({error}). Install it from Plugins → Add New Plugin, then click "Update the website".',
-    themeSwitched: 'Theme "Hello Elementor" activated: the previous block theme does not show Elementor headers and footers.',
+    themeSwitched: 'Theme "Hello Elementor" activated: it is the theme the template is designed for (Elementor header and footer).',
     conditions: 'Display conditions of header/footer could not be refreshed: open them in Templates → Theme Builder and publish them again.',
-    noCf7: 'Contact Form 7 is not active: the contact form was not created.',
-    cf7Created: 'Contact form "{title}" created in Contact Form 7.',
+    noForm: '{plugin} is not active: the contact form was not created. Install it, then click "Update the website".',
+    formCreated: 'Contact form "{title}" created in {plugin} (messages are sent to {email}).',
     permalinks: 'Permalinks set to "Post name".',
-    globalStyles: 'Colors and fonts of the template kit applied to the Elementor site kit.',
+    globalStyles: 'Colors and fonts of the template applied to the Elementor site kit.',
   }),
 };
 
@@ -100,18 +101,71 @@ export const pluginSlug = (project) => `${slugify(project.site_name, 40) || 'web
 /** Text safe inside the PHP comment header (one line, no comment terminator). */
 const headerText = (s) => String(s).replace(/[\r\n]+/g, ' ').replace(/\*\//g, '* /');
 
+/** Fields of the contact form required by the prompt (name, email, phone, message, privacy consent). */
+const FORM_TEXTS = {
+  it: {
+    name: ['Nome e cognome', 'Il tuo nome'],
+    email: ['Email', 'La tua email'],
+    phone: ['Telefono', 'Il tuo numero di telefono'],
+    message: ['Messaggio', 'Come possiamo aiutarti?'],
+    consent: "Ho letto l'informativa sulla privacy e acconsento al trattamento dei miei dati personali.",
+    submit: 'Invia messaggio',
+    subject: 'Nuovo messaggio dal sito',
+    success: 'Grazie! Il tuo messaggio è stato inviato: ti risponderemo al più presto.',
+  },
+  en: {
+    name: ['Full name', 'Your name'],
+    email: ['Email', 'Your email'],
+    phone: ['Phone', 'Your phone number'],
+    message: ['Message', 'How can we help you?'],
+    consent: 'I have read the privacy policy and I consent to the processing of my personal data.',
+    submit: 'Send message',
+    subject: 'New message from the website',
+    success: 'Thank you! Your message has been sent: we will reply as soon as possible.',
+  },
+};
+
+/** Elementor content of the MetForm form (MetForm field widgets inside one container). */
+function metformDoc(texts, hash) {
+  let n = 0;
+  const id = () => crypto.createHash('md5').update(`metform:${hash}:${n++}`).digest('hex').slice(0, 7);
+  const widget = (widgetType, settings) => ({ id: id(), elType: 'widget', widgetType, settings, elements: [] });
+  const input = (type, name, [label, placeholder], required = 'yes') =>
+    widget(type, { mf_input_label: label, mf_input_name: name, mf_input_placeholder: placeholder, mf_input_required: required });
+  return [
+    {
+      id: id(),
+      elType: 'container',
+      isInner: false,
+      settings: { content_width: 'full', flex_direction: 'column', flex_gap: { unit: 'px', size: 16, column: '16', row: '16', isLinked: true } },
+      elements: [
+        input('mf-text', 'mf-name', texts.name),
+        input('mf-email', 'mf-email', texts.email),
+        input('mf-telephone', 'mf-phone', texts.phone, ''),
+        input('mf-textarea', 'mf-message', texts.message),
+        widget('mf-gdpr-consent', { mf_input_name: 'mf-privacy', mf_gdpr_consent_option_text: texts.consent, mf_input_required: 'yes' }),
+        widget('mf-button', { mf_btn_text: texts.submit }),
+      ],
+    },
+  ];
+}
+
 /**
- * Placeholder shortcode the plugin swaps for a real Contact Form 7 form
- * (an id like INSERIRE_ID / INSERT_ID; a real id is numeric or a lowercase hash).
+ * Contact form the plugin creates (MetForm by default, or Contact Form 7). The contact page
+ * contains its placeholder shortcode (id INSERIRE_ID), replaced by the shortcode of the created form.
  */
-function contactFormInfo(ctx) {
-  const shortcode = ctx.settings.contactShortcode || '';
-  const id = shortcode.match(/\bid="([^"]*)"/)?.[1];
-  if (!/\[contact-form-7\b/.test(shortcode) || (id && !/[A-Z_]/.test(id))) return null;
+function contactFormInfo(ctx, hash) {
+  const form = contactForm(ctx);
+  const texts = FORM_TEXTS[ctx.project.language] || FORM_TEXTS.en;
   return {
-    placeholder: shortcode,
-    title: shortcode.match(/\btitle="([^"]*)"/)?.[1] || (ctx.project.language === 'it' ? 'Modulo di contatto' : 'Contact form'),
+    plugin: form.plugin,
+    name: form.name,
+    placeholder: form.placeholder,
+    title: form.title,
     recipient: ctx.project.email,
+    subject: `${texts.subject} – ${ctx.project.site_name}`,
+    success: texts.success,
+    elementor: form.plugin === 'metform' ? metformDoc(texts, hash) : null,
   };
 }
 
@@ -119,7 +173,7 @@ function contactFormInfo(ctx) {
  * @param {object} p
  *   ctx, pages: [{ key, role, title, slug, seo, doc }] (the 5 site pages, doc = importable template or null),
  *   templates: [{ key, role, title, type, doc }], posts: [{ key, title, slug, content, excerpt, image, seo }],
- *   images: [{ file, alt, photo, logo }], imagesDir, category, globalStyles
+ *   images: [{ file, alt, photo, logo }], imagesDir, category, globalStyles (template colors and fonts)
  * @returns {{ fileName: string, buffer: Buffer }}
  */
 export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, category, globalStyles }) {
@@ -156,11 +210,13 @@ export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, c
     logo: images.find((i) => i.logo)?.file || null,
     category,
     menu: ctx.menu,
-    contactForm: contactFormInfo(ctx),
+    contactForm: contactFormInfo(ctx, hash),
     pages: pages.map((p) => ({ key: p.key, role: p.role, title: p.title, slug: p.slug, seo: p.seo || null, elementor: addDoc(p.key, p.doc) })),
     posts,
     templates: templates.map((t) => ({ key: t.key, role: t.role, title: t.title, type: t.type, elementor: addDoc(t.key, t.doc) })),
     globalStyles: globalStyles || null,
+    // Without Elementor Pro the plugin itself displays the header and footer (no other addon needed)
+    headerFooter: templates.some((t) => t.role === 'header' || t.role === 'footer'),
   };
   add('data/site.json', JSON.stringify(site, null, 1));
 

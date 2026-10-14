@@ -72,15 +72,14 @@ export default function DownloadStep({ project, setProject }) {
   const selected = gens?.find((g) => g.id === genId);
   const it = project.language === 'it';
   const contents = [
-    [Plug, result?.plugin || t('<site>-site.zip'), t('WordPress plugin: upload and activate it, it creates the 5 pages, the service articles, images, menu, header and footer')],
+    [Plug, result?.plugin || t('<site>-site.zip'), t('WordPress plugin: upload and activate it, it creates the 5 pages, the service articles, images, menu, contact form, header and footer')],
     [FileJson, 'templates/*.json', t('Header, footer, single post and every page as importable Elementor templates')],
     [FileCode, 'wordpress-import.xml', t('Service articles (category, text, featured image), pages and navigation menu for Tools → Import')],
     [Image, 'images/', t('Renamed and optimized images')],
-    [FileArchive, 'elementor-kit.zip', t('The kit with your content (alternative import)')],
     [FileText, 'content.md · menu.md', t('All generated text and the menu structure')],
     [FileSpreadsheet, 'seo.csv', t('Title, meta description and slug of each page and article')],
     [PackageCheck, it ? 'ISTRUZIONI.md' : 'INSTRUCTIONS.md', t('Step-by-step import guide')],
-    [ListChecks, it ? 'CONTROLLI.md' : 'CHECKS.md', t('Final checks: demo images/texts, links, contacts')],
+    [ListChecks, it ? 'CONTROLLI.md' : 'CHECKS.md', t('Final checks: placeholder images, sample texts, links, contacts')],
   ];
 
   return (
@@ -108,7 +107,7 @@ export default function DownloadStep({ project, setProject }) {
             </p>
           </Card>
 
-          <Card title={t('Export')} description={t('Builds the zip from the original kit and the generated content. You can export again after editing.')}>
+          <Card title={t('Export')} description={t('Builds the zip from the template and the generated content. You can export again after editing.')}>
             {!gens ? (
               <Spinner />
             ) : !gens.length ? (

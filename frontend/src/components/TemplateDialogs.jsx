@@ -1,0 +1,366 @@
+/**
+ * Template dialogs:
+ *  - TemplateGenerator: the AI designs a template for a category (preview, regenerate, save);
+ *  - TemplateEditor: change the design of a saved template (colors, fonts, layouts, icons, tone).
+ */
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Bot, RefreshCw, Save, Sparkles } from 'lucide-react';
+import { api } from '../api.js';
+import { useT } from '../i18n/index.jsx';
+import { useToast } from './Toast.jsx';
+import { Alert, Badge, Button, EmptyState, Field, Input, Modal, Select, Spinner, Textarea, Toggle } from './ui.jsx';
+import { TemplatePreview, TemplateSwatches } from './TemplatePreview.jsx';
+
+export const SECTION_LABELS = {
+  header: 'Header',
+  hero: 'Hero (Home)',
+  about: 'About section',
+  features: 'Why choose us',
+  cta: 'Call to action',
+  services: 'Services',
+  testimonials: 'Reviews',
+  contact: 'Contact page',
+  footer: 'Footer',
+  gallery: 'Gallery',
+};
+
+const VARIANT_LABELS = {
+  'header.classic': 'Logo, menu and button',
+  'header.centered': 'Centered logo and menu',
+  'header.topbar': 'Top bar (phone, email) + menu',
+  'hero.center': 'Centered text over a photo',
+  'hero.left': 'Left text over a photo',
+  'hero.split': 'Text beside a photo',
+  'about.image-left': 'Image on the left',
+  'about.image-right': 'Image on the right',
+  'features.icons': 'Icons on a light background',
+  'features.cards': 'Cards over a photo',
+  'cta.banner': 'Banner over a photo',
+  'cta.split': 'Colored band with a button',
+  'cta.none': 'No call to action',
+  'services.cards': 'Cards',
+  'services.boxed': 'Boxed cards on a tinted background',
+  'testimonials.cards': 'Cards',
+  'testimonials.minimal': 'Minimal',
+  'contact.split': 'Details beside the form',
+  'contact.stacked': 'Details above the form',
+  'footer.dark': 'Dark',
+  'footer.light': 'Light',
+  'gallery.3': '3 columns',
+  'gallery.4': '4 columns',
+};
+
+const COLOR_LABELS = { primary: 'Primary', secondary: 'Secondary (buttons)', accent: 'Accent', heading: 'Titles', text: 'Text', background: 'Light background', dark: 'Dark (footer, overlays)' };
+const SPACING_LABELS = { compact: 'Compact', normal: 'Normal', airy: 'Airy' };
+const LANGUAGE_OPTIONS = { it: 'Italiano', en: 'English', es: 'Español', fr: 'Français', de: 'Deutsch', pt: 'Português' };
+
+export const variantLabel = (t, section, value) => t(VARIANT_LABELS[`${section}.${value}`] || value);
+
+/** Generate a template for `category` with the AI, then save it. */
+export function TemplateGenerator({ open, onClose, category, onSaved }) {
+  const { t } = useT();
+  const toast = useToast();
+  const [providers, setProviders] = useState(null);
+  const [providerId, setProviderId] = useState('');
+  const [instructions, setInstructions] = useState('');
+  const [language, setLanguage] = useState('it');
+  const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const [name, setName] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    setDraft(null);
+    setInstructions('');
+    api
+      .get('/providers')
+      .then((list) => {
+        setProviders(list);
+        setProviderId((id) => (list.some((p) => p.id === Number(id)) ? id : String(list[0]?.id ?? '')));
+      })
+      .catch((e) => toast(e.message, 'error'));
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const generate = async () => {
+    setBusy(true);
+    try {
+      const res = await api.post(`/template-categories/${category.id}/templates/generate`, { providerId: Number(providerId), instructions, language });
+      setDraft(res);
+      setName((n) => n || `${category.name} – ${t('template')} ${category.template_count + 1}`);
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      const tpl = await api.post(`/template-categories/${category.id}/templates`, { name, spec: draft.spec, instructions, language, generated_by: draft.generated_by, tokens_used: draft.tokens });
+      toast(t('Template "{name}" saved', { name: tpl.name }));
+      onSaved?.(tpl);
+      onClose();
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={busy ? undefined : onClose} title={t('Generate a template for "{name}"', { name: category?.name || '' })} size={draft ? 'xl' : 'md'}>
+      {!providers ? (
+        <div className="flex justify-center py-10">
+          <Spinner />
+        </div>
+      ) : !providers.length ? (
+        <EmptyState
+          icon={Bot}
+          title={t('No AI provider connected')}
+          description={t('Add Claude, ChatGPT, Gemini or any OpenAI-compatible service with your API key.')}
+          action={
+            <Link to="/settings/providers">
+              <Button variant="primary">{t('Connect a provider')}</Button>
+            </Link>
+          }
+        />
+      ) : (
+        <div className={draft ? 'grid gap-6 lg:grid-cols-[1fr_360px]' : ''}>
+          {draft && (
+            <div className="order-2 lg:order-1">
+              <TemplatePreview spec={draft.spec} />
+            </div>
+          )}
+          <div className="order-1 space-y-4 lg:order-2">
+            <p className="text-sm text-slate-600">
+              {t('The AI designs colors, fonts, the layout of every section, icons, tone of voice and sample texts for the businesses of this category. The structure of the site is always the one of the prompt.')}
+            </p>
+            <Field label={t('AI provider')}>
+              {(id) => (
+                <Select id={id} value={providerId} onChange={(e) => setProviderId(e.target.value)} disabled={busy}>
+                  {providers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} · {p.model}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Field label={t('Style instructions (optional)')} hint={t('E.g. "elegant, dark colors, serif titles" or "bright and friendly".')}>
+              {(id) => <Textarea id={id} rows={3} value={instructions} onChange={(e) => setInstructions(e.target.value)} maxLength={2000} disabled={busy} />}
+            </Field>
+            <Field label={t('Language of the sample texts')}>
+              {(id) => (
+                <Select id={id} value={language} onChange={(e) => setLanguage(e.target.value)} disabled={busy}>
+                  {Object.entries(LANGUAGE_OPTIONS).map(([code, label]) => (
+                    <option key={code} value={code}>
+                      {label}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            {draft && (
+              <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                <TemplateSwatches spec={draft.spec} />
+                {draft.spec.description && <p className="text-xs text-slate-600">{draft.spec.description}</p>}
+                <p className="text-xs text-slate-500">
+                  {draft.generated_by} · {t('{n} tokens', { n: draft.tokens.toLocaleString() })}
+                </p>
+                <Field label={t('Template name')}>{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />}</Field>
+              </div>
+            )}
+            <div className="flex flex-wrap justify-end gap-2">
+              {draft ? (
+                <>
+                  <Button icon={RefreshCw} onClick={generate} loading={busy} disabled={!providerId}>
+                    {t('Regenerate')}
+                  </Button>
+                  <Button variant="primary" icon={Save} onClick={save} disabled={busy || !name.trim()}>
+                    {t('Save template')}
+                  </Button>
+                </>
+              ) : (
+                <Button variant="primary" icon={Sparkles} onClick={generate} loading={busy} disabled={!providerId}>
+                  {busy ? t('Designing…') : t('Generate')}
+                </Button>
+              )}
+            </div>
+            {busy && <p className="text-right text-xs text-slate-500">{t('This can take up to a minute.')}</p>}
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/** Edit the design of a saved template. */
+export function TemplateEditor({ template, onClose, onSaved }) {
+  const { t } = useT();
+  const toast = useToast();
+  const [options, setOptions] = useState(null);
+  const [name, setName] = useState(template?.name || '');
+  const [spec, setSpec] = useState(template?.spec || null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!template) return;
+    setName(template.name);
+    setSpec(structuredClone(template.spec));
+    api.get('/template-options').then(setOptions).catch((e) => toast(e.message, 'error'));
+  }, [template]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const setStyle = (patch) => setSpec((s) => ({ ...s, style: { ...s.style, ...patch } }));
+  const setColor = (key, value) => setSpec((s) => ({ ...s, style: { ...s.style, colors: { ...s.style.colors, [key]: value } } }));
+  const setLayout = (key, value) => setSpec((s) => ({ ...s, layout: { ...s.layout, [key]: value } }));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const updated = await api.patch(`/templates/${template.id}`, { name, spec });
+      toast(t('Template saved'));
+      onSaved?.(updated);
+      onClose();
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={!!template}
+      onClose={onClose}
+      title={t('Edit template')}
+      size="xl"
+      footer={
+        <>
+          <Button onClick={onClose}>{t('Cancel')}</Button>
+          <Button variant="primary" icon={Save} onClick={save} loading={saving} disabled={!name.trim()}>
+            {t('Save')}
+          </Button>
+        </>
+      }
+    >
+      {!options || !spec ? (
+        <div className="flex justify-center py-10">
+          <Spinner />
+        </div>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+          <div className="order-2 lg:order-1">
+            <TemplatePreview spec={spec} />
+            <p className="mt-2 text-xs text-slate-500">{t('Sketch of the Home page: the site uses your photos and the texts written for each project.')}</p>
+          </div>
+          <div className="order-1 space-y-5 lg:order-2">
+            <Field label={t('Template name')}>{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />}</Field>
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-slate-700">{t('Colors')}</p>
+              <div className="grid grid-cols-2 gap-2">
+                {options.colorKeys.map((k) => (
+                  <label key={k} className="flex items-center gap-2 text-xs text-slate-600">
+                    <input type="color" value={spec.style.colors[k]} onChange={(e) => setColor(k, e.target.value.toUpperCase())} className="h-7 w-9 cursor-pointer rounded border border-slate-300" />
+                    <span className="min-w-0">
+                      <span className="block truncate">{t(COLOR_LABELS[k] || k)}</span>
+                      <span className="font-mono text-[11px] text-slate-400">{spec.style.colors[k]}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {['heading', 'body'].map((k) => (
+                <Field key={k} label={k === 'heading' ? t('Title font') : t('Text font')}>
+                  {(id) => (
+                    <Select id={id} value={spec.style.fonts[k]} onChange={(e) => setStyle({ fonts: { ...spec.style.fonts, [k]: e.target.value } })}>
+                      {options.fonts.map((f) => (
+                        <option key={f} value={f}>
+                          {f}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+              ))}
+              <Field label={t('Title weight')}>
+                {(id) => (
+                  <Select id={id} value={spec.style.headingWeight} onChange={(e) => setStyle({ headingWeight: e.target.value })}>
+                    {options.weights.map((w) => (
+                      <option key={w} value={w}>
+                        {w}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              <Field label={t('Spacing')}>
+                {(id) => (
+                  <Select id={id} value={spec.style.spacing} onChange={(e) => setStyle({ spacing: e.target.value })}>
+                    {options.spacings.map((s) => (
+                      <option key={s} value={s}>
+                        {t(SPACING_LABELS[s] || s)}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+            </div>
+            <Field label={`${t('Corner radius')}: ${spec.style.radius}px`}>
+              {(id) => <input id={id} type="range" min="0" max="30" value={spec.style.radius} onChange={(e) => setStyle({ radius: Number(e.target.value) })} className="w-full accent-brand-600" />}
+            </Field>
+            <Toggle checked={spec.style.uppercase} onChange={(v) => setStyle({ uppercase: v })} label={t('Uppercase buttons and labels')} />
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-slate-700">{t('Layout of the sections')}</p>
+              <div className="space-y-2">
+                {Object.entries(options.layouts).map(([section, values]) => (
+                  <label key={section} className="grid grid-cols-[110px_1fr] items-center gap-2 text-xs text-slate-600">
+                    {t(SECTION_LABELS[section] || section)}
+                    <Select value={spec.layout[section]} onChange={(e) => setLayout(section, e.target.value)} className="py-1.5 text-xs">
+                      {values.map((v) => (
+                        <option key={v} value={v}>
+                          {variantLabel(t, section, v)}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-slate-700">{t('Icons of "Why choose us"')}</p>
+              <div className="grid grid-cols-2 gap-2">
+                {spec.icons.map((icon, i) => (
+                  <Select key={i} value={icon} onChange={(e) => setSpec((s) => ({ ...s, icons: s.icons.map((x, j) => (j === i ? e.target.value : x)) }))} className="py-1.5 text-xs" aria-label={`${t('Icon')} ${i + 1}`}>
+                    {options.icons.map((ic) => (
+                      <option key={ic} value={ic}>
+                        {ic.replace('fas fa-', '')}
+                      </option>
+                    ))}
+                  </Select>
+                ))}
+              </div>
+            </div>
+
+            <Field label={t('Tone of voice')} hint={t('Given to the AI when it writes the texts of each site.')}>
+              {(id) => <Input id={id} value={spec.tone} onChange={(e) => setSpec((s) => ({ ...s, tone: e.target.value }))} maxLength={300} />}
+            </Field>
+            {template?.generated_by && (
+              <Alert kind="info">
+                {t('Generated by {provider}', { provider: template.generated_by })}
+                {template.instructions ? ` · “${template.instructions}”` : ''}
+              </Alert>
+            )}
+            <Badge>{t('Sample texts: {lang}', { lang: LANGUAGE_OPTIONS[template?.language] || template?.language })}</Badge>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}

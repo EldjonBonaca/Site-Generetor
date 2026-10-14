@@ -7,20 +7,11 @@ import fs from 'node:fs';
 process.env.STORAGE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'esg-unit-'));
 process.env.ENCRYPTION_KEY ||= 'a'.repeat(64);
 
-const { safeJoin } = await import('../src/lib/zip.js');
 const { extractJson, validateValues } = await import('../src/ai/json.js');
-const { analyzeDocument, defaultSlotRoles } = await import('../src/elementor/analyze.js');
+const { analyzeDocument } = await import('../src/elementor/analyze.js');
 const { applyFieldValues, applyImages, replaceContacts, sanitizeHtml } = await import('../src/elementor/apply.js');
 const { encrypt, decrypt, maskKey } = await import('../src/lib/crypto.js');
 const { renderTemplate } = await import('../src/generation/prompt-builder.js');
-
-test('safeJoin blocks zip-slip paths', () => {
-  const dest = path.join(os.tmpdir(), 'x');
-  assert.ok(safeJoin(dest, 'templates/home.json').startsWith(dest));
-  for (const evil of ['../evil.txt', 'a/../../evil', '/etc/passwd', 'C:\\Windows\\x', '..\\evil']) {
-    assert.throws(() => safeJoin(dest, evil), /Unsafe path/, evil);
-  }
-});
 
 test('extractJson handles fences, chatter and trailing commas', () => {
   assert.deepEqual(extractJson('```json\n{"a": "1",}\n```'), { a: '1' });
@@ -67,8 +58,8 @@ test('analyzeDocument finds text fields, image slots and demo contacts', () => {
   assert.equal(a.slots.length, 2, 'responsive variant is not a separate slot');
   assert.ok(a.contacts.emails.includes('hello@demo.com'));
   assert.ok(a.contacts.phones.some((p) => p.includes('555')));
-  const roles = defaultSlotRoles(a.slots, 'home');
-  assert.equal(roles[a.slots[0].id], 'hero');
+  assert.equal(a.slots[0].id, 'a1:background_image', 'slot id = element id + settings path');
+  assert.equal(a.fields.find((f) => f.key === 'text' && f.widget === 'icon-list').ref, 'c6:icon_list.0.text', 'field ref = element id + settings path');
 });
 
 test('apply* functions only touch targeted values', () => {

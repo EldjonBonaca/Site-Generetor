@@ -1,8 +1,8 @@
 /**
  * Export: builds output-<site>.zip with
- *   <site>-site.zip (WordPress plugin that creates the site on activation) · elementor-kit.zip · templates/*.json · wordpress-import.xml · images/ · content.md · seo.csv
+ *   <site>-site.zip (WordPress plugin that creates the site on activation) · templates/*.json · wordpress-import.xml · images/ · content.md · seo.csv
  *   · menu.md · INSTRUCTIONS.md (ISTRUZIONI.md in Italian) · CHECKS.md (CONTROLLI.md)
- * Everything is rebuilt from the original kit + stored values, so exports are repeatable.
+ * Everything is rebuilt from the project template + stored values, so exports are repeatable.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -10,17 +10,17 @@ import sharp from 'sharp';
 import { get, run, parseJson } from '../db/index.js';
 import { config } from '../config.js';
 import { AdmZip, addFolderToZip } from '../lib/zip.js';
-import { slugify, stripHtml } from '../lib/util.js';
+import { badRequest, slugify, stripHtml } from '../lib/util.js';
 import { exportNames, galleryPool } from '../lib/images.js';
-import { loadContext, analyzePage, buildReplacements, mappingFor, siteLinks, fallbackLink, servicesCategory, oneLine, pageTitle, pageSlug, PAGE_ROLES, SITE_PAGE_ROLES, DEFAULT_CROP_SIZES } from './plan.js';
+import { loadContext, analyzePage, builtSite, siteLinks, fallbackLink, servicesCategory, oneLine, pageTitle, pageSlug, TEMPLATE_ROLES, SITE_PAGE_ROLES, DEFAULT_CROP_SIZES } from './plan.js';
 import { applyFieldValues, applyImages, replaceContacts, sanitizeHtml } from '../elementor/apply.js';
-import { isPersonSlot, EMAIL_IN_TEXT } from '../elementor/analyze.js';
-import { loadTemplate } from '../elementor/kit.js';
+import { EMAIL_IN_TEXT } from '../elementor/analyze.js';
 import { normalizeUrl } from '../ai/json.js';
 import { languageName } from './prompt-builder.js';
 import { buildWxr } from './wxr.js';
 import { buildPlugin, PLUGIN_IMAGE_SCHEME } from './wp-plugin.js';
 import { docsText } from './export-docs.js';
+import { fieldValue } from './runner.js';
 
 const PLACEHOLDER_BASE_URL = 'https://example.com/wp-content/uploads/';
 const TEMPLATE_TYPES = new Set(['page', 'section', 'header', 'footer', 'single', 'single-page', 'single-post', 'archive', 'popup', 'error-404', 'loop-item', 'container']);
@@ -111,15 +111,16 @@ async function exportCrops(ctx, pages, exported, destDir) {
 }
 
 /**
- * Decide which exported image goes into each slot of a page.
- * Gallery widgets get every photo. With "replace all images" on, no slot keeps its demo image:
- * unassigned slots get one of the photos (round-robin, starting at a different photo on each
- * page so they are spread over the site), people photos and a missing logo are removed.
+ * Decide which exported image goes into each slot of a page. No template placeholder may remain:
+ *  - hero / subheader / logo: the image with that role; service cards: the image of their service;
+ *  - photo: the photos of the shared archive, round-robin from a different starting photo on each
+ *    page, so neighbouring sections do not repeat the same photo;
+ *  - gallery widgets: every photo.
+ * Slots whose image is missing get a photo of the archive; without any photo they are emptied.
  * Hero / subheader slots use the cropped version of their image (keys collected in `neededCrops`).
  */
 function imageAssignment(ctx, page, slots, slotRoles, exported, neededCrops = null) {
   const ex = (i, crop = null) => {
-    if (!i) return null;
     if (crop) {
       neededCrops?.add(cropKey(i.id, crop));
       if (exported.has(cropKey(i.id, crop))) return exported.get(cropKey(i.id, crop));
@@ -128,11 +129,7 @@ function imageAssignment(ctx, page, slots, slotRoles, exported, neededCrops = nu
   };
   const pick = (pred) => ctx.images.find((i) => pred(i) && exported.has(i.id));
   const pool = galleryPool(ctx.images).filter((i) => exported.has(i.id));
-  const serviceImg = (svc) => (svc ? pick((i) => i.role === 'service' && i.service_id === svc.id) : null);
-  const serviceImgs = ctx.services.map(serviceImg).filter(Boolean);
-  const replaceAll = ctx.settings.replaceAllImages;
   let g = [...page.key].reduce((n, c) => n + c.charCodeAt(0), 0);
-  let seq = 0;
   const nextFill = () => (pool.length ? pool[g++ % pool.length] : null);
 
   const subheader = () => {
@@ -142,32 +139,25 @@ function imageAssignment(ctx, page, slots, slotRoles, exported, neededCrops = nu
     }
     return pick((i) => i.role === 'subheader' && !i.target_page) || pick((i) => i.role === 'subheader');
   };
+  const serviceImg = (index) => {
+    const svc = ctx.services[index];
+    return svc ? pick((i) => i.role === 'service' && i.service_id === svc.id) : null;
+  };
 
   const assignment = {};
   for (const slot of slots) {
-    const role = slotRoles[slot.id] || 'keep';
-
+    const role = slotRoles[slot.id] || 'photo';
     if (slot.kind === 'gallery') {
-      if (role === 'remove' && page.role !== 'gallery') assignment[slot.id] = [];
-      else if ((role !== 'keep' || replaceAll || page.role === 'gallery') && pool.length) assignment[slot.id] = pool.map((i) => ex(i));
+      assignment[slot.id] = pool.map((i) => ex(i));
       continue;
     }
-
     let img = null;
-    let remove = role === 'remove';
     if (role === 'hero') img = pick((i) => i.role === 'hero_home');
     else if (role === 'subheader') img = subheader();
-    else if (role === 'service_list') img = slot.card != null ? serviceImg(ctx.services[slot.card]) : serviceImgs.length ? serviceImgs[seq++ % serviceImgs.length] : null;
+    else if (role === 'service_list') img = serviceImg(slot.service);
     else if (role === 'logo') img = pick((i) => i.role === 'logo');
-    else if (role === 'gallery') img = nextFill();
-
-    if (!img && !remove && replaceAll) {
-      if (isPersonSlot(slot) || role === 'logo') remove = true;
-      else img = nextFill();
-      if (!img) remove = true;
-    }
-    if (remove) assignment[slot.id] = { remove: true };
-    else if (img) assignment[slot.id] = ex(img, role === 'hero' || role === 'subheader' ? role : null);
+    if (!img && role !== 'logo') img = nextFill();
+    assignment[slot.id] = img ? ex(img, role === 'hero' || role === 'subheader' ? role : null) : { remove: true };
   }
   return assignment;
 }
@@ -176,9 +166,11 @@ function imageAssignment(ctx, page, slots, slotRoles, exported, neededCrops = nu
 // Pages
 // ---------------------------------------------------------------------------
 
-/** Build the final Elementor document of every template page (articles have no template). */
-function buildPageDocs(ctx, pages, exported, links) {
-  const replacements = buildReplacements(ctx);
+/**
+ * Build the final Elementor document of every template page (articles have no template).
+ * `allPages` (every page of the generation) resolves the texts shared between pages.
+ */
+function buildPageDocs(ctx, pages, exported, links, allPages = pages) {
   return pages
     .filter((p) => p.templateId)
     .map((page) => {
@@ -187,100 +179,26 @@ function buildPageDocs(ctx, pages, exported, links) {
       const values = {};
       for (const f of fields) {
         const s = stored.get(f.id);
-        if (typeof s?.value === 'string') values[f.id] = s.value;
-        else if (f.format === 'link') values[f.id] = fallbackLink(`${f.original} ${s?.hint || ''}`, links); // never keep demo URLs
+        const value = s ? fieldValue(allPages, s) : null;
+        if (typeof value === 'string') values[f.id] = value;
+        else if (f.format === 'link' && !f.fixed) values[f.id] = fallbackLink(`${f.original} ${s?.hint || ''}`, links);
       }
       applyFieldValues(doc, fields, values);
       applyImages(doc, slots, imageAssignment(ctx, page, slots, slotRoles, exported));
-      replaceContacts(doc, { phone: ctx.project.phone, email: ctx.project.email, replacements, replaceAllEmails: ctx.settings.replaceAllEmails });
-      if (!Array.isArray(doc) && 'title' in doc) doc.title = page.title;
+      // Safety net for AI-written texts: tel:/mailto: links and stray emails become the site's ones
+      replaceContacts(doc, { phone: ctx.project.phone, email: ctx.project.email });
+      doc.title = page.title;
       return { page, doc };
     });
 }
 
 /** Standalone importable template (Elementor > Templates > Import). */
 function toImportable(doc, page) {
-  if (Array.isArray(doc)) return { version: '0.4', title: page.title, type: 'page', content: doc, page_settings: {} };
   let type = doc.type || 'page';
-  if (page.role === 'header' || page.role === 'footer') type = TEMPLATE_TYPES.has(doc.type) ? doc.type : page.role;
-  if (page.role === 'single_post') type = TEMPLATE_TYPES.has(doc.type) && doc.type !== 'page' ? doc.type : 'single-post';
+  if (page.role === 'header' || page.role === 'footer') type = page.role;
+  if (page.role === 'single_post') type = 'single-post';
   if (!TEMPLATE_TYPES.has(type)) type = 'page';
-  const out = { version: doc.version || '0.4', title: page.title, type, content: doc.content, page_settings: doc.page_settings || doc.settings || {} };
-  if (doc.metadata) out.metadata = doc.metadata;
-  return out;
-}
-
-// ---------------------------------------------------------------------------
-// Kit rebuild
-// ---------------------------------------------------------------------------
-
-function copyDir(src, dest) {
-  fs.mkdirSync(dest, { recursive: true });
-  for (const name of fs.readdirSync(src)) {
-    const s = path.join(src, name);
-    const d = path.join(dest, name);
-    if (fs.statSync(s).isDirectory()) copyDir(s, d);
-    else fs.copyFileSync(s, d);
-  }
-}
-
-const isGlobalTemplate = (t) => /global|kit[\s_-]?(settings|styles)|site[\s_-]?settings/i.test(`${t.type} ${t.title}`);
-
-/**
- * Copy the original kit and replace the generated templates, keeping the original
- * format (template-kit or website-kit). Unused templates (except global styles) are dropped.
- */
-function buildKit(ctx, built, workDir) {
-  const kitRoot = path.join(ctx.kit.dir, ctx.kit.info.rootDir || '.');
-  const out = path.join(workDir, 'kit');
-  copyDir(kitRoot, out);
-  const manifest = structuredClone(ctx.kit.manifest || {});
-  const relToRoot = (templateId) => path.relative(kitRoot, path.join(ctx.kit.dir, templateId)).replace(/\\/g, '/');
-  const writeJson = (rel, data) => {
-    const file = path.join(out, rel);
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify(data));
-  };
-  const byTemplate = new Map(built.map((b) => [b.page.templateId, b]));
-  const dropped = ctx.kit.info.templates.filter((t) => !byTemplate.has(t.id) && !isGlobalTemplate(t));
-  for (const t of dropped) fs.rmSync(path.join(out, relToRoot(t.id)), { force: true });
-
-  if (ctx.kit.format === 'template-kit' && Array.isArray(manifest.templates)) {
-    const newTemplates = [];
-    for (const entry of manifest.templates) {
-      const tpl = entry?.source && ctx.kit.info.templates.find((t) => t.source?.kind === 'template-kit' && relToRoot(t.id) === path.posix.normalize(entry.source));
-      if (tpl && dropped.includes(tpl)) continue;
-      const b = tpl && byTemplate.get(tpl.id);
-      if (b) writeJson(entry.source, b.doc);
-      newTemplates.push(b ? { ...entry, name: b.page.title } : entry);
-    }
-    manifest.templates = newTemplates;
-    if (manifest.title) manifest.title = `${ctx.project.site_name} – ${manifest.title}`;
-  } else if (ctx.kit.format === 'website-kit') {
-    for (const t of dropped) {
-      if (t.source.group === 'templates') delete manifest.templates?.[t.source.id];
-      else delete manifest.content?.[t.source.postType]?.[t.source.id];
-    }
-    for (const [tid, b] of byTemplate) {
-      const src = ctx.kit.info.templates.find((x) => x.id === tid).source;
-      if (src.group === 'templates') {
-        writeJson(`templates/${src.id}.json`, b.doc);
-        if (manifest.templates?.[src.id]) manifest.templates[src.id].title = b.page.title;
-      } else {
-        writeJson(`content/${src.postType}/${src.id}.json`, b.doc);
-        const bucket = (manifest.content[src.postType] ||= {});
-        bucket[src.id] = { ...(bucket[src.id] || {}), title: b.page.title };
-      }
-    }
-    if (manifest.title) manifest.title = ctx.project.site_name;
-  } else {
-    for (const b of built) writeJson(relToRoot(b.page.templateId), b.doc);
-  }
-
-  if (fs.existsSync(path.join(out, 'manifest.json')) || ctx.kit.format !== 'loose') writeJson('manifest.json', manifest);
-  const zip = new AdmZip();
-  addFolderToZip(zip, out);
-  return zip.toBuffer();
+  return { version: doc.version || '0.4', title: page.title, type, content: doc.content, page_settings: doc.page_settings || {} };
 }
 
 // ---------------------------------------------------------------------------
@@ -315,13 +233,6 @@ function runChecks(ctx, built, posts, links, baseUrl, T) {
   const items = [];
   const add = (level, message) => items.push({ level, message });
   const allowed = new Set(links.map((l) => normalizeUrl(l.url)));
-  const ignored = new Set(ctx.settings.demoValues.ignored || []);
-  const demoValues = [
-    ...(ctx.kit.info.contacts?.emails || []),
-    ...(ctx.kit.info.contacts?.phones || []),
-    ctx.settings.demoValues.brand,
-    ctx.settings.demoValues.address,
-  ].filter((v) => v && !ignored.has(v) && v !== ctx.project.email && v !== ctx.project.phone);
 
   for (const { page, doc } of built) {
     const demoImages = new Set();
@@ -344,13 +255,10 @@ function runChecks(ctx, built, posts, links, baseUrl, T) {
       for (const [k, x] of Object.entries(v)) if (k !== '__globals__' && k !== '__dynamic__') visit(x, k);
     };
     visit(doc, null);
-    const json = JSON.stringify(doc);
-    const leftovers = demoValues.filter((d) => json.includes(d));
-    const unchanged = page.fields.filter((f) => f.source === 'original' || (f.format !== 'link' && f.value == null)).length;
+    const unchanged = page.fields.filter((f) => f.source === 'original' || (f.format !== 'link' && f.source !== 'shared' && f.value == null)).length;
 
     if (demoImages.size) add('error', T.chkDemoImages(page.title, [...demoImages]));
     if (badLinks.size) add('warning', T.chkLinks(page.title, [...badLinks]));
-    if (leftovers.length) add('error', T.chkDemoText(page.title, leftovers));
     if (lorem) add('error', T.chkLorem(page.title));
     if (unchanged) add('warning', T.chkUnchanged(page.title, unchanged));
     if (otherEmails.size) add('warning', T.chkEmails(page.title, [...otherEmails]));
@@ -369,7 +277,7 @@ function runChecks(ctx, built, posts, links, baseUrl, T) {
 // Docs: content.md, seo.csv
 // ---------------------------------------------------------------------------
 
-function contentMarkdown(ctx, pages) {
+function contentMarkdown(ctx, pages, allPages) {
   const lines = [`# ${ctx.project.site_name} — generated content`, '', `Language: ${languageName(ctx.project.language)}`, ''];
   for (const page of pages) {
     lines.push(`## ${page.title}${page.role === 'post' ? ' (article)' : ''}`, '');
@@ -377,7 +285,8 @@ function contentMarkdown(ctx, pages) {
       lines.push(`- **SEO title:** ${page.seo.title || '—'}`, `- **Meta description:** ${page.seo.description || '—'}`, `- **Slug:** /${page.seo.slug ?? ''}`, '');
     }
     for (const f of page.fields) {
-      const value = f.format === 'link' ? f.value || '' : stripHtml(f.value ?? f.original);
+      const current = fieldValue(allPages, f);
+      const value = f.format === 'link' ? current || '' : stripHtml(current ?? f.original);
       lines.push(`**${f.id}** _(${f.label})_`, '', value || '—', '');
     }
   }
@@ -399,32 +308,14 @@ function seoCsv(pages) {
 // WordPress plugin
 // ---------------------------------------------------------------------------
 
-/** Kit settings that must not be copied: demo site identity and demo images. */
-const SKIPPED_KIT_SETTINGS = new Set(['site_name', 'site_description', 'site_logo', 'site_favicon']);
-
-/** Global colors / fonts of the kit (Template Kit "global styles" template or Website Kit site settings). */
-function kitGlobalStyles(ctx) {
-  const tpl = ctx.kit.info.templates.find((t) => t.valid && isGlobalTemplate(t));
-  const doc = tpl ? loadTemplate(ctx.kit.dir, tpl.id) : null;
-  let settings = doc?.page_settings || doc?.settings;
-  if (!settings && ctx.kit.format === 'website-kit') {
-    const file = path.join(ctx.kit.dir, ctx.kit.info.rootDir || '.', 'site-settings.json');
-    settings = fs.existsSync(file) ? parseJson(fs.readFileSync(file, 'utf8'), {}).settings : null;
-  }
-  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return null;
-  const isImage = (v) => v && typeof v === 'object' && !Array.isArray(v) && 'url' in v;
-  const styles = Object.fromEntries(Object.entries(settings).filter(([k, v]) => !SKIPPED_KIT_SETTINGS.has(k) && !isImage(v)));
-  return Object.keys(styles).length ? styles : null;
-}
-
 /**
  * Input of the WordPress plugin. The Elementor documents are rebuilt with images referenced as
  * esg-image://<file>: the plugin imports the bundled files and swaps in their Media Library id + URL.
  */
-function pluginInput(ctx, pages, posts, exported, links, category, imagesDir) {
+function pluginInput(ctx, pages, allPages, posts, exported, links, category, imagesDir) {
   const lang = ctx.project.language;
   const local = new Map([...exported].map(([id, e]) => [id, { ...e, url: PLUGIN_IMAGE_SCHEME + e.name }]));
-  const built = buildPageDocs(ctx, pages, local, links);
+  const built = buildPageDocs(ctx, pages, local, links, allPages);
   const builtFor = (role) => built.find((b) => b.page.role === role);
 
   const sitePages = SITE_PAGE_ROLES.map((role) => {
@@ -445,9 +336,7 @@ function pluginInput(ctx, pages, posts, exported, links, category, imagesDir) {
     .filter(Boolean)
     .map((b) => {
       const doc = toImportable(b.doc, b.page);
-      // Theme Builder document type (kits often export header/footer as plain "section" templates)
-      const type = b.page.role === 'single_post' ? (doc.type === 'single' ? 'single' : 'single-post') : b.page.role;
-      return { key: b.page.key, role: b.page.role, title: `${ctx.project.site_name} – ${b.page.title}`, type, doc: { ...doc, type } };
+      return { key: b.page.key, role: b.page.role, title: `${ctx.project.site_name} – ${b.page.title}`, type: doc.type, doc };
     });
 
   return {
@@ -470,7 +359,7 @@ function pluginInput(ctx, pages, posts, exported, links, category, imagesDir) {
     }),
     imagesDir,
     category,
-    globalStyles: kitGlobalStyles(ctx),
+    globalStyles: builtSite(ctx).globalStyles,
   };
 }
 
@@ -483,16 +372,19 @@ export async function exportGeneration(generationId) {
   if (!gen) throw new Error('Generation not found');
   const output = parseJson(gen.output_json, { pages: [] });
   const ctx = loadContext(gen.project_id);
-  if (!ctx.kit) throw new Error('The project has no kit selected anymore.');
+  if (!ctx.template) throw badRequest('The project has no template anymore: choose one in the Template step.');
+  // Field ids belong to the template the generation was made with: generations of another template
+  // (or of the old Template Kits) cannot be exported with the current one
+  if (parseJson(gen.config_json, {}).templateId !== ctx.template.id) {
+    throw badRequest('This generation was made with another template: run a new generation with the current one.');
+  }
 
-  // Pages whose service was deleted after the generation are skipped, and so are the service /
-  // "other" pages of generations made by older versions (only the 5 site pages are kept).
+  // Pages whose service was deleted after the generation are skipped
   const pages = output.pages
     .filter((p) => p.status === 'done' || p.fields.some((f) => f.value))
-    .filter((p) => p.role === 'post' || PAGE_ROLES.includes(p.role))
-    .filter((p) => !p.serviceId || ctx.services.some((s) => s.id === p.serviceId))
-    .filter((p) => !p.templateId || mappingFor(ctx, p.templateId).role !== 'ignore');
-  if (!pages.length) throw new Error('Nothing to export: no page has generated content.');
+    .filter((p) => p.role === 'post' || TEMPLATE_ROLES.includes(p.role))
+    .filter((p) => !p.serviceId || ctx.services.some((s) => s.id === p.serviceId));
+  if (!pages.length) throw badRequest('Nothing to export: no page has generated content.');
 
   const lang = ctx.project.language;
   const T = docsText(lang);
@@ -506,13 +398,12 @@ export async function exportGeneration(generationId) {
 
   const exported = await exportImages(ctx, path.join(outRoot, 'images'));
   await exportCrops(ctx, pages, exported, path.join(outRoot, 'images'));
-  const built = buildPageDocs(ctx, pages, exported, links);
+  const built = buildPageDocs(ctx, pages, exported, links, output.pages);
   const posts = buildPosts(ctx, pages, exported);
 
   for (const b of built) {
     fs.writeFileSync(path.join(outRoot, 'templates', `${b.page.key}.json`), JSON.stringify(toImportable(b.doc, b.page), null, 1));
   }
-  fs.writeFileSync(path.join(outRoot, 'elementor-kit.zip'), buildKit(ctx, built, workDir));
 
   // WordPress import file: pages (for slugs + menu), articles, category, featured images, menu
   const sitePages = pages.filter((p) => p.seo?.slug != null && p.role !== 'post');
@@ -530,7 +421,7 @@ export async function exportGeneration(generationId) {
   );
 
   // WordPress plugin: creates the same site on activation, with the images bundled
-  const plugin = buildPlugin(pluginInput(ctx, pages, posts, exported, links, category, path.join(outRoot, 'images')));
+  const plugin = buildPlugin(pluginInput(ctx, pages, output.pages, posts, exported, links, category, path.join(outRoot, 'images')));
   fs.writeFileSync(path.join(outRoot, plugin.fileName), plugin.buffer);
   const pluginDir = path.join(config.outputDir, String(gen.id), 'plugin');
   fs.mkdirSync(pluginDir, { recursive: true });
@@ -540,7 +431,7 @@ export async function exportGeneration(generationId) {
   const checks = runChecks(ctx, built, posts, links, baseUrl, T);
   const docInfo = { ctx, pages, built, posts, exported, baseUrl, placeholder: baseUrl === PLACEHOLDER_BASE_URL, category, menuItems, pluginFile: plugin.fileName, imageCount: exported.size, oneLineAddress: oneLine(ctx.project.address) };
 
-  fs.writeFileSync(path.join(outRoot, 'content.md'), contentMarkdown(ctx, pages));
+  fs.writeFileSync(path.join(outRoot, 'content.md'), contentMarkdown(ctx, pages, output.pages));
   fs.writeFileSync(path.join(outRoot, 'seo.csv'), seoCsv(pages));
   fs.writeFileSync(path.join(outRoot, 'menu.md'), T.menuMd(docInfo));
   fs.writeFileSync(path.join(outRoot, T.instructionsFile), T.instructions(docInfo));

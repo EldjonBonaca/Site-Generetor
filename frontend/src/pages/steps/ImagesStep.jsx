@@ -166,12 +166,6 @@ export default function ImagesStep({ project, setProject, reload }) {
               label={t('One subheader per page')}
               description={t('Allow a different subheader image for specific pages.')}
             />
-            <Toggle
-              checked={settings.replaceAllImages}
-              onChange={(v) => saveSettings({ replaceAllImages: v })}
-              label={t('Replace all demo images')}
-              description={t('No template image remains: free slots get one of your images, people photos and a missing logo are removed.')}
-            />
             <CropSizeField
               label={t('Home hero size')}
               hint={t('The Home hero image is cropped to exactly this size (the gallery keeps the full photo).')}

@@ -2,28 +2,26 @@
  * Texts of the exported documentation (import guide, menu, final checks) in the site language.
  * Italian and English are provided; other languages use English.
  */
-
-const pluginsOf = (ctx) =>
-  (ctx.kit.manifest.required_plugins || ctx.kit.manifest.plugins || []).map((p) => (typeof p === 'string' ? p : p.name || p.slug || p.plugin)).filter(Boolean);
+import { contactForm } from './plan.js';
 
 const ORDER = { header: 0, footer: 1, single_post: 2, home: 3, about: 4, services: 5, gallery: 6, contact: 7 };
 const sortedTemplates = (built) => [...built].sort((a, b) => (ORDER[a.page.role] ?? 9) - (ORDER[b.page.role] ?? 9));
 const list = (arr) => arr.map((x) => `  - \`${x}\``).join('\n');
+const PARTS = ['header', 'footer', 'single_post'];
 
 // ---------------------------------------------------------------------------- IT
 const IT = {
   instructionsFile: 'ISTRUZIONI.md',
   checksFile: 'CONTROLLI.md',
 
-  chkDemoImages: (p, urls) => `**${p}**: immagini demo ancora presenti (${urls.length}):\n${list(urls.slice(0, 8))}`,
+  chkDemoImages: (p, urls) => `**${p}**: immagini segnaposto del template ancora presenti (${urls.length}):\n${list(urls.slice(0, 8))}`,
   chkLinks: (p, urls) => `**${p}**: link che non puntano a pagine del sito:\n${list(urls.slice(0, 8))}`,
-  chkDemoText: (p, vals) => `**${p}**: testi/contatti demo ancora presenti: ${vals.map((v) => `\`${v}\``).join(', ')}`,
   chkLorem: (p) => `**${p}**: contiene ancora "Lorem ipsum".`,
-  chkUnchanged: (p, n) => `**${p}**: ${n} testo/i non generato/i dall'AI (testo originale del template). Rigenera la pagina o modificali nell'anteprima.`,
+  chkUnchanged: (p, n) => `**${p}**: ${n} testo/i non generato/i dall'AI (testo di esempio del template). Rigenera la pagina o modificali nell'anteprima.`,
   chkEmails: (p, vals) => `**${p}**: email diverse da quella del sito: ${vals.join(', ')}`,
   chkPostShort: (t, n) => `Articolo **${t}**: testo di soli ${n} caratteri (minimo 300).`,
   chkPostImage: (t) => `Articolo **${t}**: manca l'immagine in evidenza (assegna l'immagine al servizio).`,
-  chkAllGood: 'Nessun problema trovato: nessuna immagine o testo demo, link interni corretti, contatti coerenti.',
+  chkAllGood: 'Nessun problema trovato: nessuna immagine o testo di esempio, link interni corretti, contatti coerenti.',
   chkResponsive: 'Da verificare a mano dopo l\'importazione: layout responsive su desktop, tablet e mobile (Elementor → modalità responsive).',
 
   checksMd: (site, checks) => {
@@ -32,32 +30,34 @@ const IT = {
   },
 
   menuMd: ({ ctx, menuItems }) =>
-    `# Menu di navigazione — "${ctx.menu.name}"\n\nCreato automaticamente dal file \`wordpress-import.xml\` (slug \`${ctx.menu.slug}\`). Il widget Menu dell'header è già impostato su questo menu.\n\n| # | Voce | Link |\n|---|---|---|\n${menuItems
+    `# Menu di navigazione — "${ctx.menu.name}"\n\nCreato automaticamente dal plugin o dal file \`wordpress-import.xml\` (slug \`${ctx.menu.slug}\`). L'header e il footer del template contengono già i link alle pagine.\n\n| # | Voce | Link |\n|---|---|---|\n${menuItems
       .map((m, i) => `| ${i + 1} | ${m.title} | \`${m.url}\` |`)
       .join('\n')}\n`,
 
-  instructions: ({ ctx, built, posts, exported, baseUrl, placeholder, category, menuItems, pluginFile, imageCount }) => {
-    const plugins = pluginsOf(ctx);
+  instructions: ({ ctx, built, posts, baseUrl, placeholder, category, menuItems, pluginFile, imageCount }) => {
     const templates = sortedTemplates(built);
-    const parts = templates.filter((b) => ['header', 'footer', 'single_post'].includes(b.page.role));
-    const pages = templates.filter((b) => !['header', 'footer', 'single_post'].includes(b.page.role));
-    const shortcode = ctx.settings.contactShortcode;
+    const parts = templates.filter((b) => PARTS.includes(b.page.role));
+    const pages = templates.filter((b) => !PARTS.includes(b.page.role));
+    const form = contactForm(ctx);
     const contact = pages.find((b) => b.page.role === 'contact');
     return `# Guida all'importazione — "${ctx.project.site_name}"
 
-Questo pacchetto è stato generato da Elementor Site Generator. Nulla è stato pubblicato.
+Questo pacchetto è stato generato da Elementor Site Generator con il template **${ctx.template.name}** (categoria *${ctx.template.category.name}*). Nulla è stato pubblicato.
+
+Plugin necessari: **Elementor** e **${form.name}** (modulo di contatto). Il template usa solo widget nativi di Elementor: **non serve Ultimate Addons for Elementor (UAE)** né altri addon. Elementor Pro è facoltativo.
 
 ## Metodo rapido: plugin WordPress (consigliato)
 
-1. Installa e attiva **Elementor**${plugins.length ? ` e i plugin richiesti dal Template Kit (${plugins.join(', ')})` : ''}. Elementor Pro **non** è necessario.
+1. Installa e attiva **Elementor**. Elementor Pro **non** è necessario.
 2. **Plugin → Aggiungi nuovo plugin → Carica plugin** → scegli \`${pluginFile}\` → **Installa ora** → **Attiva**.
 3. Si apre la pagina del plugin (**Strumenti → Sito ${ctx.project.site_name}**) e la creazione parte da sola. Il plugin:
+   - installa da solo **${form.name}** e, se serve, il tema **Hello Elementor** (il tema per cui è pensato il template);
    - carica tutte le immagini (${imageCount}) nella Libreria Media;
    - crea le 5 pagine ${menuItems.map((m) => `**${m.title}**`).join(', ')} con Elementor (la Galleria mostra tutte le foto);
    - crea ${posts.length} articoli, uno per servizio, nella categoria **"${category.name}"** con immagine in evidenza;
-   - installa da solo i plugin gratuiti **Ultimate Addons for Elementor** (mostra header e footer su tutto il sito senza Elementor Pro) e **Contact Form 7**, e il tema **Hello Elementor** se il tema attivo è un tema a blocchi;
-   - crea il menu **"${ctx.menu.name}"**, header e footer (con Elementor Pro attivo usa invece il Theme Builder) e applica i colori e i font del kit;
-   - crea il modulo di Contact Form 7 e lo inserisce nella pagina **${contact?.page.title || 'Contatti'}**, imposta la Home come pagina iniziale e i permalink "Nome articolo".
+   - crea il modulo di contatto in ${form.name} (i messaggi arrivano a ${ctx.project.email}) e lo inserisce nella pagina **${contact?.page.title || 'Contatti'}**;
+   - crea il menu **"${ctx.menu.name}"**, header e footer e applica i colori e i font del template. Con Elementor Pro usa il Theme Builder; **senza Pro header e footer vengono mostrati dal plugin stesso, che quindi deve restare attivo**;
+   - imposta la Home come pagina iniziale e i permalink "Nome articolo".
 4. Leggi i messaggi finali e controlla il sito su desktop, tablet e mobile (vedi \`CONTROLLI.md\`).
 
 Puoi rieseguirlo da **Strumenti** ("Aggiorna il sito"): aggiorna le stesse pagine e gli stessi articoli senza duplicarli. Con il plugin l'URL base delle immagini **non serve**.
@@ -70,9 +70,9 @@ Segui i passaggi **in quest'ordine**.
 
 ## 0. Requisiti
 
-- WordPress con **Elementor** attivo e **Elementor Pro** (Theme Builder per header, footer e articolo singolo).
-- Plugin **Contact Form 7** (modulo contatti) e **WordPress Importer** (Strumenti → Importa → WordPress → Installa ora).
-${plugins.length ? `- Plugin richiesti dal Template Kit: ${plugins.join(', ')}.\n` : ''}- **Impostazioni → Permalink → "Nome articolo"**: i link del sito usano indirizzi come \`/chi-siamo/\` e \`/${posts[0]?.slug || 'nome-servizio'}/\`.
+- WordPress con **Elementor** attivo e **Elementor Pro** (Theme Builder per header, footer e articolo singolo), tema **Hello Elementor** consigliato.
+- Plugin **${form.name}** (modulo contatti) e **WordPress Importer** (Strumenti → Importa → WordPress → Installa ora).
+- **Impostazioni → Permalink → "Nome articolo"**: i link del sito usano indirizzi come \`/chi-siamo/\` e \`/${posts[0]?.slug || 'nome-servizio'}/\`.
 
 ## 1. Carica prima le immagini
 
@@ -110,10 +110,10 @@ ${parts
     b.page.role === 'header'
       ? '- **Header**: apri il template importato "Header" (o crea un Header e inseriscilo dalla cartella *I miei template*) → **Pubblica** → condizione **Intero sito**.'
       : b.page.role === 'footer'
-        ? '- **Footer**: come sopra, condizione **Intero sito**. Il copyright in fondo è già inserito.'
+        ? '- **Footer**: come sopra, condizione **Intero sito**. Logo, link, servizi, contatti e copyright sono già inseriti.'
         : `- **Articolo singolo**: crea un template *Single Post*, inserisci "${b.page.title}" → condizione **Articoli → nella categoria "${category.name}"**.`
   )
-  .join('\n') || '- Nessun header/footer mappato nel kit.'}
+  .join('\n')}
 
 ## 5. Contenuto delle pagine
 
@@ -127,25 +127,21 @@ ${pages.map((b) => `| ${b.page.title} | \`templates/${b.page.key}.json\` | \`/${
 
 **Impostazioni → Lettura** → "La homepage mostra: **Una pagina statica**" → Homepage: **${pages.find((b) => b.page.role === 'home')?.page.title || 'Home'}**.
 
-## 7. Modulo di contatto (Contact Form 7)
+## 7. Modulo di contatto (${form.name})
 
-1. **Contatto → Aggiungi nuovo**, crea il modulo e copia il suo shortcode.
+1. ${form.plugin === 'metform' ? '**MetForm → Forms → Add New**: crea il modulo con i campi nome, email, telefono, messaggio, consenso privacy e pulsante di invio, imposta la notifica email' : '**Contatto → Aggiungi nuovo**: crea il modulo con i campi nome, email, telefono, messaggio e consenso privacy, imposta il destinatario'} a ${ctx.project.email} e copia il suo shortcode.
 2. Pagina **${contact?.page.title || 'Contatti'}** → modifica con Elementor → nella sezione del modulo c'è un **widget Shortcode** con il segnaposto:
-   \`${shortcode}\`
+   \`${form.placeholder}\`
 3. Sostituiscilo con lo shortcode reale (o metti l'ID corretto al posto di \`INSERIRE_ID\`) → **Aggiorna**.
 
 La mappa Google è già impostata con l'indirizzo: ${ctx.project.address.replace(/\n+/g, ', ')}.
 
 ## 8. Menu, SEO e controlli finali
 
-- **Aspetto → Menu**: verifica il menu "${ctx.menu.name}" (l'header lo usa già).
+- **Aspetto → Menu**: verifica il menu "${ctx.menu.name}".
 - **SEO**: \`seo.csv\` contiene titolo, meta description e slug di ogni pagina e articolo (Yoast, Rank Math…).
 - **Controlli**: leggi \`CONTROLLI.md\` e verifica il layout su desktop, tablet e mobile.
 - Tutti i testi generati sono in \`content.md\`.
-
-## Alternativa: importare il kit completo
-
-\`elementor-kit.zip\` contiene il Template Kit con i tuoi contenuti (stesso formato del kit originale): si importa con il plugin *Template Kit – Import* / Envato Elements${ctx.kit.format === 'website-kit' ? ' oppure da Elementor → Strumenti → Importa kit' : ''}. Gli articoli dei servizi vanno comunque importati con \`wordpress-import.xml\`.
 
 ## Dati di contatto usati
 
@@ -162,15 +158,14 @@ const EN = {
   instructionsFile: 'INSTRUCTIONS.md',
   checksFile: 'CHECKS.md',
 
-  chkDemoImages: (p, urls) => `**${p}**: demo images still present (${urls.length}):\n${list(urls.slice(0, 8))}`,
+  chkDemoImages: (p, urls) => `**${p}**: template placeholder images still present (${urls.length}):\n${list(urls.slice(0, 8))}`,
   chkLinks: (p, urls) => `**${p}**: links not pointing to site pages:\n${list(urls.slice(0, 8))}`,
-  chkDemoText: (p, vals) => `**${p}**: demo texts/contacts still present: ${vals.map((v) => `\`${v}\``).join(', ')}`,
   chkLorem: (p) => `**${p}**: still contains "Lorem ipsum".`,
-  chkUnchanged: (p, n) => `**${p}**: ${n} text(s) not generated by the AI (original template text). Regenerate the page or edit them in the preview.`,
+  chkUnchanged: (p, n) => `**${p}**: ${n} text(s) not generated by the AI (sample text of the template). Regenerate the page or edit them in the preview.`,
   chkEmails: (p, vals) => `**${p}**: emails different from the site email: ${vals.join(', ')}`,
   chkPostShort: (t, n) => `Article **${t}**: text is only ${n} characters (minimum 300).`,
   chkPostImage: (t) => `Article **${t}**: featured image missing (assign an image to the service).`,
-  chkAllGood: 'No problems found: no demo images or texts, internal links valid, consistent contacts.',
+  chkAllGood: 'No problems found: no sample images or texts, internal links valid, consistent contacts.',
   chkResponsive: 'To check by hand after importing: responsive layout on desktop, tablet and mobile (Elementor responsive mode).',
 
   checksMd: (site, checks) => {
@@ -179,31 +174,34 @@ const EN = {
   },
 
   menuMd: ({ ctx, menuItems }) =>
-    `# Navigation menu — "${ctx.menu.name}"\n\nCreated by \`wordpress-import.xml\` (slug \`${ctx.menu.slug}\`). The header menu widget already uses it.\n\n| # | Item | Link |\n|---|---|---|\n${menuItems
+    `# Navigation menu — "${ctx.menu.name}"\n\nCreated by the plugin or by \`wordpress-import.xml\` (slug \`${ctx.menu.slug}\`). The header and footer of the template already link to the pages.\n\n| # | Item | Link |\n|---|---|---|\n${menuItems
       .map((m, i) => `| ${i + 1} | ${m.title} | \`${m.url}\` |`)
       .join('\n')}\n`,
 
-  instructions: ({ ctx, built, posts, exported, baseUrl, placeholder, category, menuItems, pluginFile, imageCount }) => {
-    const plugins = pluginsOf(ctx);
+  instructions: ({ ctx, built, posts, baseUrl, placeholder, category, menuItems, pluginFile, imageCount }) => {
     const templates = sortedTemplates(built);
-    const parts = templates.filter((b) => ['header', 'footer', 'single_post'].includes(b.page.role));
-    const pages = templates.filter((b) => !['header', 'footer', 'single_post'].includes(b.page.role));
+    const parts = templates.filter((b) => PARTS.includes(b.page.role));
+    const pages = templates.filter((b) => !PARTS.includes(b.page.role));
+    const form = contactForm(ctx);
     const contact = pages.find((b) => b.page.role === 'contact');
     return `# How to import "${ctx.project.site_name}" into WordPress + Elementor
 
-This package was generated by Elementor Site Generator. Nothing has been published.
+This package was generated by Elementor Site Generator with the template **${ctx.template.name}** (category *${ctx.template.category.name}*). Nothing has been published.
+
+Required plugins: **Elementor** and **${form.name}** (contact form). The template only uses native Elementor widgets: **Ultimate Addons for Elementor (UAE) and other addons are not needed**. Elementor Pro is optional.
 
 ## Fastest way: the WordPress plugin (recommended)
 
-1. Install and activate **Elementor**${plugins.length ? ` and the plugins required by the kit (${plugins.join(', ')})` : ''}. Elementor Pro is **not** needed.
+1. Install and activate **Elementor**. Elementor Pro is **not** needed.
 2. **Plugins → Add New Plugin → Upload Plugin** → choose \`${pluginFile}\` → **Install Now** → **Activate**.
 3. The plugin page opens (**Tools → Site ${ctx.project.site_name}**) and starts by itself. The plugin:
+   - installs **${form.name}** by itself and, when needed, the **Hello Elementor** theme (the theme the template is designed for);
    - uploads all the images (${imageCount}) to the Media Library;
    - creates the 5 pages ${menuItems.map((m) => `**${m.title}**`).join(', ')} with Elementor (the Gallery shows every photo);
    - creates ${posts.length} articles, one per service, in the category **"${category.name}"** with a featured image;
-   - installs the free plugins **Ultimate Addons for Elementor** (shows the header and footer on the whole site without Elementor Pro) and **Contact Form 7** by itself, plus the **Hello Elementor** theme when the active theme is a block theme;
-   - creates the menu **"${ctx.menu.name}"**, the header and footer (with Elementor Pro active it uses the Theme Builder instead) and applies the kit colors and fonts;
-   - creates the Contact Form 7 form and puts it on the **${contact?.page.title || 'Contact'}** page, sets Home as the front page and "Post name" permalinks.
+   - creates the contact form in ${form.name} (messages are sent to ${ctx.project.email}) and puts it on the **${contact?.page.title || 'Contact'}** page;
+   - creates the menu **"${ctx.menu.name}"**, the header and footer and applies the template colors and fonts. With Elementor Pro it uses the Theme Builder; **without Pro the header and footer are displayed by the plugin itself, so keep it active**;
+   - sets Home as the front page and "Post name" permalinks.
 4. Read the final messages and check the site on desktop, tablet and mobile (see \`CHECKS.md\`).
 
 You can run it again from **Tools** ("Update the website"): it updates the same pages and articles without duplicating them. The images base URL is **not** needed with the plugin.
@@ -216,9 +214,9 @@ Follow the steps **in this order**.
 
 ## 0. Requirements
 
-- WordPress with **Elementor** and **Elementor Pro** (Theme Builder for header, footer and single post).
-- **Contact Form 7** and the **WordPress Importer** (Tools → Import → WordPress → Install now).
-${plugins.length ? `- Plugins required by the kit: ${plugins.join(', ')}.\n` : ''}- **Settings → Permalinks → "Post name"**: site links use addresses such as \`/${posts[0]?.slug || 'service-name'}/\`.
+- WordPress with **Elementor** and **Elementor Pro** (Theme Builder for header, footer and single post); the **Hello Elementor** theme is recommended.
+- **${form.name}** and the **WordPress Importer** (Tools → Import → WordPress → Install now).
+- **Settings → Permalinks → "Post name"**: site links use addresses such as \`/${posts[0]?.slug || 'service-name'}/\`.
 
 ## 1. Upload the images first
 
@@ -252,10 +250,10 @@ ${parts
     b.page.role === 'header'
       ? '- **Header**: open/insert the imported "Header" template → **Publish** → condition **Entire Site**.'
       : b.page.role === 'footer'
-        ? '- **Footer**: same, condition **Entire Site**. The copyright line is already in it.'
+        ? '- **Footer**: same, condition **Entire Site**. Logo, links, services, contacts and copyright are already in it.'
         : `- **Single post**: create a *Single Post* template, insert "${b.page.title}" → condition **Posts → in category "${category.name}"**.`
   )
-  .join('\n') || '- No header/footer mapped in the kit.'}
+  .join('\n')}
 
 ## 5. Page content
 
@@ -269,19 +267,15 @@ ${pages.map((b) => `| ${b.page.title} | \`templates/${b.page.key}.json\` | \`/${
 
 **Settings → Reading** → "Your homepage displays: **A static page**" → Homepage: **${pages.find((b) => b.page.role === 'home')?.page.title || 'Home'}**.
 
-## 7. Contact form (Contact Form 7)
+## 7. Contact form (${form.name})
 
-Create the form (**Contact → Add New**), copy its shortcode, then edit **${contact?.page.title || 'Contact'}** with Elementor: replace the placeholder in the **Shortcode widget** \`${ctx.settings.contactShortcode}\` with the real shortcode. The Google map already uses your address.
+Create the form in ${form.name} (name, email, phone, message, privacy consent, send button; notifications to ${ctx.project.email}), copy its shortcode, then edit **${contact?.page.title || 'Contact'}** with Elementor: replace the placeholder in the **Shortcode widget** \`${form.placeholder}\` with the real shortcode. The Google map already uses your address.
 
 ## 8. Menu, SEO and final checks
 
-- **Appearance → Menus**: check "${ctx.menu.name}" (the header already uses it).
+- **Appearance → Menus**: check "${ctx.menu.name}".
 - \`seo.csv\`: title, meta description and slug of every page and article.
 - Read \`CHECKS.md\` and check the layout on desktop, tablet and mobile. All texts are in \`content.md\`.
-
-## Alternative: import the whole kit
-
-\`elementor-kit.zip\` contains the kit with your content in the original format (Template Kit – Import / Envato Elements${ctx.kit.format === 'website-kit' ? ', or Elementor → Tools → Import Kit' : ''}). Articles are still imported with \`wordpress-import.xml\`.
 `;
   },
 };

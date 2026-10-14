@@ -1,16 +1,14 @@
 /**
- * End-to-end test of the Italian full-site prompt ("Sito completo Elementor (IT)"):
- * Home / Chi Siamo / Servizi / Galleria / Contatti, services as articles (WXR), header/footer,
- * removed sections, card cloning, contact form shortcode, map, menu and final checks.
+ * End-to-end test of the Italian full-site prompt ("Sito completo Elementor (IT)") with a
+ * category template: Home / Chi Siamo / Servizi / Galleria / Contatti, services as articles (WXR),
+ * header/footer, service cards, shared image archive, reviews, MetForm, map, menu and final checks.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 process.env.STORAGE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'esg-it-'));
 process.env.ENCRYPTION_KEY ||= 'c'.repeat(64);
 
@@ -18,7 +16,6 @@ const { default: app } = await import('../src/app.js');
 const { default: sharp } = await import('sharp');
 const { AdmZip } = await import('../src/lib/zip.js');
 
-const SAMPLE_KIT = path.resolve(__dirname, '../../samples/sample-elementor-kit.zip');
 let server;
 let base;
 
@@ -41,7 +38,7 @@ async function api(method, url, body) {
 }
 const png = (color) => sharp({ create: { width: 800, height: 500, channels: 3, background: color } }).png().toBuffer();
 
-test('Italian full site: articles, gallery, contact form, menu, final checks', async () => {
+test('Italian full site: template, articles, gallery, reviews, contact form, menu, final checks', async () => {
   const p = await api('POST', '/projects', { site_name: 'Edil Bianchi' });
   assert.equal(p.language, 'it', 'new projects default to Italian');
   const pid = p.id;
@@ -66,39 +63,29 @@ test('Italian full site: articles, gallery, contact form, menu, final checks', a
   await api('PATCH', `/images/${created[1].id}`, { role: 'hero_home', alt_text: 'Cantiere' });
   await api('PATCH', `/images/${created[2].id}`, { role: 'subheader', alt_text: 'Banner' });
   for (const [i, s] of services.entries()) await api('PATCH', `/images/${created[3 + i].id}`, { role: 'service', service_id: s.id, alt_text: s.name });
+  await api('PATCH', `/images/${created[8].id}`, { alt_text: 'Squadra al lavoro' });
   await api('POST', `/projects/${pid}/images/seo-rename`);
 
-  // Kit + roles
-  const kform = new FormData();
-  kform.append('file', new Blob([fs.readFileSync(SAMPLE_KIT)]), 'sample.zip');
-  const kit = await api('POST', '/kits', kform);
-  await api('PUT', `/projects/${pid}/kit`, { kit_id: kit.id });
-  let mapping = await api('GET', `/projects/${pid}/kit-mapping`);
-  const tpl = (title) => mapping.templates.find((t) => t.title === title);
-  assert.deepEqual(
-    ['Home', 'About Us', 'Our Services', 'Gallery', 'Contact', 'Single Post', 'Header', 'Footer', 'Service Single'].map((t) => tpl(t).role),
-    ['home', 'about', 'services', 'gallery', 'contact', 'single_post', 'header', 'footer', 'ignore']
-  );
-  assert.equal(tpl('Our Services').cardCount, 5, 'services grid cloned to one card per service');
-  assert.equal(tpl('Home').cardCount, 3, 'home keeps 3 featured services');
-
-  // Remove the extra section of the services page ("only one section: all services")
-  const extra = tpl('Our Services').sections.find((s) => /Not sure/.test(s.label));
-  await api('PUT', `/projects/${pid}/kit-mapping`, { template_id: tpl('Our Services').id, removed_sections: [extra.id] });
-  mapping = await api('GET', `/projects/${pid}/kit-mapping`);
-  assert.equal(tpl('Our Services').sections.find((s) => s.id === extra.id).removed, true);
-
-  // Provider + the Italian full-site prompt for every page type
+  // Category "Edilizia" + a template generated for it (Italian sample texts), used by the project
   const provider = await api('POST', '/providers', { type: 'mock' });
-  await api('PATCH', `/projects/${pid}`, {
-    settings: { generation: { providerId: provider.id }, demoValues: { brand: 'Plumbix', address: '123 Demo Street, Springfield' } },
-  });
+  const cat = await api('POST', '/template-categories', { name: 'Edilizia', description: 'Imprese edili e ristrutturazioni' });
+  const draft = await api('POST', `/template-categories/${cat.id}/templates/generate`, { providerId: provider.id, instructions: 'stile solido e moderno' });
+  assert.match(draft.spec.copy.heroTitle, /^Edilizia/);
+  const spec = { ...draft.spec, layout: { ...draft.spec.layout, cta: 'banner', header: 'topbar', contact: 'split' } };
+  const tpl = await api('POST', `/template-categories/${cat.id}/templates`, { name: 'Edilizia moderna', spec, instructions: 'stile solido e moderno', language: 'it' });
+  await api('PUT', `/projects/${pid}/template`, { template_id: tpl.id });
+  await api('PATCH', `/projects/${pid}`, { settings: { generation: { providerId: provider.id } } });
 
-  // The built-in site prompt is used automatically
+  // The built-in site prompt is used automatically, with every variable filled
   const preview = await api('POST', '/prompts/preview', { projectId: pid, pageKey: 'about' });
   assert.match(preview.prompt, /\| Nome sito \| `Edil Bianchi` \|/);
+  assert.match(preview.prompt, /\| Settore \/ tipo di cliente \| `Edilizia` \|/, 'no industry: the template category');
   assert.match(preview.prompt, /5\. `Pavimenti`/, '{{SERVIZIO_N}} expanded for the 5th service');
-  assert.match(preview.prompt, /\| Servizio 4 – `Cartongesso` \| `[^`]*cartongesso[^`]*\.webp/, 'table row expanded with image file name');
+  assert.match(preview.prompt, /\| Immagine in evidenza Servizio 4 – `Cartongesso` \| `[^`]*cartongesso[^`]*\.webp/, 'table row expanded with image file name');
+  assert.match(preview.prompt, /unico archivio condiviso\*\* \(`[^`]*Cantiere[^`]*pavimenti\.webp[^`]*Squadra al lavoro[^`]*`\)/, '{{ELENCO_IMMAGINI}}: every photo');
+  assert.doesNotMatch(preview.prompt.match(/unico archivio condiviso[^\n]*/)[0], /logo/, 'the logo is not in the archive');
+  assert.match(preview.prompt, /\| Altre immagini \| `foto-8\.webp \(ALT: Squadra al lavoro\), foto-9\.webp` \|/);
+  assert.match(preview.prompt, /dal template Elementor `Edilizia moderna` della categoria `Edilizia`/);
   assert.match(preview.prompt, /Via%20Milano%2010%2C%2020100%20Milano/);
   assert.match(preview.prompt, /\/chi-siamo\//);
   assert.match(preview.prompt, /overrides any output format requested above/);
@@ -139,18 +126,18 @@ test('Italian full site: articles, gallery, contact form, menu, final checks', a
   for (const f of ['ISTRUZIONI.md', 'CONTROLLI.md', 'menu.md', 'wordpress-import.xml', 'templates/home.json', 'templates/about.json', 'templates/services.json', 'templates/gallery.json', 'templates/contact.json', 'templates/single-post.json', 'templates/header.json', 'templates/footer.json']) {
     assert.ok(files.includes(f), `missing ${f}`);
   }
-  assert.ok(!files.some((f) => f.startsWith('templates/service-')), 'no service pages in article mode');
+  assert.ok(!files.some((f) => f.startsWith('templates/service-')), 'no service pages: services are articles');
   // Templates are pretty-printed: compact them so the regexes below match reliably
   const read = (f) => (f.endsWith('.json') ? JSON.stringify(JSON.parse(zip.readAsText(root + f))) : zip.readAsText(root + f));
   const baseUrl = 'https://edilbianchi.it/wp-content/uploads/2026/10/';
 
-  // No demo image or demo text anywhere
+  // No placeholder image anywhere, and every image slot is filled
   let scanned = 0;
   for (const f of files.filter((x) => x.startsWith('templates/'))) {
     const urls = [...read(f).matchAll(/"url":"([^"]*)"/g)].map((m) => m[1]).filter((u) => /\.(jpe?g|png|webp)$/.test(u));
     scanned += urls.length;
-    for (const u of urls) assert.ok(u.startsWith(baseUrl), `${f}: demo image ${u}`);
-    assert.doesNotMatch(read(f), /plumbix-demo|555\) 010|Demo Street/, f);
+    for (const u of urls) assert.ok(u.startsWith(baseUrl), `${f}: placeholder image ${u}`);
+    assert.doesNotMatch(read(f), /template\.invalid|"url":""/, `${f}: empty or placeholder image`);
   }
   assert.ok(scanned > 20, `image URLs scanned: ${scanned}`);
 
@@ -158,29 +145,41 @@ test('Italian full site: articles, gallery, contact form, menu, final checks', a
   const servicesJson = read('templates/services.json');
   const servicesDoc = JSON.parse(servicesJson);
   assert.equal(servicesDoc.title, 'Servizi');
-  assert.equal(servicesDoc.content.length, 3, 'subheader + 2 rows of cards (extra section removed)');
-  assert.doesNotMatch(servicesJson, /Not sure what you need/);
+  assert.equal(servicesDoc.content.length, 2, 'subheader + only one section: all services');
   assert.equal([...servicesJson.matchAll(/"widgetType":"image-box"/g)].length, 5);
   for (const s of services) {
     assert.match(servicesJson, new RegExp(`"title_text":"${s.name}"`));
     assert.match(servicesJson, new RegExp(`"url":"/${s.slug}/"`));
   }
-  // Home: 3 featured services
-  assert.equal([...read('templates/home.json').matchAll(/"widgetType":"image-box"/g)].length, 3);
+  // Home: hero, chi siamo, perché sceglierci, call to action, 3 featured services, reviews
+  const homeJson = read('templates/home.json');
+  assert.equal(JSON.parse(homeJson).content.length, 6);
+  assert.equal([...homeJson.matchAll(/"widgetType":"image-box"/g)].length, 3);
+  assert.equal([...homeJson.matchAll(/"widgetType":"testimonial"/g)].length, 3);
   // Gallery: all provided images except the logo, lightbox on
-  const galleryWidget = JSON.parse(read('templates/gallery.json')).content[1].elements[0].elements[0];
+  const galleryWidget = JSON.parse(read('templates/gallery.json')).content[1].elements[0];
   assert.equal(galleryWidget.settings.wp_gallery.length, 9);
   assert.equal(galleryWidget.settings.gallery_link, 'file');
-  // Contact: CF7 placeholder shortcode + map with the real address + tel link
+  assert.equal(galleryWidget.settings.open_lightbox, 'yes');
+  // Contact: MetForm placeholder shortcode + map with the real address + tel/mailto links
   const contact = read('templates/contact.json');
-  assert.ok(contact.includes('"shortcode":"[contact-form-7 id=\\"INSERIRE_ID\\" title=\\"Modulo di contatto\\"]"'));
-  assert.doesNotMatch(contact, /"widgetType":"form"/);
-  assert.match(contact, /"address":"Via Milano 10, 20100 Milano"/);
+  assert.ok(contact.includes('"shortcode":"[metform form_id=\\"INSERIRE_ID\\"]"'));
+  assert.match(contact, /google\.com\/maps\?q=Via%20Milano%2010%2C%2020100%20Milano/);
   assert.match(contact, /tel:\+39021234567/);
-  // Header menu + footer copyright
-  assert.match(read('templates/header.json'), /"menu":"menu-principale"/);
-  assert.match(read('templates/footer.json'), /© 2026 Edil Bianchi S\.r\.l\. – P\.IVA 01234567890/);
+  assert.match(contact, /mailto:info@edilbianchi\.it/);
+  // Header (top bar with phone and email) + footer in 4 columns with the copyright
+  const header = read('templates/header.json');
+  assert.match(header, /"text":"\+39 02 1234 567"/);
+  assert.match(header, /"url":"\/chi-siamo\/"/);
+  const footer = read('templates/footer.json');
+  for (const t of ['"title":"Link"', '"title":"Servizi"', '"title":"Contatti"', '"text":"Pavimenti"', '"url":"/pavimenti/"', 'Via Milano 10, 20100 Milano', '© 2026 Edil Bianchi S.r.l. – P.IVA 01234567890']) {
+    assert.ok(footer.includes(t), `footer: ${t}`);
+  }
+  assert.equal(JSON.parse(footer).content[0].elements.length, 4, '4 columns');
   assert.equal(JSON.parse(read('templates/single-post.json')).type, 'single-post');
+  // Same 3 reviews in Home and Chi Siamo
+  const reviews = (json) => json.match(/"testimonial_(content|name|job)":"[^"]*"/g);
+  assert.deepEqual(reviews(read('templates/about.json')), reviews(homeJson));
 
   // WordPress import file
   const xml = read('wordpress-import.xml');
@@ -189,16 +188,14 @@ test('Italian full site: articles, gallery, contact form, menu, final checks', a
   assert.equal([...xml.matchAll(/_thumbnail_id/g)].length, 5);
   assert.match(xml, /<category domain="category" nicename="servizi"><!\[CDATA\[Servizi\]\]><\/category>/);
   assert.match(xml, /<wp:post_name><!\[CDATA\[chi-siamo\]\]><\/wp:post_name>/);
-  assert.match(read('ISTRUZIONI.md'), /Contact Form 7/);
+  const istruzioni = read('ISTRUZIONI.md');
+  assert.match(istruzioni, /template \*\*Edilizia moderna\*\* \(categoria \*Edilizia\*\)/);
+  assert.match(istruzioni, /MetForm/);
+  assert.match(istruzioni, /non serve Ultimate Addons for Elementor \(UAE\)/);
   assert.match(read('menu.md'), /\| 2 \| Chi Siamo \| `\/chi-siamo\/` \|/);
 
-  // The output kit drops the unused service page template, keeps global styles
-  const inner = new AdmZip(zip.readFile(root + 'elementor-kit.zip'));
-  const kitNames = JSON.parse(inner.readAsText('manifest.json')).templates.map((t) => t.name);
-  assert.ok(!kitNames.includes('Service Single') && kitNames.includes('Global Kit Styles'), kitNames.join(','));
-
-  // WordPress plugin: 5 pages, 5 articles, every photo in the gallery, CF7 placeholder, Italian admin texts
-  assert.match(read('ISTRUZIONI.md'), /Carica plugin\*\* → scegli `edil-bianchi-site\.zip`/);
+  // WordPress plugin: 5 pages, 5 articles, every photo in the gallery, MetForm form, Italian admin texts
+  assert.match(istruzioni, /Carica plugin\*\* → scegli `edil-bianchi-site\.zip`/);
   const plugin = new AdmZip(zip.readFile(root + 'edil-bianchi-site.zip'));
   const site = JSON.parse(plugin.readAsText('edil-bianchi-site/data/site.json'));
   assert.deepEqual(site.pages.map((x) => [x.title, x.slug]), [['Home', 'home'], ['Chi Siamo', 'chi-siamo'], ['Servizi', 'servizi'], ['Galleria', 'galleria'], ['Contatti', 'contatti']]);
@@ -208,32 +205,17 @@ test('Italian full site: articles, gallery, contact form, menu, final checks', a
   assert.deepEqual(site.category, { name: 'Servizi', slug: 'servizi' });
   assert.deepEqual(site.menu, { name: 'Menu principale', slug: 'menu-principale' });
   assert.deepEqual(site.templates.map((x) => x.type), ['header', 'footer', 'single-post']);
-  assert.deepEqual(site.contactForm, { placeholder: '[contact-form-7 id="INSERIRE_ID" title="Modulo di contatto"]', title: 'Modulo di contatto', recipient: 'info@edilbianchi.it' });
+  assert.equal(site.contactForm.plugin, 'metform');
+  assert.equal(site.contactForm.title, 'Modulo di contatto');
+  assert.equal(site.contactForm.recipient, 'info@edilbianchi.it');
+  assert.equal(site.contactForm.elementor[0].elements[0].settings.mf_input_label, 'Nome e cognome');
   assert.equal(site.ui.run, 'Crea il sito');
+  assert.match(site.ui.hfNotice, /deve restare attivo/);
   const photos = site.images.filter((i) => i.photo).map((i) => `esg-image://${i.file}`);
   assert.equal(photos.length, 9);
-  const pluginGallery = JSON.parse(plugin.readAsText('edil-bianchi-site/data/elementor/gallery.json')).content[1].elements[0].elements[0];
+  const pluginGallery = JSON.parse(plugin.readAsText('edil-bianchi-site/data/elementor/gallery.json')).content[1].elements[0];
   assert.deepEqual(pluginGallery.settings.wp_gallery.map((i) => i.url), photos, 'the gallery shows every uploaded photo');
-  // Photos are also used on the other pages (not only in the gallery and on the services)
+  // Photos are also used on the other pages (shared archive: not only in the gallery and on the services)
   const used = new Set(site.pages.filter((x) => x.role !== 'gallery').flatMap((x) => [...plugin.readAsText(`edil-bianchi-site/data/${x.elementor}`).matchAll(/esg-image:\/\/([^"]+)/g)].map((m) => m[1].replace(/-(hero|subheader)(\.\w+)$/, '$2')))); // hero/subheader crops count as their photo
   assert.ok(site.images.filter((i) => i.photo).filter((i) => used.has(i.file)).length >= 8, `photos used outside the gallery: ${used.size}`);
-});
-
-test('gallery page without a gallery widget gets one with every photo', async () => {
-  const { prepareDocument } = await import('../src/elementor/prepare.js');
-  const { analyzeDocument } = await import('../src/elementor/analyze.js');
-  const img = (n) => ({ id: `i${n}`, elType: 'widget', widgetType: 'image', settings: { image: { url: `https://demo.test/${n}.jpg`, id: n } }, elements: [] });
-  const doc = {
-    content: [
-      { id: 'sub', elType: 'container', settings: {}, elements: [{ id: 'h', elType: 'widget', widgetType: 'heading', settings: { title: 'Gallery' }, elements: [] }] },
-      { id: 'grid', elType: 'container', settings: {}, elements: [img(1), img(2)] },
-    ],
-  };
-  const { doc: prepared } = prepareDocument(structuredClone(doc), { role: 'gallery', ensureGallery: true });
-  assert.equal(prepared.content.length, 3);
-  assert.equal(prepared.content[1].elements[0].widgetType, 'image-gallery', 'added right after the subheader');
-  assert.equal(analyzeDocument(prepared).slots.filter((s) => s.kind === 'gallery').length, 1);
-  // Not on other pages, and not twice
-  assert.equal(prepareDocument(structuredClone(doc), { role: 'about', ensureGallery: true }).doc.content.length, 2);
-  assert.equal(prepareDocument(structuredClone(prepared), { role: 'gallery', ensureGallery: true }).doc.content.length, 3);
 });

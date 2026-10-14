@@ -58,7 +58,7 @@ export default function ProjectsPage() {
     <>
       <PageHeader
         title={t('Projects')}
-        description={t('Each project is one website: site data, services, images, template kit and generated content.')}
+        description={t('Each project is one website: site data, services, images, template and generated content.')}
         actions={
           <Button variant="primary" icon={Plus} onClick={create} loading={busy}>
             {t('New project')}
@@ -74,7 +74,7 @@ export default function ProjectsPage() {
         <EmptyState
           icon={FolderKanban}
           title={t('No projects yet')}
-          description={t('Create your first project, upload an Elementor kit and let the AI write the content.')}
+          description={t('Create your first project, choose or generate a template for its category and let the AI write the content.')}
           action={
             <Button variant="primary" icon={Plus} onClick={create} loading={busy}>
               {t('New project')}

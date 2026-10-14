@@ -4,7 +4,8 @@
  */
 import { LANGUAGES, stripHtml } from '../lib/util.js';
 import { exportNames, galleryPool } from '../lib/images.js';
-import { copyrightText } from './plan.js';
+import { contactForm, copyrightText } from './plan.js';
+import { describeSpec } from '../templates/spec.js';
 
 /** Variables available in user prompts (also shown in the UI). */
 export const PROMPT_VARIABLES = [
@@ -16,6 +17,7 @@ export const PROMPT_VARIABLES = [
   { name: 'copyright', alias: 'TESTO_COPYRIGHT', description: 'Copyright text (footer)' },
   { name: 'city', alias: 'CITTA', description: 'City / service area' },
   { name: 'industry', alias: 'SETTORE', description: 'Industry' },
+  { name: 'client_sector', alias: 'SETTORE_CLIENTE', description: 'Sector / type of client (industry, or the template category)' },
   { name: 'language', alias: 'LINGUA', description: 'Language' },
   { name: 'services', alias: 'SERVIZI', description: 'List of services (name + description)' },
   { name: 'service_1', alias: 'SERVIZIO_1', description: 'Service #1 (also _2, _3… and _N = one line per remaining service)' },
@@ -26,7 +28,12 @@ export const PROMPT_VARIABLES = [
   { name: 'hero_image', alias: 'IMG_HOME_HERO', description: 'Home hero image file name' },
   { name: 'subheader_image', alias: 'IMG_SUBHEADER', description: 'Subheader image file name' },
   { name: 'gallery_images', alias: 'ELENCO_IMMAGINI_GALLERIA', description: 'Gallery image file names' },
-  { name: 'kit_name', alias: 'NOME_FILE_TEMPLATE_KIT', description: 'Template Kit name' },
+  { name: 'all_images', alias: 'ELENCO_IMMAGINI', description: 'Shared image archive: every photo (logo excluded) with its ALT text' },
+  { name: 'other_images', alias: 'ALTRE_IMMAGINI', description: 'Photos without a specific use (not hero, subheader, service or logo)' },
+  { name: 'template_name', alias: 'NOME_TEMPLATE', description: 'Name of the template used by the site' },
+  { name: 'template_category', alias: 'CATEGORIA_TEMPLATE', description: 'Category of the template' },
+  { name: 'template_style', alias: 'STILE_TEMPLATE', description: 'Design of the template: colors, fonts, layouts, tone of voice' },
+  { name: 'form_plugin', alias: 'PLUGIN_MODULO', description: 'Contact form plugin (MetForm or Contact Form 7)' },
   { name: 'template_structure', alias: 'STRUTTURA_TEMPLATE', description: 'List of text fields to fill, extracted from the template' },
   { name: 'notes', alias: 'NOTE', description: 'Additional notes' },
   { name: 'page_title', alias: 'TITOLO_PAGINA', description: 'Title of the page being generated' },
@@ -92,7 +99,7 @@ export function expandIndexedLines(content, count) {
 }
 
 /**
- * All variables for a page. `ctx` (project context) enables image / kit variables.
+ * All variables for a page. `ctx` (project context) enables image / template variables.
  */
 export function buildVariables({ project, services, service, fields, pageTitle, ctx = null }) {
   const lang = project.language;
@@ -100,6 +107,8 @@ export function buildVariables({ project, services, service, fields, pageTitle, 
   const names = ctx ? exportNames(ctx.images, ctx.settings.image) : new Map();
   const imgName = (img) => (img ? `${names.get(img.id) || img.file_name}${img.alt_text ? ` (ALT: ${img.alt_text})` : ''}` : none);
   const byRole = (r) => ctx?.images.find((i) => i.role === r);
+  const imgList = (list) => list.map(imgName).join(', ') || none;
+  const photos = ctx ? galleryPool(ctx.images) : [];
   const address = String(project.address || '').replace(/\s*\n+\s*/g, ', ').trim();
 
   const vars = {
@@ -121,8 +130,14 @@ export function buildVariables({ project, services, service, fields, pageTitle, 
     logo: imgName(byRole('logo')),
     hero_image: imgName(byRole('hero_home')),
     subheader_image: imgName(byRole('subheader')),
-    gallery_images: ctx ? galleryPool(ctx.images).map((i) => names.get(i.id)).join(', ') || none : none,
-    kit_name: ctx?.kit?.name || '',
+    gallery_images: photos.map((i) => names.get(i.id)).join(', ') || none,
+    all_images: imgList(photos),
+    other_images: imgList(photos.filter((i) => !['hero_home', 'subheader', 'service'].includes(i.role))),
+    client_sector: project.industry || ctx?.template?.category.name || '(not specified)',
+    template_name: ctx?.template?.name || none,
+    template_category: ctx?.template?.category.name || none,
+    template_style: ctx?.template ? describeSpec(ctx.template.spec) : none,
+    form_plugin: ctx ? contactForm(ctx).name : 'MetForm',
   };
   services.forEach((s, i) => {
     vars[`service_${i + 1}`] = `${s.name}${s.description ? ` – ${s.description}` : ''}`;

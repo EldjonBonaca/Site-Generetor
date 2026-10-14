@@ -1,14 +1,17 @@
-/** The built-in site prompt (read-only) + preview with real project data. */
+/** The built-in prompts (read-only) + preview of the site prompt with real project data. */
 import { Router } from 'express';
 import { buildPagePrompt, estimateTokens } from '../generation/prompt-builder.js';
 import { loadContext, buildPages, siteLinks } from '../generation/plan.js';
 import { initPages } from '../generation/runner.js';
-import { SITE_PROMPT } from '../generation/site-prompt.js';
+import { SITE_PROMPT, TEMPLATE_PROMPT } from '../generation/site-prompt.js';
 
 const router = Router();
 
 /** The prompt used for every page of every site (it cannot be changed). */
 router.get('/prompts/site', (req, res) => res.json(SITE_PROMPT));
+
+/** The prompt used to generate the templates of a category (it cannot be changed). */
+router.get('/prompts/template', (req, res) => res.json(TEMPLATE_PROMPT));
 
 /**
  * Preview the final prompt of a project page: the site prompt with the variables replaced +
@@ -24,10 +27,10 @@ router.post('/prompts/preview', (req, res) => {
   let fields = [];
   let pages = [];
 
-  if (ctx?.kit) {
+  if (ctx?.template) {
     pages = initPages(ctx);
     page = pages.find((p) => p.key === b.pageKey) || pages[0];
-    fields = page ? page.fields.filter((f) => f.source !== 'auto') : [];
+    fields = page ? page.fields.filter((f) => f.source === 'ai') : [];
   }
   if (!project) {
     project = { site_name: 'Acme Plumbing', phone: '+44 20 7946 0958', email: 'info@acme.example', address: '1 High Street, London', city: 'London', industry: 'Plumber', language: 'en', notes: '' };
@@ -63,7 +66,7 @@ router.post('/prompts/preview', (req, res) => {
 });
 
 function buildPagesSummary(ctx, pages) {
-  if (!ctx?.kit) return [];
+  if (!ctx?.template) return [];
   return (pages.length ? pages : buildPages(ctx)).map((p) => ({ key: p.key, title: p.title, role: p.role }));
 }
 

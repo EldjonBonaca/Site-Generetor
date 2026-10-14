@@ -20,8 +20,10 @@ function addColumn(table, column, definition) {
   if (!exists) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 addColumn('projects', 'copyright', "TEXT NOT NULL DEFAULT ''");
-addColumn('kit_mappings', 'options_json', "TEXT NOT NULL DEFAULT '{}'");
+addColumn('projects', 'template_id', 'INTEGER REFERENCES site_templates(id) ON DELETE SET NULL'); // replaces kit_id
 addColumn('images', 'library_image_id', 'INTEGER'); // Gallery image it was copied from
+// Databases created before templates replaced the Template Kits keep the old `kits` / `kit_mappings`
+// tables and `projects.kit_id` (SQLite cannot drop a foreign-key column): they are no longer used.
 
 /** Strip the null prototype node:sqlite uses so objects serialize/spread normally. */
 const plain = (row) => (row ? { ...row } : row);

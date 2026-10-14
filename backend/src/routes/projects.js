@@ -78,12 +78,11 @@ router.patch('/projects/:id', (req, res) => {
     const s = req.body.settings;
     settings = {
       ...settings,
-      ...pick(s, ['subheaderPerPage', 'replaceAllEmails', 'replaceAllImages', 'mapEmbed', 'contactShortcode', 'menuName']),
+      ...pick(s, ['subheaderPerPage', 'mapEmbed', 'contactForm', 'menuName']),
       image: { ...(settings.image || {}), ...(s.image || {}) },
-      demoValues: { ...(settings.demoValues || {}), ...(s.demoValues || {}) },
       generation: { ...(settings.generation || {}), ...(s.generation || {}) },
     };
-    if (typeof settings.contactShortcode === 'string') settings.contactShortcode = settings.contactShortcode.slice(0, 500);
+    if (!['metform', 'cf7'].includes(settings.contactForm)) settings.contactForm = 'metform';
     if (typeof settings.menuName === 'string') settings.menuName = settings.menuName.slice(0, 100);
   }
 
@@ -102,8 +101,8 @@ router.post('/projects/:id/duplicate', (req, res) => {
   const src = requireProject(req.params.id);
   const newId = tx(() => {
     const { lastInsertRowid: id } = run(
-      `INSERT INTO projects (${PROJECT_FIELDS.join(', ')}, kit_id, settings_json)
-       SELECT ${PROJECT_FIELDS.map((f) => (f === 'site_name' ? "site_name || ' (copy)'" : f)).join(', ')}, kit_id, settings_json FROM projects WHERE id = ?`,
+      `INSERT INTO projects (${PROJECT_FIELDS.join(', ')}, template_id, settings_json)
+       SELECT ${PROJECT_FIELDS.map((f) => (f === 'site_name' ? "site_name || ' (copy)'" : f)).join(', ')}, template_id, settings_json FROM projects WHERE id = ?`,
       src.id
     );
     const serviceMap = new Map();
@@ -111,11 +110,6 @@ router.post('/projects/:id/duplicate', (req, res) => {
       const r = run('INSERT INTO services (project_id, name, description, slug, position) VALUES (?, ?, ?, ?, ?)', id, s.name, s.description, s.slug, s.position);
       serviceMap.set(s.id, Number(r.lastInsertRowid));
     }
-    run(
-      'INSERT INTO kit_mappings (project_id, kit_id, template_id, page_role, image_slots_json, options_json) SELECT ?, kit_id, template_id, page_role, image_slots_json, options_json FROM kit_mappings WHERE project_id = ?',
-      id,
-      src.id
-    );
     // Copy image files
     const destDir = path.join(config.imagesDir, String(id));
     fs.mkdirSync(destDir, { recursive: true });

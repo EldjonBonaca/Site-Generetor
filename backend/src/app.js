@@ -11,7 +11,7 @@ import { run } from './db/index.js';
 import { HttpError } from './lib/util.js';
 import projects from './routes/projects.js';
 import images from './routes/images.js';
-import kits from './routes/kits.js';
+import templates from './routes/templates.js';
 import providers from './routes/providers.js';
 import prompts from './routes/prompts.js';
 import generations from './routes/generations.js';
@@ -36,7 +36,7 @@ app.use('/api', (req, res, next) => {
 });
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
-for (const r of [projects, images, library, kits, providers, prompts, generations]) app.use('/api', r);
+for (const r of [projects, images, library, templates, providers, prompts, generations]) app.use('/api', r);
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
 // Serve the built frontend if present

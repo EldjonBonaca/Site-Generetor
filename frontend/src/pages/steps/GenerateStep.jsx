@@ -134,7 +134,7 @@ function PlanCard({ plan, project, onStart, starting, onCancel }) {
   return (
     <Card
       title={t('Generation plan')}
-      description={t('Pages that will be generated from the kit mapping, with the estimated token usage.')}
+      description={t('Pages that will be generated from the template, with the estimated token usage.')}
       actions={
         <>
           {onCancel && <Button onClick={onCancel}>{t('Back to results')}</Button>}
@@ -145,7 +145,7 @@ function PlanCard({ plan, project, onStart, starting, onCancel }) {
       }
     >
       <StepIssues project={{ readiness: plan.readiness }} step="site" t={t} />
-      {['services', 'images', 'kit', 'ai', 'download'].map((s) => (
+      {['services', 'images', 'template', 'ai', 'download'].map((s) => (
         <StepIssues key={s} project={{ readiness: plan.readiness }} step={s} t={t} />
       ))}
       {ready && !plan.readiness.items.length && <Alert kind="success" className="mb-5">{t('Everything is ready.')}</Alert>}
@@ -156,7 +156,7 @@ function PlanCard({ plan, project, onStart, starting, onCancel }) {
               <tr>
                 <th className="px-3 py-2 font-medium">{t('Page')}</th>
                 <th className="px-3 py-2 font-medium">{t('AI fields')}</th>
-                <th className="px-3 py-2 font-medium">{t('Auto (contacts)')}</th>
+                <th className="px-3 py-2 font-medium">{t('Fixed by the template')}</th>
                 <th className="px-3 py-2 font-medium">{t('Images')}</th>
                 <th className="px-3 py-2 font-medium">{t('Prompt')}</th>
                 <th className="px-3 py-2 text-right font-medium">{t('Est. tokens')}</th>
@@ -188,7 +188,7 @@ function PlanCard({ plan, project, onStart, starting, onCancel }) {
         </div>
       )}
       <p className="mt-3 text-xs text-slate-500">{t('Estimates are approximate (≈ 4 characters per token). Retries for invalid answers can increase usage.')}</p>
-      {!project.services.length && <p className="mt-1 text-xs text-slate-500">{t('Tip: add services to get one page per service.')}</p>}
+      {!project.services.length && <p className="mt-1 text-xs text-slate-500">{t('Tip: add services to get one article per service.')}</p>}
     </Card>
   );
 }
@@ -295,7 +295,7 @@ function PagesPreview({ gen, setGen, onReload }) {
   );
 }
 
-const SOURCE_BADGE = { ai: ['blue', 'AI'], auto: ['purple', 'Auto'], manual: ['green', 'Edited'], original: ['yellow', 'Original'] };
+const SOURCE_BADGE = { ai: ['blue', 'AI'], auto: ['purple', 'Template'], manual: ['green', 'Edited'], original: ['yellow', 'Original'], shared: ['gray', 'Shared'] };
 
 function PageEditor({ gen, page, locked, onPageChange }) {
   const { t } = useT();
@@ -355,7 +355,7 @@ function PageEditor({ gen, page, locked, onPageChange }) {
       <div className="flex items-center justify-between">
         <label className="flex items-center gap-2 text-xs text-slate-600">
           <input type="checkbox" checked={showOriginal} onChange={(e) => setShowOriginal(e.target.checked)} className="accent-brand-600" />
-          {t('Show original demo text')}
+          {t('Show the sample text of the template')}
         </label>
         <SaveStatus status={status} t={t} />
       </div>
@@ -389,6 +389,7 @@ function PageEditor({ gen, page, locked, onPageChange }) {
       )}
 
       {page.fields.map((f) => {
+        if (f.source === 'shared') return <SharedField key={f.id} field={f} pages={gen.pages} />;
         const value = values[f.id] ?? '';
         const plainLen = value.replace(/<[^>]+>/g, '').length;
         const [color, label] = SOURCE_BADGE[f.source] || ['gray', f.source];
@@ -438,6 +439,23 @@ function PageEditor({ gen, page, locked, onPageChange }) {
           <CircleAlert className="size-4" /> {t('This template has no text fields.')}
         </p>
       )}
+    </div>
+  );
+}
+
+/** A text shared with another page (the reviews of About are the ones of Home): read-only here. */
+function SharedField({ field, pages }) {
+  const { t } = useT();
+  const ownerPage = pages.find((p) => p.key === field.sharedFrom.page);
+  const value = ownerPage?.fields.find((f) => f.id === field.sharedFrom.field)?.value || '';
+  return (
+    <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-3">
+      <div className="mb-1.5 flex flex-wrap items-center gap-2">
+        <code className="text-xs text-slate-500">{field.id}</code>
+        <Badge>{t('Shared')}</Badge>
+        <span className="text-xs text-slate-400">{t('Same text as on the page "{page}": edit it there.', { page: ownerPage?.title || field.sharedFrom.page })}</span>
+      </div>
+      <p className="text-sm whitespace-pre-wrap text-slate-600">{value.replace(/<[^>]+>/g, ' ') || '—'}</p>
     </div>
   );
 }

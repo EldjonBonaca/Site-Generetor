@@ -10,11 +10,13 @@
  * License: GPL-2.0-or-later
  *
  * Generated file. On activation it opens Tools → {{MENU_TITLE}}, which creates the website:
- *  1. setup: Hello Elementor theme (only replacing a block theme), Contact Form 7 and, without
- *     Elementor Pro, Ultimate Addons for Elementor to display the header and footer;
+ *  1. setup: Hello Elementor theme (replacing a block theme, or any theme without Elementor Pro) and
+ *     the contact form plugin (MetForm or Contact Form 7); no other addon (no UAE);
  *  2. images (Media Library), a few per request;
  *  3. the 5 pages (Home, About, Services, Gallery, Contact) built with Elementor, one article per
- *     service, the menu, header/footer/single post templates and the kit colors.
+ *     service, the menu, the contact form, header/footer/single post templates and the template colors.
+ * Header and footer: Elementor Pro Theme Builder templates; without Pro this plugin displays them
+ * on every page (Hello Elementor hooks), so it must stay active.
  * Running it again updates what it created (tracked in the option OPTION).
  */
 
@@ -28,8 +30,10 @@ const OPTION = 'esg_site_{{HASH}}';
 const PAGE = 'esg-site-{{HASH}}';
 const SCHEME = 'esg-image://';
 const IMAGES_PER_REQUEST = 3;
-// Free plugin that displays the Elementor header/footer on every page when Elementor Pro is not active
-const UAE = array('slug' => 'header-footer-elementor', 'file' => 'header-footer-elementor/header-footer-elementor.php', 'name' => 'Ultimate Addons for Elementor');
+// Header / footer template ids displayed by this plugin when Elementor Pro is not active
+const OPTION_HF = 'esg_site_{{HASH}}_hf';
+// Contact form plugins (installed from wordpress.org)
+const METFORM = array('slug' => 'metform', 'file' => 'metform/metform.php', 'name' => 'MetForm');
 const CF7 = array('slug' => 'contact-form-7', 'file' => 'contact-form-7/wp-contact-form-7.php', 'name' => 'Contact Form 7');
 
 register_activation_hook(__FILE__, __NAMESPACE__ . '\\activate');
@@ -38,6 +42,11 @@ add_action('admin_init', __NAMESPACE__ . '\\redirect_after_activation');
 add_action('admin_menu', __NAMESPACE__ . '\\admin_menu');
 add_action('wp_ajax_' . PAGE, __NAMESPACE__ . '\\ajax_step');
 add_filter('plugin_action_links_' . plugin_basename(__FILE__), __NAMESPACE__ . '\\action_links');
+// Without Elementor Pro: header and footer of the site on every page (Hello Elementor theme)
+add_filter('hello_elementor_header_footer', __NAMESPACE__ . '\\theme_header_footer');
+add_action('wp_body_open', __NAMESPACE__ . '\\render_header', 5);
+add_action('get_footer', __NAMESPACE__ . '\\render_footer', 5);
+add_action('wp_enqueue_scripts', __NAMESPACE__ . '\\enqueue_header_footer');
 
 // ---------------------------------------------------------------------------- data + state
 
@@ -64,7 +73,7 @@ function t($key, array $vars = array()) {
 /** IDs of everything this plugin created, so a new run updates instead of duplicating. */
 function state() {
 	$state = get_option(OPTION, array());
-	$defaults = array('images' => array(), 'pages' => array(), 'posts' => array(), 'templates' => array(), 'hf' => array(), 'menu_items' => array(), 'cf7' => 0, 'done_at' => 0);
+	$defaults = array('images' => array(), 'pages' => array(), 'posts' => array(), 'templates' => array(), 'menu_items' => array(), 'form' => null, 'done_at' => 0);
 	return is_array($state) ? array_merge($defaults, $state) : $defaults;
 }
 
@@ -88,6 +97,7 @@ function activate() {
 
 function uninstall() {
 	delete_option(OPTION);
+	delete_option(OPTION_HF);
 }
 
 /** Right after activation open the plugin page, which starts creating the site. */
@@ -151,7 +161,7 @@ function render_page() {
 			</tbody>
 		</table>
 		<?php if (!defined('ELEMENTOR_PRO_VERSION') && has_header_footer()) : ?>
-			<div class="notice notice-info inline"><p><?php echo esc_html(t('uaeNotice')); ?></p></div>
+			<div class="notice notice-info inline"><p><?php echo esc_html(t('hfNotice')); ?></p></div>
 		<?php endif; ?>
 		<p>
 			<button type="button" id="esg-run" class="button button-primary button-hero"><?php echo esc_html($done ? t('rerun') : t('run')); ?></button>
@@ -303,12 +313,6 @@ function has_header_footer() {
 	});
 }
 
-/** Header/footer shown by Ultimate Addons for Elementor (free) instead of the Elementor Pro Theme Builder. */
-function use_uae() {
-	require_once ABSPATH . 'wp-admin/includes/plugin.php';
-	return !defined('ELEMENTOR_PRO_VERSION') && is_plugin_active(UAE['file']) && post_type_exists('elementor-hf');
-}
-
 function load_upgrader() {
 	require_once ABSPATH . 'wp-admin/includes/plugin.php';
 	require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -352,12 +356,17 @@ function ensure_plugin(array $plugin, array &$messages) {
 }
 
 /**
- * Block themes (e.g. Twenty Twenty-Five) do not show Elementor headers/footers on
- * "Elementor Full Width" pages: switch to Hello Elementor, the theme the kits are made for.
- * Classic themes the user chose are kept.
+ * The templates are made for Hello Elementor. Block themes (e.g. Twenty Twenty-Five) do not show
+ * Elementor headers/footers, and without Elementor Pro this plugin displays them through the Hello
+ * Elementor hooks: in those cases the theme is switched (installed from wordpress.org if needed).
+ * With Elementor Pro a classic theme chosen by the user is kept.
  */
 function ensure_theme(array &$messages) {
-	if (!function_exists('wp_is_block_theme') || !wp_is_block_theme()) {
+	if (get_template() === 'hello-elementor') {
+		return;
+	}
+	$block = function_exists('wp_is_block_theme') && wp_is_block_theme();
+	if (!$block && (defined('ELEMENTOR_PRO_VERSION') || !has_header_footer())) {
 		return;
 	}
 	if (!wp_get_theme('hello-elementor')->exists()) {
@@ -377,15 +386,13 @@ function ensure_theme(array &$messages) {
 	$messages[] = array('level' => 'info', 'text' => t('themeSwitched'));
 }
 
-/** First step: theme + free plugins the site needs (Ultimate Addons for Elementor without Pro, Contact Form 7). */
+/** First step: the theme and the contact form plugin (MetForm or Contact Form 7). No other addon. */
 function setup_dependencies() {
 	$messages = array();
 	ensure_theme($messages);
-	if (!defined('ELEMENTOR_PRO_VERSION') && has_header_footer()) {
-		ensure_plugin(UAE, $messages);
-	}
-	if (!empty(data()['contactForm'])) {
-		ensure_plugin(CF7, $messages);
+	$form = data()['contactForm'];
+	if (!empty($form)) {
+		ensure_plugin($form['plugin'] === 'cf7' ? CF7 : METFORM, $messages);
 	}
 	return array('done' => true, 'messages' => $messages);
 }
@@ -519,9 +526,6 @@ function prepare_elementor($node, array $r) {
 		$node['id'] = $img['id'];
 	}
 	if (isset($node['widgetType'], $node['settings']) && is_array($node['settings'])) {
-		if (!empty($r['free'])) {
-			$node = free_widget($node);
-		}
 		if (preg_match('/nav-menu|mega-menu|navigation-menu/', $node['widgetType'])) {
 			$node['settings']['menu'] = $r['menu'];
 		}
@@ -529,33 +533,6 @@ function prepare_elementor($node, array $r) {
 	$is_link = isset($node['url']) && (array_key_exists('is_external', $node) || array_key_exists('nofollow', $node));
 	foreach ($node as $key => $value) {
 		$node[$key] = ($key === 'url' && $is_link) ? absolute_url($value) : prepare_elementor($value, $r);
-	}
-	return $node;
-}
-
-/**
- * Without Elementor Pro its widgets render nothing: the header/footer ones become the free
- * Ultimate Addons for Elementor widgets. Menu colors/spacing use the same setting names in both.
- */
-function free_widget(array $node) {
-	$s = $node['settings'];
-	switch ($node['widgetType']) {
-		case 'nav-menu':
-		case 'mega-menu':
-			$align = isset($s['align_items']) ? $s['align_items'] : 'right';
-			$node['widgetType'] = 'navigation-menu';
-			$node['settings'] = array_merge($s, array(
-				'layout' => (isset($s['layout']) && $s['layout'] === 'vertical') ? 'vertical' : ((isset($s['layout']) && $s['layout'] === 'dropdown') ? 'expandible' : 'horizontal'),
-				'navmenu_align' => strtr($align, array('start' => 'left', 'end' => 'right', 'stretch' => 'justify')),
-				'dropdown' => 'tablet',
-			));
-			break;
-		case 'theme-site-logo':
-			$node['widgetType'] = 'site-logo'; // shows the site logo set by this plugin
-			break;
-		case 'theme-site-title':
-			$node['widgetType'] = 'site-title';
-			break;
 	}
 	return $node;
 }
@@ -628,17 +605,42 @@ function category_id(array $category) {
 	return (int) (is_array($term) ? $term['term_id'] : $term);
 }
 
-/** Contact Form 7 form (created once) and its shortcode; null when CF7 is not active. */
+/**
+ * The contact form (created once, MetForm or Contact Form 7, mail sent to the site email) and its
+ * shortcode; null when the form plugin is not active.
+ */
 function contact_form(array &$state, array &$messages) {
 	$cf = data()['contactForm'];
 	if (!$cf) {
 		return null;
 	}
+	if (!$state['form'] && !empty($state['cf7'])) {
+		$state['form'] = array('plugin' => 'cf7', 'id' => (int) $state['cf7']); // created by an earlier version of the plugin
+	}
+	$known = (is_array($state['form']) && $state['form']['plugin'] === $cf['plugin']) ? (int) $state['form']['id'] : 0;
+	$created = function ($id) use (&$state, &$messages, $cf) {
+		$state['form'] = array('plugin' => $cf['plugin'], 'id' => (int) $id);
+		save_state($state);
+		$messages[] = array('level' => 'info', 'text' => t('formCreated', array('title' => $cf['title'], 'plugin' => $cf['name'], 'email' => $cf['recipient'])));
+	};
+
+	if ($cf['plugin'] === 'metform') {
+		if (!post_type_exists('metform-form')) {
+			$messages[] = array('level' => 'warning', 'text' => t('noForm', array('plugin' => $cf['name'])));
+			return null;
+		}
+		$id = ($known && get_post($known)) ? $known : create_metform($cf);
+		if ($id !== $known) {
+			$created($id);
+		}
+		return '[metform form_id="' . $id . '"]';
+	}
+
 	if (!class_exists('WPCF7_ContactForm')) {
-		$messages[] = array('level' => 'warning', 'text' => t('noCf7'));
+		$messages[] = array('level' => 'warning', 'text' => t('noForm', array('plugin' => $cf['name'])));
 		return null;
 	}
-	$form = $state['cf7'] ? \WPCF7_ContactForm::get_instance($state['cf7']) : null;
+	$form = $known ? \WPCF7_ContactForm::get_instance($known) : null;
 	if (!$form) {
 		$form = \WPCF7_ContactForm::get_template(array('title' => $cf['title']));
 		if (!empty($cf['recipient'])) {
@@ -647,11 +649,33 @@ function contact_form(array &$state, array &$messages) {
 			$form->set_properties($props);
 		}
 		$form->save();
-		$state['cf7'] = (int) $form->id();
-		save_state($state);
-		$messages[] = array('level' => 'info', 'text' => t('cf7Created', array('title' => $cf['title'])));
+		$created($form->id());
 	}
 	return method_exists($form, 'shortcode') ? $form->shortcode() : sprintf('[contact-form-7 id="%d" title="%s"]', $form->id(), esc_attr($form->title()));
+}
+
+/** MetForm form: its fields are MetForm Elementor widgets, its settings send every message to the site email. */
+function create_metform(array $cf) {
+	$id = wp_insert_post(wp_slash(array('post_type' => 'metform-form', 'post_status' => 'publish', 'post_title' => $cf['title'])), true);
+	if (is_wp_error($id)) {
+		throw new \RuntimeException($id->get_error_message());
+	}
+	update_post_meta($id, '_wp_page_template', 'elementor_canvas');
+	update_post_meta($id, '_elementor_edit_mode', 'builder');
+	update_post_meta($id, '_elementor_template_type', 'wp-post');
+	update_post_meta($id, '_elementor_version', defined('ELEMENTOR_VERSION') ? ELEMENTOR_VERSION : '3.0.0');
+	update_post_meta($id, '_elementor_data', wp_slash(wp_json_encode($cf['elementor'])));
+	update_post_meta($id, 'metform_form__form_setting', array(
+		'form_title' => $cf['title'],
+		'success_message' => $cf['success'],
+		'store_entries' => 1,
+		'enable_admin_notification' => 1,
+		'admin_email_to' => $cf['recipient'],
+		'admin_email_subject' => $cf['subject'],
+		'admin_email_from' => get_option('admin_email'),
+		'admin_email_reply_to' => $cf['recipient'],
+	));
+	return (int) $id;
 }
 
 function site_menu(array $menu) {
@@ -719,7 +743,6 @@ function import_content() {
 	$r = array(
 		'images' => $images,
 		'menu' => $menu->slug,
-		'free' => use_uae(),
 		'strings' => ($shortcode && !empty($data['contactForm']['placeholder'])) ? array($data['contactForm']['placeholder'] => $shortcode) : array(),
 	);
 
@@ -773,48 +796,42 @@ function import_content() {
 
 	fill_menu($state, $menu, array_values($page_ids));
 
-	// Header, footer and single post: Elementor Pro theme templates, or (without Pro) header and
-	// footer shown on the whole site by Ultimate Addons for Elementor
+	// Header, footer and single post: Elementor Pro theme templates. Without Pro the theme document
+	// types do not exist: the templates are saved as sections and this plugin displays header and footer.
 	$pro = defined('ELEMENTOR_PRO_VERSION');
-	$uae = use_uae();
+	$hf = array();
 	foreach ($data['templates'] as $tpl) {
 		$doc = element_doc($tpl['elementor']);
 		if (!$doc) {
 			continue;
 		}
-		if ($uae && $tpl['role'] !== 'single_post') {
-			$id = upsert_post($state, 'hf', $tpl['key'], array(
-				'post_type' => 'elementor-hf',
-				'post_status' => 'publish',
-				'post_title' => $tpl['title'],
-				'post_name' => sanitize_title($data['site']['name'] . ' ' . $tpl['title']),
-			));
-			set_elementor($id, $doc, 'wp-post', $r);
-			update_post_meta($id, 'ehf_template_type', $tpl['role'] === 'header' ? 'type_header' : 'type_footer');
-			update_post_meta($id, 'ehf_target_include_locations', array('rule' => array('basic-global'), 'specific' => array()));
-			update_post_meta($id, 'ehf_target_exclude_locations', array());
-			update_post_meta($id, 'ehf_target_user_roles', array('all'));
-			continue;
-		}
+		$type = $pro ? $tpl['type'] : 'section';
 		$id = upsert_post($state, 'templates', $tpl['key'], array(
 			'post_type' => 'elementor_library',
 			'post_status' => 'publish',
 			'post_title' => $tpl['title'],
 			'post_name' => sanitize_title($data['site']['name'] . ' ' . $tpl['title']),
 		));
-		set_elementor($id, $doc, $tpl['type'], $r);
-		wp_set_object_terms($id, $tpl['type'], 'elementor_library_type');
+		set_elementor($id, $doc, $type, $r);
+		wp_set_object_terms($id, $type, 'elementor_library_type');
 		if ($pro) {
 			$condition = $tpl['role'] === 'single_post' ? 'include/singular/in_category/' . $category : 'include/general';
 			update_post_meta($id, '_elementor_conditions', array($condition));
+		} elseif (in_array($tpl['role'], array('header', 'footer'), true)) {
+			$hf[$tpl['role']] = $id;
 		}
 	}
-	if ($pro && $data['templates']) {
-		regenerate_theme_conditions($messages);
-	} elseif ($uae) {
-		$messages[] = array('level' => 'info', 'text' => t('uaeReady'));
-	} elseif (has_header_footer()) {
-		$messages[] = array('level' => 'warning', 'text' => t('noPro'));
+	if ($pro) {
+		delete_option(OPTION_HF);
+		if ($data['templates']) {
+			regenerate_theme_conditions($messages);
+		}
+	} elseif ($hf) {
+		update_option(OPTION_HF, $hf, true);
+		$messages[] = array('level' => 'info', 'text' => t('hfReady'));
+		if (get_template() !== 'hello-elementor') {
+			$messages[] = array('level' => 'warning', 'text' => t('hfTheme'));
+		}
 	}
 
 	apply_global_styles($data['globalStyles'], $messages);
@@ -845,6 +862,54 @@ function import_content() {
 	return array('done' => true, 'messages' => $messages);
 }
 
+// ---------------------------------------------------------------------------- header + footer without Elementor Pro
+
+/** Header / footer template ids to display (only on the front end, only without Elementor Pro). */
+function header_footer() {
+	if (is_admin() || defined('ELEMENTOR_PRO_VERSION') || !did_action('elementor/loaded') || (did_action('wp') && is_singular('elementor_library'))) {
+		return array();
+	}
+	$ids = get_option(OPTION_HF, array());
+	return is_array($ids) ? array_filter(array_map('intval', $ids)) : array();
+}
+
+/** Hello Elementor: hide the theme header/footer when the site ones are displayed. */
+function theme_header_footer($show) {
+	return header_footer() ? false : $show;
+}
+
+function render_part($role) {
+	static $printed = array();
+	$ids = header_footer();
+	if (empty($ids[$role]) || isset($printed[$role]) || get_post_status($ids[$role]) !== 'publish') {
+		return;
+	}
+	$printed[$role] = true;
+	echo \Elementor\Plugin::instance()->frontend->get_builder_content_for_display($ids[$role], true); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Elementor markup
+}
+
+function render_header() {
+	render_part('header');
+}
+
+function render_footer() {
+	render_part('footer');
+}
+
+/** Styles of the header/footer, also on pages not built with Elementor (e.g. the service articles). */
+function enqueue_header_footer() {
+	$ids = header_footer();
+	if (!$ids) {
+		return;
+	}
+	\Elementor\Plugin::instance()->frontend->enqueue_styles();
+	if (class_exists('\Elementor\Core\Files\CSS\Post')) {
+		foreach ($ids as $id) {
+			\Elementor\Core\Files\CSS\Post::create($id)->enqueue();
+		}
+	}
+}
+
 /** Elementor Pro caches the display conditions of theme templates: rebuild that cache. */
 function regenerate_theme_conditions(array &$messages) {
 	try {
@@ -861,7 +926,7 @@ function regenerate_theme_conditions(array &$messages) {
 	$messages[] = array('level' => 'warning', 'text' => t('conditions'));
 }
 
-/** Colors, fonts and other global settings of the template kit -> the active Elementor kit. */
+/** Colors and fonts of the template -> the global colors / fonts of the active Elementor kit. */
 function apply_global_styles($styles, array &$messages) {
 	$kit_id = (int) get_option('elementor_active_kit');
 	if (!$styles || !$kit_id || !get_post($kit_id)) {

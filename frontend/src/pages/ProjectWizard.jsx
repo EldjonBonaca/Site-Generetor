@@ -12,7 +12,7 @@ import { Badge, Button, Spinner, cx } from '../components/ui.jsx';
 import SiteDataStep from './steps/SiteDataStep.jsx';
 import ServicesStep from './steps/ServicesStep.jsx';
 import ImagesStep from './steps/ImagesStep.jsx';
-import KitStep from './steps/KitStep.jsx';
+import TemplateStep from './steps/TemplateStep.jsx';
 import AiStep from './steps/AiStep.jsx';
 import GenerateStep from './steps/GenerateStep.jsx';
 import DownloadStep from './steps/DownloadStep.jsx';
@@ -21,7 +21,7 @@ export const STEPS = [
   { path: 'site', key: 'site', label: 'Site data', Component: SiteDataStep },
   { path: 'services', key: 'services', label: 'Services', Component: ServicesStep },
   { path: 'images', key: 'images', label: 'Images', Component: ImagesStep },
-  { path: 'kit', key: 'kit', label: 'Template Kit', Component: KitStep },
+  { path: 'template', key: 'template', label: 'Template', Component: TemplateStep },
   { path: 'ai', key: 'ai', label: 'AI', Component: AiStep },
   { path: 'generate', key: 'generate', label: 'Generate & Preview', Component: GenerateStep },
   { path: 'download', key: 'download', label: 'Download', Component: DownloadStep },
