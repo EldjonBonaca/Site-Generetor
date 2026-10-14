@@ -56,6 +56,31 @@ function demoTemplate(context, prompt) {
   };
 }
 
+/** Industry analysis of a category (demo): generic but complete, with optional sections and suitable directions. */
+function demoProfile(context) {
+  const category = context.category || 'demo';
+  const h = [...category].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 7);
+  const directions = ['industrial', 'corporate', 'minimal', 'editorial', 'friendly', 'bold', 'premium', 'natural', 'technical'];
+  const start = h % directions.length;
+  return {
+    business: `Attività del settore "${category}" (analisi scritta dal provider demo offline).`,
+    audience: 'Privati e aziende della zona che cercano professionisti affidabili, con prezzi chiari e tempi certi.',
+    services: ['Consulenza', 'Preventivi', 'Interventi su misura', 'Assistenza'],
+    conventions: [
+      'Hero con una foto reale dei lavori e una call to action per il preventivo',
+      'Galleria dei lavori realizzati in evidenza',
+      'Elementi di fiducia ben visibili: anni di esperienza, garanzie, recensioni',
+      'Numero di telefono sempre raggiungibile',
+    ],
+    trust: ['Anni di esperienza', 'Garanzia sui lavori', 'Preventivo gratuito', 'Recensioni dei clienti'],
+    palette: 'Colori solidi e rassicuranti; evitare toni troppo vivaci.',
+    imagery: 'Foto reali di lavori, persone al lavoro e dettagli dei materiali.',
+    tone: 'professionale e diretto',
+    sections: ['highlights', 'about', 'stats', 'features', 'cta', 'services', 'process', 'gallery', 'reviews', 'faq'],
+    directions: Array.from({ length: 5 }, (_, i) => directions[(start + i) % directions.length]),
+  };
+}
+
 export default class MockProvider extends AIProvider {
   static type = 'mock';
   static label = 'Demo (offline mock)';
@@ -66,6 +91,10 @@ export default class MockProvider extends AIProvider {
   async generate(prompt, options = {}) {
     await new Promise((r) => setTimeout(r, 250));
     if (!options.json) return { text: 'OK', usage: { inputTokens: 5, outputTokens: 1 } };
+    if (options.task === 'industry') {
+      const text = JSON.stringify(demoProfile(options.context || {}));
+      return { text, usage: { inputTokens: Math.round(prompt.length / 4), outputTokens: Math.round(text.length / 4) } };
+    }
     if (options.task === 'template') {
       const text = JSON.stringify(demoTemplate(options.context || {}, prompt));
       return { text, usage: { inputTokens: Math.round(prompt.length / 4), outputTokens: Math.round(text.length / 4) } };

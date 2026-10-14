@@ -147,7 +147,7 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
 
   const cat = await api('POST', '/template-categories', { name: 'Idraulici' });
   const draft = await api('POST', `/template-categories/${cat.id}/templates/generate`, { providerId: provider.id, language: 'en' });
-  const spec = { ...draft.spec, layout: { ...draft.spec.layout, hero: 'center', cta: 'banner', contact: 'split', header: 'classic' } };
+  const spec = { ...draft.spec, sections: ['about', 'features', 'cta', 'services', 'gallery', 'reviews'], layout: { ...draft.spec.layout, hero: 'center', cta: 'banner', contact: 'split', header: 'classic' } };
   const tpl = await api('POST', `/template-categories/${cat.id}/templates`, { name: 'Plumber blue', spec });
   await assert.rejects(api('PUT', `/projects/${pid}/template`, { template_id: 9999 }), /404/);
   await api('PUT', `/projects/${pid}/template`, { template_id: tpl.id });
@@ -203,7 +203,7 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
 
   // 6. Manual edit + single field regeneration (shared texts are edited on their first page)
   const titleField = home.fields.find((f) => f.id === 'home.hero.heading2.title');
-  await api('PATCH', `/generations/${gen.id}/pages/home`, { fields: { [titleField.id]: 'Idraulico a Roma 24/7', 'home.s6.testimonial1.testimonial_name': 'Anna Neri' } });
+  await api('PATCH', `/generations/${gen.id}/pages/home`, { fields: { [titleField.id]: 'Idraulico a Roma 24/7', 'home.s7.testimonial1.testimonial_name': 'Anna Neri' } });
   await api('PATCH', `/generations/${gen.id}/pages/about`, { fields: { [shared[0].id]: 'ignored' } });
   const regen = await api('POST', `/generations/${gen.id}/pages/about/fields/regenerate`, { fieldId: 'about.s2.heading1.title' });
   assert.ok(regen.fields.find((f) => f.id === 'about.s2.heading1.title').value);
@@ -228,7 +228,10 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.match(instructions, /template \*\*Plumber blue\*\* \(category \*Idraulici\*\)/);
   assert.match(instructions, /\*\*MetForm\*\*/);
   assert.match(instructions, /Ultimate Addons for Elementor \(UAE\) and other addons are not needed/);
-  assert.equal(names.filter((n) => n.startsWith(root + 'images/') && n.endsWith('.webp')).length, 8, '6 images + hero and subheader crops');
+  const webp = names.filter((n) => n.startsWith(root + 'images/') && n.endsWith('.webp'));
+  assert.equal(webp.filter((n) => !/-(hero|subheader|carousel)\.webp$/.test(n)).length, 6, '6 images');
+  assert.equal(webp.filter((n) => /-(hero|subheader)\.webp$/.test(n)).length, 2, 'hero and subheader crops');
+  assert.ok(webp.some((n) => /-carousel\.webp$/.test(n)), 'photos of the Home carousel cropped to the same size');
   for (const [file, width, height] of [['plumber-roma-home-hero.webp', 1920, 1080], ['plumber-roma-banner-subheader.webp', 1920, 600]]) {
     const meta = await sharp(zip.readFile(root + 'images/' + file)).metadata();
     assert.deepEqual([meta.width, meta.height], [width, height], file);
@@ -294,9 +297,23 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
     ['Bagni su misura', 'bagni-su-misura', 'plumber-roma-bagni-su-misura.webp'],
   ]);
   assert.ok(site.posts.every((x) => x.content.length > 100 && x.seo));
-  assert.equal(site.images.length, 8);
+  assert.equal(site.images.length, 13, '6 images + hero / subheader crops + 5 carousel crops');
   assert.equal(site.images.filter((i) => i.photo).length, 5, 'every image except the logo is a gallery photo');
-  assert.equal(site.logo, site.images.find((i) => !i.photo && !/-(hero|subheader)\./.test(i.file)).file);
+  assert.equal(site.logo, site.images.find((i) => !i.photo && !/-(hero|subheader|carousel)\./.test(i.file)).file);
+  // Each article is designed: hero with its featured image, its content, the OTHER services in the sidebar, no comments
+  for (const post of site.posts) {
+    const doc = JSON.parse(plugin.readAsText(pr + 'data/' + post.elementor));
+    const json = JSON.stringify(doc);
+    assert.ok(json.includes(`"url":"esg-image://${post.image}"`), `${post.title}: featured image in the hero`);
+    assert.ok(json.includes(`"title":"${post.title}"`), `${post.title}: title`);
+    assert.doesNotMatch(json, /theme-post-|__dynamic__/, 'no Elementor Pro widget or dynamic tag');
+    const other = site.posts.find((x) => x !== post);
+    assert.ok(json.includes(`"text":"${other.title}"`) && !json.includes(`"text":"${post.title}"`), `${post.title}: other services only`);
+    assert.doesNotMatch(json, /post-comments|comments/i);
+  }
+  const pluginPhp = plugin.readAsText(plugin.getEntries().find((e) => e.entryName.endsWith('.php')).entryName);
+  assert.match(pluginPhp, /add_filter\('comments_open'/, 'comments closed by the plugin');
+  assert.match(pluginPhp, /'comment_status' => 'closed'/);
   for (const img of site.images) assert.ok(plugin.getEntry(pr + 'images/' + img.file), `bundled ${img.file}`);
   assert.deepEqual(site.templates.map((x) => [x.role, x.type]), [['header', 'header'], ['footer', 'footer'], ['single_post', 'single-post']]);
   assert.equal(site.headerFooter, true);

@@ -49,7 +49,8 @@ export function contactForm(ctx) {
 }
 
 /** Exact size (px) of the Home hero and of the page subheader images: they are cropped to it. */
-export const DEFAULT_CROP_SIZES = { hero: { width: 1920, height: 1080 }, subheader: { width: 1920, height: 600 } };
+// carousel: the photos of the Home carousel, all of the same size so the slides line up
+export const DEFAULT_CROP_SIZES = { hero: { width: 1920, height: 1080 }, subheader: { width: 1920, height: 600 }, carousel: { width: 900, height: 640 } };
 
 export function defaultSettings(settings = {}) {
   return {

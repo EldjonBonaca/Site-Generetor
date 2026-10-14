@@ -13,8 +13,9 @@ import { extractJson } from '../ai/json.js';
 import { AIError } from '../ai/AIProvider.js';
 import { estimateTokens, languageName } from '../generation/prompt-builder.js';
 import { TEMPLATE_PROMPT } from '../generation/site-prompt.js';
-import { COLOR_KEYS, COPY_KEYS, ICONS, sanitizeSpec, similarColor } from './spec.js';
+import { COLOR_KEYS, COPY_KEYS, ICONS, SECTION_NAMES_IT, sanitizeSpec, similarColor } from './spec.js';
 import { applyPlan, designPlan, pickDirection } from './directions.js';
+import { describeProfile } from './industry.js';
 
 const RETRIES = 2;
 
@@ -34,7 +35,7 @@ const LOOK_LABELS = {
 };
 
 /** Design direction block: what the generator decided and what the AI must avoid. */
-function directionInstructions(category, direction, plan, existing, avoidColors) {
+function directionInstructions(category, direction, plan, existing, avoidColors, profile) {
   const st = plan.style;
   const look = Object.entries(LOOK_LABELS)
     .map(([k, label]) => `${label} "${st[k]}"`)
@@ -51,12 +52,20 @@ function directionInstructions(category, direction, plan, existing, avoidColors)
   const colors = taken.length
     ? `\nPrimary colors already taken in this category: ${taken.join(', ')}. Choose a "primary" of a clearly different color family (hue at least 40° away, or a neutral if they are all colorful), and a "secondary" that is different too — while staying credible for "${category.name}".`
     : '';
-  return `
+  const industry = profile
+    ? `
+
+=== INDUSTRY ANALYSIS OF THE CATEGORY (use it as inspiration: follow the conventions of the industry, with an original visual identity) ===
+${describeProfile(profile)}`
+    : '';
+  const sections = plan.sections.map((x) => `"${x}" (${SECTION_NAMES_IT[x]})`).join(', ');
+  return `${industry}
 
 === DESIGN DIRECTION (chosen by the generator: every template of a category gets a different visual identity) ===
 Direction: "${direction.name}" — ${direction.brief}
 Palette mood: ${direction.palette}. The palette must suit the category "${category.name}"; the user's style instructions (if any) refine it.
-Already decided by the generator, do not change: fonts ${plan.fonts.heading} (titles) / ${plan.fonts.body} (texts), ${look}, corner radius ${st.radius}px, spacing "${st.spacing}", title weight ${st.headingWeight}; layout of the sections: ${layout}.${
+Already decided by the generator, do not change: fonts ${plan.fonts.heading} (titles) / ${plan.fonts.body} (texts), ${look}, corner radius ${st.radius}px, spacing "${st.spacing}", title weight ${st.headingWeight}; layout of the sections: ${layout}.
+Sections of the Home page after the hero, in this order: ${sections}.${
     st.theme === 'dark'
       ? '\nTheme "dark": the pages have a dark background ("dark" color, keep it very deep) with white texts; "heading" and "text" are only used on white elements (contact form), keep them dark.'
       : ''
@@ -64,10 +73,25 @@ Already decided by the generator, do not change: fonts ${plan.fonts.heading} (ti
 Write the "description" of the concept and the "tone" so that they match this direction.`;
 }
 
-function technicalInstructions(languageLabel) {
+/** Copy keys of optional sections: only asked when the template has the section. */
+const SECTION_COPY = { stats: [], process: ['processKicker', 'processTitle', 'processText'], faq: ['faqKicker', 'faqTitle'] };
+const SECTION_LISTS = {
+  stats: '"stats": [4 × { "value": "short figure, e.g. 20+ or 24h (max 12 chars)", "label": "max 40 chars" }]',
+  process: '"steps": [4 × { "title": "max 50 chars", "text": "max 160 chars" }]',
+  faq: '"faq": [4 × { "q": "question typical of the customers of the category (max 120 chars)", "a": "answer, max 400 chars" }]',
+  highlights: '"highlights": [4 short guarantees typical of the category, max 40 chars each]',
+};
+
+function technicalInstructions(languageLabel, sections = null) {
+  const optionalKeys = Object.values(SECTION_COPY).flat();
   const copyShape = Object.entries(COPY_KEYS)
+    .filter(([k]) => !optionalKeys.includes(k) || Object.entries(SECTION_COPY).some(([sec, keys]) => keys.includes(k) && (!sections || sections.includes(sec))))
     .map(([k, max]) => `    "${k}": "... (max ${max} chars)"`)
     .join(',\n');
+  const lists = Object.entries(SECTION_LISTS)
+    .filter(([sec]) => !sections || sections.includes(sec))
+    .map(([, shape]) => `,\n    ${shape}`)
+    .join('');
   return `
 
 === OUTPUT FORMAT (added automatically by the generator — it overrides any output format requested above) ===
@@ -82,14 +106,14 @@ The generator builds the Elementor templates itself from the design decisions ab
   "copy": {
 ${copyShape},
     "features": [4 × { "title": "max 50 chars", "text": "max 160 chars" }],
-    "reviews": [3 × { "name": "fictional customer", "role": "role or city", "text": "2–3 sentences" }]
+    "reviews": [3 × { "name": "fictional customer", "role": "role or city", "text": "2–3 sentences" }]${lists}
   }
 }
 Rules:
 - Colors: 6-digit hex. "background" is a light tint for alternate sections, "dark" a deep color for the footer and image overlays; white text must be readable on "primary" and "dark", and "heading" / "text" must be readable on white.
 - Icons: only from this list (Font Awesome 5 solid): ${ICONS.join(', ')}.
-- Texts of "copy": in ${languageLabel}. "aboutText" and "aboutPageText" may use simple HTML (<p>, <strong>, <ul>, <li>); every other text is plain text. No business names, phone numbers, emails or addresses, no placeholder text.
-- "aboutPageText" is the single "About us" section of the About page: history, mission, values and experience in 3–4 paragraphs, without sub-titles.
+- Texts of "copy": in ${languageLabel}. "aboutText", "aboutPageText" and "aboutPageText2" may use simple HTML (<p>, <strong>, <ul>, <li>); every other text is plain text. No business names, phone numbers, emails or addresses, no placeholder text.
+- The About page shows its text in two rows (text beside a photo, then a photo beside the text), without sub-titles: "aboutPageText" = who we are, history and experience (2 paragraphs); "aboutPageText2" = values, method and commitment to the customers (2 paragraphs, may include a short list).
 - "features": 4 real strengths of a business of this category (short title + concrete explanation).
 - Reviews have no photo of the customer.`;
 }
@@ -100,7 +124,7 @@ const LABELS = { it: '(nessuna)', en: '(none)' };
  * Final prompt for a category template.
  * @param {object} p  { category, instructions, language, direction, plan, existing: spec[], avoidColors: string[] }
  */
-export function buildTemplatePrompt({ category, instructions = '', language = 'it', direction = null, plan = null, existing = [], avoidColors = [] }) {
+export function buildTemplatePrompt({ category, instructions = '', language = 'it', direction = null, plan = null, existing = [], avoidColors = [], profile = null }) {
   const none = LABELS[language] || LABELS.en;
   const languageLabel = languageName(language);
   const vars = {
@@ -110,8 +134,8 @@ export function buildTemplatePrompt({ category, instructions = '', language = 'i
     LINGUA: languageLabel,
   };
   const body = TEMPLATE_PROMPT.content.replace(/\{\{\s*([A-Z_]+)\s*\}\}/g, (m, name) => (name in vars ? vars[name] : m));
-  const design = direction && plan ? directionInstructions(category, direction, plan, existing, avoidColors) : '';
-  return { prompt: body + design + technicalInstructions(languageLabel), system: TEMPLATE_SYSTEM_PROMPT };
+  const design = direction && plan ? directionInstructions(category, direction, plan, existing, avoidColors, profile) : '';
+  return { prompt: body + design + technicalInstructions(languageLabel, plan?.sections), system: TEMPLATE_SYSTEM_PROMPT };
 }
 
 /**
@@ -124,13 +148,14 @@ export function buildTemplatePrompt({ category, instructions = '', language = 'i
  *   - direction       id of a direction chosen by the user (otherwise the least used one)
  *   - exclude         directions to avoid (e.g. the drafts just generated and discarded)
  *   - avoidColors     primary colors to avoid (same reason)
+ *   - profile         industry analysis of the category (industry.js), if any
  *   - rng             random source (tests)
  * @returns {Promise<{ spec, tokens, direction }>}
  */
-export async function generateTemplateSpec(provider, { category, instructions = '', language = 'it', existing = [], direction: requested = '', exclude = [], avoidColors = [], rng = Math.random }) {
-  const direction = pickDirection(existing, { requested, exclude, rng });
-  const plan = designPlan(direction, existing, rng);
-  const { prompt, system } = buildTemplatePrompt({ category, instructions, language, direction, plan, existing, avoidColors });
+export async function generateTemplateSpec(provider, { category, instructions = '', language = 'it', existing = [], direction: requested = '', exclude = [], avoidColors = [], profile = null, rng = Math.random }) {
+  const direction = pickDirection(existing, { requested, exclude, suitable: profile?.directions, rng });
+  const plan = designPlan(direction, existing, rng, profile);
+  const { prompt, system } = buildTemplatePrompt({ category, instructions, language, direction, plan, existing, avoidColors, profile });
   const taken = [...existing.map((s) => s.style.colors.primary), ...avoidColors];
   let tokens = 0;
   let note = '';
@@ -142,7 +167,7 @@ export async function generateTemplateSpec(provider, { category, instructions = 
       json: true,
       temperature: 1,
       task: 'template',
-      context: { category: category.name, language, instructions, direction: direction.id, avoidColors: taken },
+      context: { category: category.name, language, instructions, direction: direction.id, avoidColors: taken, sections: plan.sections },
     });
     tokens += (res.usage?.inputTokens || estimateTokens(prompt)) + (res.usage?.outputTokens || estimateTokens(res.text));
     try {

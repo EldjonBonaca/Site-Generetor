@@ -47,6 +47,11 @@ add_filter('hello_elementor_header_footer', __NAMESPACE__ . '\\theme_header_foot
 add_action('wp_body_open', __NAMESPACE__ . '\\render_header', 5);
 add_action('get_footer', __NAMESPACE__ . '\\render_footer', 5);
 add_action('wp_enqueue_scripts', __NAMESPACE__ . '\\enqueue_header_footer');
+// No comments on the articles (nor on the pages) of the site
+add_filter('comments_open', __NAMESPACE__ . '\\no_comments', 20, 2);
+add_filter('pings_open', __NAMESPACE__ . '\\no_comments', 20, 2);
+add_filter('comments_array', __NAMESPACE__ . '\\no_comment_list', 20, 2);
+add_action('init', __NAMESPACE__ . '\\remove_comment_support', 100);
 
 // ---------------------------------------------------------------------------- data + state
 
@@ -770,12 +775,16 @@ function import_content() {
 		$page_ids[$page['role']] = $id;
 	}
 
-	// Services: one article each, in the services category, with featured image. Without the
-	// Elementor Pro single post template the theme does not show it: it opens the article instead.
+	// Services: one article each, in the services category, with featured image. Each article is
+	// built with Elementor in the design of the single post template (hero with the featured image,
+	// content, sidebar with the other services), so it needs no Elementor Pro. Comments are closed.
+	update_option('default_comment_status', 'closed');
+	update_option('default_ping_status', 'closed');
 	foreach ($data['posts'] as $post) {
 		$image = ($post['image'] && isset($images[$post['image']])) ? $images[$post['image']]['id'] : 0;
 		$content = replace_string($post['content'], $r);
-		if ($image && !defined('ELEMENTOR_PRO_VERSION')) {
+		$post_doc = !empty($post['elementor']) ? element_doc($post['elementor']) : null;
+		if ($image && !$post_doc && !defined('ELEMENTOR_PRO_VERSION')) {
 			$content = '<figure class="wp-block-image size-large">' . wp_get_attachment_image($image, 'large') . '</figure>' . "
 " . $content;
 		}
@@ -787,9 +796,17 @@ function import_content() {
 			'post_content' => $content,
 			'post_excerpt' => $post['excerpt'],
 			'post_category' => array($category),
+			'comment_status' => 'closed',
+			'ping_status' => 'closed',
 		));
 		if ($image) {
 			set_post_thumbnail($id, $image);
+		}
+		if ($post_doc) {
+			update_post_meta($id, '_wp_page_template', 'elementor_header_footer');
+			set_elementor($id, $post_doc, 'wp-post', $r);
+		} else {
+			clear_elementor($id);
 		}
 		set_seo($id, $post['seo']);
 	}
@@ -798,6 +815,8 @@ function import_content() {
 
 	// Header, footer and single post: Elementor Pro theme templates. Without Pro the theme document
 	// types do not exist: the templates are saved as sections and this plugin displays header and footer.
+	// The single post template is saved without display condition: the service articles are already
+	// built with its design (it can be assigned by hand to articles written later).
 	$pro = defined('ELEMENTOR_PRO_VERSION');
 	$hf = array();
 	foreach ($data['templates'] as $tpl) {
@@ -815,8 +834,11 @@ function import_content() {
 		set_elementor($id, $doc, $type, $r);
 		wp_set_object_terms($id, $type, 'elementor_library_type');
 		if ($pro) {
-			$condition = $tpl['role'] === 'single_post' ? 'include/singular/in_category/' . $category : 'include/general';
-			update_post_meta($id, '_elementor_conditions', array($condition));
+			if ($tpl['role'] !== 'single_post') {
+				update_post_meta($id, '_elementor_conditions', array('include/general'));
+			} else {
+				delete_post_meta($id, '_elementor_conditions');
+			}
 		} elseif (in_array($tpl['role'], array('header', 'footer'), true)) {
 			$hf[$tpl['role']] = $id;
 		}
@@ -860,6 +882,24 @@ function import_content() {
 	save_state($state);
 	$messages[] = array('level' => 'info', 'text' => t('summary', array('pages' => count($page_ids), 'posts' => count($data['posts']), 'images' => count($images))));
 	return array('done' => true, 'messages' => $messages);
+}
+
+// ---------------------------------------------------------------------------- comments
+
+/** Comments and pings are closed on articles and pages. */
+function no_comments($open, $post_id) {
+	return in_array(get_post_type($post_id), array('post', 'page'), true) ? false : $open;
+}
+
+/** Comments already saved are not shown on articles and pages. */
+function no_comment_list($comments, $post_id) {
+	return in_array(get_post_type($post_id), array('post', 'page'), true) ? array() : $comments;
+}
+
+/** No comment box in the article editor. */
+function remove_comment_support() {
+	remove_post_type_support('post', 'comments');
+	remove_post_type_support('post', 'trackbacks');
 }
 
 // ---------------------------------------------------------------------------- header + footer without Elementor Pro

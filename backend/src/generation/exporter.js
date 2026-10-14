@@ -21,7 +21,7 @@ import { buildWxr } from './wxr.js';
 import { buildPlugin, PLUGIN_IMAGE_SCHEME } from './wp-plugin.js';
 import { docsText } from './export-docs.js';
 import { fieldValue } from './runner.js';
-import { BUILDER_VERSION } from '../templates/builder.js';
+import { BUILDER_VERSION, articleDoc } from '../templates/builder.js';
 
 const PLACEHOLDER_BASE_URL = 'https://example.com/wp-content/uploads/';
 const TEMPLATE_TYPES = new Set(['page', 'section', 'header', 'footer', 'single', 'single-page', 'single-post', 'archive', 'popup', 'error-404', 'loop-item', 'container']);
@@ -76,7 +76,7 @@ async function exportImages(ctx, destDir) {
 
 const cropKey = (imageId, kind) => `${imageId}:${kind}`;
 
-/** Exact pixel size of the Home hero / page subheader images (settings.image.hero / .subheader). */
+/** Exact pixel size of the Home hero / page subheader / carousel images (settings.image.hero / .subheader / .carousel). */
 export function cropSize(settings, kind) {
   const fallback = DEFAULT_CROP_SIZES[kind];
   const size = settings.image?.[kind] || {};
@@ -149,7 +149,8 @@ function imageAssignment(ctx, page, slots, slotRoles, exported, neededCrops = nu
   for (const slot of slots) {
     const role = slotRoles[slot.id] || 'photo';
     if (slot.kind === 'gallery') {
-      assignment[slot.id] = pool.map((i) => ex(i));
+      // Gallery page: the full photos; Home carousel: the photos cropped to the same size
+      assignment[slot.id] = pool.map((i) => ex(i, role === 'carousel' ? 'carousel' : null));
       continue;
     }
     let img = null;
@@ -224,6 +225,16 @@ function buildPosts(ctx, pages, exported) {
     });
 }
 
+/**
+ * Elementor document of a service article: the design of the single post template with the
+ * article's featured image, title, content and the other services (works without Elementor Pro).
+ */
+function postDoc(single, post, imageUrl) {
+  if (!single) return null;
+  const doc = articleDoc(single.doc, { title: post.title, content: sanitizeHtml(post.content || ''), imageUrl, url: `/${post.slug}/` });
+  return { version: doc.version || '0.4', title: post.title, type: 'page', content: doc.content, page_settings: doc.page_settings };
+}
+
 // ---------------------------------------------------------------------------
 // Final checks (section 8 of the prompt)
 // ---------------------------------------------------------------------------
@@ -269,6 +280,8 @@ function runChecks(ctx, built, posts, links, baseUrl, T) {
     if (len < 300) add('error', T.chkPostShort(p.title, len));
     if (!p.image) add('warning', T.chkPostImage(p.title));
   }
+  // Key figures written by the AI: realistic examples, the client must confirm them
+  if (ctx.template?.spec.sections?.includes('stats')) add('warning', T.chkStats);
   if (!items.length) add('ok', T.chkAllGood);
   add('info', T.chkResponsive);
   return items;
@@ -318,6 +331,7 @@ function pluginInput(ctx, pages, allPages, posts, exported, links, category, ima
   const local = new Map([...exported].map(([id, e]) => [id, { ...e, url: PLUGIN_IMAGE_SCHEME + e.name }]));
   const built = buildPageDocs(ctx, pages, local, links, allPages);
   const builtFor = (role) => built.find((b) => b.page.role === role);
+  const single = builtFor('single_post');
 
   const sitePages = SITE_PAGE_ROLES.map((role) => {
     const page = pages.find((p) => p.role === role);
@@ -352,6 +366,7 @@ function pluginInput(ctx, pages, allPages, posts, exported, links, category, ima
       excerpt: p.excerpt,
       image: p.image?.name || null,
       seo: { title: p.page.seo?.title || '', description: p.page.seo?.description || '' },
+      doc: postDoc(single, p, p.image ? PLUGIN_IMAGE_SCHEME + p.image.name : null),
     })),
     // Uploaded images (photos + logo) and their hero / subheader crops (not shown in the gallery)
     images: [...exported].map(([key, e]) => {
@@ -409,6 +424,12 @@ export async function exportGeneration(generationId) {
 
   for (const b of built) {
     fs.writeFileSync(path.join(outRoot, 'templates', `${b.page.key}.json`), JSON.stringify(toImportable(b.doc, b.page), null, 1));
+  }
+  // Each service article, already designed (templates/post-<slug>.json)
+  const single = built.find((b) => b.page.role === 'single_post');
+  for (const p of posts) {
+    const doc = postDoc(single, p, p.image?.url || null);
+    if (doc) fs.writeFileSync(path.join(outRoot, 'templates', `${p.page.key}.json`), JSON.stringify(doc, null, 1));
   }
 
   // WordPress import file: pages (for slugs + menu), articles, category, featured images, menu

@@ -10,6 +10,7 @@ import { useToast } from '../components/Toast.jsx';
 import { Button, Card, EmptyState, Field, IconButton, Input, Modal, PageHeader, Spinner, Textarea, cx } from '../components/ui.jsx';
 import { TemplatePreview, TemplateSwatches } from '../components/TemplatePreview.jsx';
 import { TemplateEditor, TemplateGenerator } from '../components/TemplateDialogs.jsx';
+import { IndustryProfile } from '../components/IndustryProfile.jsx';
 import { formatDate } from './ProjectsPage.jsx';
 
 export default function TemplatesPage() {
@@ -169,6 +170,7 @@ export default function TemplatesPage() {
               </>
             }
           >
+            <IndustryProfile category={selected} onAnalyzed={loadCategories} />
             {!templates ? (
               <div className="flex justify-center py-10">
                 <Spinner />
@@ -213,7 +215,7 @@ export default function TemplatesPage() {
         )}
       </div>
 
-      <TemplateGenerator open={generating} onClose={() => setGenerating(false)} category={selected} onSaved={refresh} />
+      <TemplateGenerator open={generating} onClose={() => setGenerating(false)} category={selected} onSaved={refresh} onAnalyzed={loadCategories} />
       <TemplateEditor template={editing} onClose={() => setEditing(null)} onSaved={refresh} />
 
       <Modal

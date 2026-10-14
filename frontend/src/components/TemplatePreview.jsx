@@ -1,10 +1,12 @@
 /**
  * Visual sketch of a template (its Home page) drawn from the spec: colors, fonts, the look of the
- * site (theme, buttons, cards, titles, images) and the layout of every section, like the site
+ * site (theme, buttons, cards, titles, images), the layout of every section and the Home sections
+ * in the order of the template, like the site
  * builder (backend/src/templates/builder.js). Fonts are only named (no request to Google Fonts)
  * and photos are drawn as gradients: the real site uses the project images.
  */
-import { ImageIcon, Quote, Star } from 'lucide-react';
+import { Fragment } from 'react';
+import { ChevronLeft, ChevronRight, ImageIcon, Plus, Quote, Star } from 'lucide-react';
 import { cx } from './ui.jsx';
 
 // Same color rules as the site builder (backend/src/templates/spec.js)
@@ -244,19 +246,19 @@ export function TemplatePreview({ spec, compact = false, className }) {
     </p>
   );
   const cta =
-    l.cta === 'banner' ? (
+    l.cta !== 'split' ? (
       <div className="flex flex-col items-center gap-1.5 px-4 py-4 text-center" style={photoBg(`linear-gradient(135deg, ${c.primary}ee, ${c.dark}e6)`)}>
         {ctaTitle}
         {btn(c.secondary, copy.ctaButton)}
       </div>
-    ) : l.cta === 'split' ? (
+    ) : (
       <div className="px-4 py-2" style={{ background: ink.bg }}>
         <div className="flex items-center justify-between gap-2 px-3 py-3" style={{ background: `linear-gradient(135deg, ${c.primary}, ${c.dark})`, borderRadius: r }}>
           {ctaTitle}
           {btn(c.secondary, copy.ctaButton)}
         </div>
       </div>
-    ) : null;
+    );
 
   // --- Services ---
   const boxed = l.services === 'boxed';
@@ -314,6 +316,85 @@ export function TemplatePreview({ spec, compact = false, className }) {
     </div>
   );
 
+  // --- Photo carousel ---
+  const gallery = (
+    <div className={cx('px-4', pad)} style={{ background: ink.bg }}>
+      {title(copy.galleryKicker, copy.galleryTitle)}
+      <div className="mt-2 flex items-center gap-1">
+        <ChevronLeft className="size-3 shrink-0" style={{ color: ink.heading }} />
+        <div className="grid flex-1 grid-cols-3 gap-1.5">
+          {[0, 1, 2].map((i) => (
+            <Photo key={i} className="h-10 w-full" />
+          ))}
+        </div>
+        <ChevronRight className="size-3 shrink-0" style={{ color: ink.heading }} />
+      </div>
+      <div className="mt-1.5 flex justify-center gap-1">
+        {[0, 1, 2, 3].map((i) => (
+          <span key={i} className="size-1 rounded-full" style={{ background: i === 0 ? c.secondary : (dark ? '#ffffff' : c.heading) + '40' }} />
+        ))}
+      </div>
+    </div>
+  );
+
+  // --- Optional sections ---
+  const stats = (
+    <div className="grid grid-cols-4 gap-2 px-4 py-3 text-center" style={{ background: `linear-gradient(135deg, ${c.primary}, ${c.dark})` }}>
+      {copy.stats.map((x, i) => (
+        <div key={i}>
+          <p className="text-[12px] leading-none" style={{ ...head, color: c.secondary }}>
+            {x.value}
+          </p>
+          <p className="mt-0.5 text-[5px] text-white/80">{x.label}</p>
+        </div>
+      ))}
+    </div>
+  );
+  const processSteps = (
+    <div className={cx('px-4', pad)} style={{ background: ink.bg }}>
+      {title(copy.processKicker, copy.processTitle)}
+      <div className="mt-2 grid grid-cols-4 gap-1.5">
+        {copy.steps.map((x, i) => (
+          <div key={i} className="space-y-0.5 p-1.5" style={card('base')}>
+            <p className="text-[10px] leading-none" style={{ ...head, color: c.secondary }}>
+              {String(i + 1).padStart(2, '0')}
+            </p>
+            <p className="text-[6px] leading-tight" style={head}>
+              {x.title}
+            </p>
+            <Lines n={2} color={ink.text} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+  const faqList = (
+    <div className={cx('px-4', pad, left && 'flex gap-3')} style={{ background: ink.alt }}>
+      <div className={left ? 'w-1/3' : ''}>{title(copy.faqKicker, copy.faqTitle)}</div>
+      <div className={cx('space-y-1', left ? 'flex-1' : 'mx-auto mt-2 w-4/5')}>
+        {copy.faq.map((x, i) => (
+          <div key={i} className="flex items-center justify-between px-1.5 py-1" style={{ background: ink.card, border: `1px solid ${ink.border}` }}>
+            <span className="truncate text-[6px]" style={head}>
+              {x.q}
+            </span>
+            <Plus className="size-2 shrink-0" style={{ color: c.secondary }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+  const highlightsStrip = (
+    <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 px-4 py-2" style={{ background: `linear-gradient(90deg, ${c.primary}, ${c.dark})` }}>
+      {copy.highlights.map((x, i) => (
+        <span key={i} className="text-[6px] font-semibold text-white">
+          <span style={{ color: c.secondary }}>✓</span> {x}
+        </span>
+      ))}
+    </div>
+  );
+  const SECTIONS = { about, features: why, cta, services, gallery, reviews, stats, process: processSteps, faq: faqList, highlights: highlightsStrip };
+  const order = spec.sections || ['about', 'features', 'cta', 'services', 'gallery', 'reviews'];
+
   // --- Footer ---
   const lightFooter = l.footer === 'light';
   const footerBg = lightFooter ? ink.alt : l.footer === 'brand' ? `linear-gradient(135deg, ${c.primary}, ${c.dark})` : dark ? mix(c.dark, '#000000', 0.4) : c.dark;
@@ -335,11 +416,9 @@ export function TemplatePreview({ spec, compact = false, className }) {
         </div>
       )}
       {hero}
-      {about}
-      {why}
-      {cta}
-      {services}
-      {reviews}
+      {order.map((id) => (
+        <Fragment key={id}>{SECTIONS[id] || null}</Fragment>
+      ))}
       <div style={{ background: footerBg }}>
         <div className="grid grid-cols-4 gap-2 px-4 py-3">
           <div className="h-3 w-10 rounded-sm" style={{ background: lightFooter ? c.primary : '#fff', opacity: 0.85 }} />

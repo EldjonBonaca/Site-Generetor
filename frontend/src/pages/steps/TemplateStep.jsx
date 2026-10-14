@@ -225,7 +225,13 @@ export default function TemplateStep({ project, reload }) {
         <SiteStructureCard project={project} reload={reload} />
       </div>
 
-      <TemplateGenerator open={generating} onClose={() => setGenerating(false)} category={category} onSaved={onGenerated} />
+      <TemplateGenerator
+        open={generating}
+        onClose={() => setGenerating(false)}
+        category={category}
+        onSaved={onGenerated}
+        onAnalyzed={() => api.get('/template-categories').then(setCategories).catch(() => {})}
+      />
       <TemplateEditor
         template={editing}
         onClose={() => setEditing(null)}

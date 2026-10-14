@@ -9,11 +9,14 @@
  *   - look (theme, buttons, cards, titles, alignment, scale, images) and the layout of each
  *     section: among many random combinations allowed by the direction, the one farthest from
  *     the most similar template of the category (then the one using the rarest values).
+ *   - the optional Home sections: among the ones recommended by the industry analysis of the
+ *     category (industry.js), the combination the other templates use least.
+ * When the category has been analyzed, only the directions that suit its industry are used.
  * The AI then designs the palette (avoiding the colors of the other templates), icons, tone of
  * voice and sample texts for the category inside that direction. Five templates of the same
  * category therefore get five different directions, font pairs, layouts and palettes.
  */
-import { FONTS, LAYOUTS, SPACINGS, STYLE_OPTIONS, WEIGHTS } from './spec.js';
+import { DEFAULT_SECTIONS, FONTS, LAYOUTS, OPTIONAL_SECTIONS, SPACINGS, STYLE_OPTIONS, WEIGHTS } from './spec.js';
 
 /**
  * style: allowed values of STYLE_OPTIONS keys + radius [min, max], spacing, headingWeight, uppercase.
@@ -48,7 +51,7 @@ export const DIRECTIONS = [
     palette: 'almost monochrome: near-black "heading", a single restrained accent as primary (one hue only), "secondary" close to the primary or neutral, white-ish "background"',
     fonts: [['Manrope', 'Inter'], ['Space Grotesk', 'Inter'], ['Work Sans', 'Work Sans'], ['DM Sans', 'DM Sans']],
     style: { theme: ['light'], buttons: ['square'], cards: ['outline'], titles: ['plain'], align: ['left'], scale: ['large'], images: ['square'], titleCase: ['normal'], radius: [0, 4], spacing: ['airy'], headingWeight: ['500', '600'], uppercase: [false] },
-    layout: { header: ['classic', 'centered'], hero: ['split', 'card'], about: ['wide', 'image-right'], features: ['list'], cta: ['split', 'none'], services: ['cards'], testimonials: ['minimal'], contact: ['stacked', 'split'], footer: ['light'], divider: ['none'] },
+    layout: { header: ['classic', 'centered'], hero: ['split', 'card'], about: ['wide', 'image-right'], features: ['list'], cta: ['split'], services: ['cards'], testimonials: ['minimal'], contact: ['stacked', 'split'], footer: ['light'], divider: ['none'] },
   },
   {
     id: 'editorial',
@@ -130,21 +133,68 @@ function leastUsed(allowed, used, rng) {
 /**
  * Choose the direction of a new template.
  * @param {object[]} existing  specs of the other templates of the category (+ drafts to avoid)
- * @param {{ requested?: string, exclude?: string[], rng?: () => number }} opts
+ * @param {{ requested?: string, exclude?: string[], suitable?: string[], rng?: () => number }} opts
+ *   suitable: directions that fit the industry, best first (industry profile of the category)
  */
-export function pickDirection(existing, { requested, exclude = [], rng = Math.random } = {}) {
+export function pickDirection(existing, { requested, exclude = [], suitable = null, rng = Math.random } = {}) {
   if (requested && BY_ID.has(requested)) return BY_ID.get(requested);
   const used = [...existing.map((s) => s.direction).filter(Boolean), ...exclude];
-  let pool = DIRECTIONS.filter((d) => !exclude.includes(d.id));
-  if (!pool.length) pool = DIRECTIONS;
-  return BY_ID.get(leastUsed(pool.map((d) => d.id), used, rng));
+  const fitting = (suitable || []).filter((id) => BY_ID.has(id));
+  const base = fitting.length ? fitting : DIRECTIONS.map((d) => d.id);
+  let pool = base.filter((id) => !exclude.includes(id));
+  if (!pool.length) pool = base;
+  if (!fitting.length) return BY_ID.get(leastUsed(pool, used, rng));
+  // Suitable directions: the least used one, the most suitable first
+  const count = (id) => used.filter((u) => u === id).length;
+  const min = Math.min(...pool.map(count));
+  return BY_ID.get(pool.find((id) => count(id) === min));
+}
+
+/** Natural place of each Home section, used to insert the optional ones. */
+const CANONICAL_ORDER = ['highlights', 'about', 'stats', 'features', 'cta', 'services', 'process', 'gallery', 'reviews', 'faq'];
+
+/** Home sections: the recommended order with only `optional` among the optional sections. */
+function orderSections(recommended, optional) {
+  const out = recommended.filter((x) => !OPTIONAL_SECTIONS.includes(x) || optional.includes(x));
+  for (const x of optional) {
+    if (out.includes(x)) continue;
+    const pos = CANONICAL_ORDER.indexOf(x);
+    const after = CANONICAL_ORDER.slice(0, pos).reverse().find((v) => out.includes(v));
+    out.splice(after ? out.indexOf(after) + 1 : 0, 0, x);
+  }
+  return out;
+}
+
+/**
+ * Optional sections of a new template: 1–3 of the recommended ones (all of them when there is no
+ * analysis), the combination farthest from the templates of the category.
+ */
+function planSections(existing, recommended, rng) {
+  const pool = recommended ? recommended.filter((x) => OPTIONAL_SECTIONS.includes(x)) : OPTIONAL_SECTIONS;
+  const base = recommended || DEFAULT_SECTIONS;
+  if (!pool.length) return [...base];
+  const subsets = [];
+  for (let mask = 1; mask < 1 << pool.length; mask++) {
+    const subset = pool.filter((_, i) => mask & (1 << i));
+    if (subset.length <= 3) subsets.push(subset);
+  }
+  const others = existing.map((s) => (s.sections || []).filter((x) => OPTIONAL_SECTIONS.includes(x)));
+  const score = (subset) => {
+    const distances = others.map((o) => subset.filter((x) => !o.includes(x)).length + o.filter((x) => !subset.includes(x)).length);
+    const nearest = distances.length ? Math.min(...distances) : 0;
+    // Then the sections the industry recommends most (first in its list), then 2 sections rather than 1 or 3
+    const rank = subset.reduce((sum, x) => sum - pool.indexOf(x), 0);
+    return nearest * 1000 + rank * 10 - Math.abs(subset.length - 2) * 5 + rng();
+  };
+  const best = subsets.reduce((a, b) => (score(b) > score(a) ? b : a));
+  return orderSections(base, best);
 }
 
 /**
  * Concrete design decisions of a new template in `direction`, as different as possible from the
  * `existing` templates of the category: { fonts, style: {look, radius, spacing, headingWeight, uppercase}, layout }.
  */
-export function designPlan(direction, existing, rng = Math.random) {
+export function designPlan(direction, existing, rng = Math.random, profile = null) {
   const usedHeading = existing.map((s) => s.style?.fonts?.heading);
   const pairs = direction.fonts.filter(([h, b]) => FONTS.includes(h) && FONTS.includes(b));
   const fontCount = (p) => usedHeading.filter((h) => h === p[0]).length;
@@ -181,7 +231,7 @@ export function designPlan(direction, existing, rng = Math.random) {
   style.headingWeight = pickRandom((direction.style.headingWeight || WEIGHTS).filter((v) => WEIGHTS.includes(v)), rng);
   style.uppercase = pickRandom(direction.style.uppercase || [false, true], rng);
 
-  return { fonts: { heading, body }, style, layout: best.layout };
+  return { fonts: { heading, body }, style, layout: best.layout, sections: planSections(existing, profile?.sections || null, rng) };
 }
 
 /** Apply the plan to the spec answered by the AI (the AI keeps palette, icons, tone and texts). */
@@ -191,5 +241,6 @@ export function applyPlan(spec, direction, plan) {
     direction: direction.id,
     style: { ...spec.style, ...plan.style, fonts: plan.fonts },
     layout: { ...plan.layout },
+    sections: [...plan.sections],
   };
 }

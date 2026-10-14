@@ -29,7 +29,7 @@ export const LAYOUTS = {
   hero: ['center', 'left', 'split', 'card', 'bottom'],
   about: ['image-left', 'image-right', 'wide'],
   features: ['icons', 'cards', 'list'],
-  cta: ['banner', 'split', 'none'],
+  cta: ['banner', 'split'],
   services: ['cards', 'boxed', 'overlay'],
   testimonials: ['cards', 'minimal', 'band'],
   contact: ['split', 'stacked'],
@@ -37,6 +37,34 @@ export const LAYOUTS = {
   gallery: ['3', '4'],
   divider: ['curve', 'tilt', 'waves', 'none'],
 };
+
+/**
+ * Sections of the Home page after the hero, in the order chosen by the template.
+ * The required ones are the core structure of the prompt and are always present; the optional ones
+ * are added when they suit the category (from the industry analysis of the category):
+ *   cta         call to action band
+ *   stats       key numbers (years of experience, completed works…)
+ *   process     how we work, in 4 steps
+ *   faq         frequently asked questions (accordion)
+ *   highlights  strip of 4 short guarantees (free estimate, certified staff…)
+ * The About page reuses "stats" and "cta" when the template has them.
+ */
+export const REQUIRED_SECTIONS = ['about', 'features', 'services', 'gallery', 'reviews'];
+export const OPTIONAL_SECTIONS = ['cta', 'stats', 'process', 'faq', 'highlights'];
+export const DEFAULT_SECTIONS = ['about', 'features', 'cta', 'services', 'gallery', 'reviews'];
+
+/** Order of the Home sections: known ids once each, the required ones always present. */
+export function sanitizeSections(value, fallback = DEFAULT_SECTIONS) {
+  const known = new Set([...REQUIRED_SECTIONS, ...OPTIONAL_SECTIONS]);
+  const out = Array.isArray(value) ? [...new Set(value.map(String).filter((v) => known.has(v)))] : [...fallback];
+  for (const req of REQUIRED_SECTIONS) {
+    if (out.includes(req)) continue;
+    // Missing required section: back to its place in the default order
+    const after = DEFAULT_SECTIONS.slice(0, DEFAULT_SECTIONS.indexOf(req)).reverse().find((v) => out.includes(v));
+    out.splice(after ? out.indexOf(after) + 1 : 0, 0, req);
+  }
+  return out;
+}
 
 /**
  * Look of the whole site (the first value is the default). Together with the layouts they make
@@ -74,7 +102,10 @@ export const COPY_KEYS = {
   ctaTitle: 90, ctaText: 220, ctaButton: 30,
   servicesKicker: 40, servicesTitle: 70, servicesText: 220, serviceText: 160, servicesButton: 30,
   reviewsKicker: 40, reviewsTitle: 70,
-  aboutPageText: 1400,
+  aboutPageText: 1200, aboutPageText2: 1200,
+  galleryKicker: 40, galleryTitle: 70, galleryButton: 30,
+  processKicker: 40, processTitle: 70, processText: 220,
+  faqKicker: 40, faqTitle: 70,
   subheaderText: 160,
   contactTitle: 70, contactText: 300, formTitle: 70,
   postCtaTitle: 80, postCtaText: 200, postCtaButton: 30,
@@ -116,7 +147,36 @@ const DEFAULT_COPY = {
     { name: 'Luca Verdi', role: 'Cliente', text: 'Ottimo rapporto qualità-prezzo e assistenza sempre presente anche dopo il lavoro.' },
   ],
   aboutPageText:
-    '<p>Siamo una realtà nata dalla passione per il nostro lavoro e cresciuta grazie alla fiducia dei clienti: ogni giorno mettiamo esperienza e competenza al servizio di chi si rivolge a noi.</p><p>Crediamo nella qualità, nella trasparenza e nel rapporto diretto con le persone: ascoltiamo ogni richiesta e proponiamo soluzioni chiare, realizzate con cura e nei tempi concordati.</p>',
+    '<p>Siamo una realtà nata dalla passione per il nostro lavoro e cresciuta grazie alla fiducia dei clienti: ogni giorno mettiamo esperienza e competenza al servizio di chi si rivolge a noi.</p><p>Negli anni abbiamo affrontato lavori di ogni dimensione, aggiornando continuamente competenze, strumenti e metodi.</p>',
+  aboutPageText2:
+    '<p>Crediamo nella qualità, nella trasparenza e nel rapporto diretto con le persone: ascoltiamo ogni richiesta e proponiamo soluzioni chiare, realizzate con cura e nei tempi concordati.</p><p>Ogni progetto è seguito da un referente unico, dal primo sopralluogo alla consegna.</p>',
+  galleryKicker: 'Galleria',
+  galleryTitle: 'I nostri lavori',
+  galleryButton: 'Vedi tutta la galleria',
+  stats: [
+    { value: '20+', label: 'Anni di esperienza' },
+    { value: '500+', label: 'Clienti soddisfatti' },
+    { value: '24h', label: 'Tempo di risposta' },
+    { value: '100%', label: 'Lavori garantiti' },
+  ],
+  processKicker: 'Come lavoriamo',
+  processTitle: 'Il nostro metodo in 4 passi',
+  processText: 'Un percorso semplice e trasparente, dalla prima richiesta alla consegna.',
+  steps: [
+    { title: 'Contatto', text: 'Ci racconti di cosa hai bisogno, per telefono o tramite il modulo.' },
+    { title: 'Sopralluogo', text: 'Valutiamo la situazione e ti proponiamo la soluzione più adatta.' },
+    { title: 'Preventivo', text: 'Ricevi un preventivo chiaro e dettagliato, senza costi nascosti.' },
+    { title: 'Realizzazione', text: 'Eseguiamo il lavoro nei tempi concordati e ti seguiamo anche dopo.' },
+  ],
+  faqKicker: 'Domande frequenti',
+  faqTitle: 'Hai qualche dubbio?',
+  faq: [
+    { q: 'Il preventivo è gratuito?', a: 'Sì, il preventivo è gratuito e senza impegno.' },
+    { q: 'In quali zone lavorate?', a: 'Operiamo in città e nei comuni limitrofi.' },
+    { q: 'Quanto tempo serve per iniziare?', a: 'Di solito fissiamo il primo appuntamento entro pochi giorni dalla richiesta.' },
+    { q: 'Offrite una garanzia sui lavori?', a: 'Sì, tutti i lavori sono coperti da garanzia.' },
+  ],
+  highlights: ['Preventivo gratuito', 'Personale qualificato', 'Tempi certi', 'Assistenza dedicata'],
   subheaderText: 'Breve frase introduttiva della pagina.',
   contactTitle: 'Contattaci',
   contactText: 'Scrivici o chiamaci: saremo felici di rispondere a ogni domanda e di preparare un preventivo gratuito.',
@@ -142,6 +202,7 @@ export const DEFAULT_SPEC = Object.freeze({
     ...Object.fromEntries(Object.entries(STYLE_OPTIONS).map(([k, v]) => [k, v[0]])),
   },
   layout: Object.fromEntries(Object.entries(LAYOUTS).map(([k, v]) => [k, v[0]])),
+  sections: DEFAULT_SECTIONS,
   icons: ['fas fa-award', 'fas fa-clock', 'fas fa-euro-sign', 'fas fa-handshake'],
   copy: DEFAULT_COPY,
 });
@@ -179,6 +240,12 @@ export function sanitizeSpec(raw) {
   const list = (arr, n, map) => Array.from({ length: n }, (_, i) => map((Array.isArray(arr) ? arr : [])[i] || {}, i));
   copy.features = list(copyIn.features, 4, (f, i) => ({ title: str(f.title, 50, d.copy.features[i].title), text: str(f.text, 160, d.copy.features[i].text) }));
   copy.reviews = list(copyIn.reviews, 3, (rv, i) => ({ name: str(rv.name, 50, d.copy.reviews[i].name), role: str(rv.role, 50, d.copy.reviews[i].role), text: str(rv.text, 300, d.copy.reviews[i].text) }));
+  copy.stats = list(copyIn.stats, 4, (x, i) => ({ value: str(x.value, 12, d.copy.stats[i].value), label: str(x.label, 40, d.copy.stats[i].label) }));
+  copy.steps = list(copyIn.steps, 4, (x, i) => ({ title: str(x.title, 50, d.copy.steps[i].title), text: str(x.text, 160, d.copy.steps[i].text) }));
+  copy.faq = list(copyIn.faq, 4, (x, i) => ({ q: str(x.q, 120, d.copy.faq[i].q), a: str(x.a, 400, d.copy.faq[i].a) }));
+  copy.highlights = list(copyIn.highlights, 4, (x, i) => str(x, 40, d.copy.highlights[i]));
+  // Templates saved before the sections existed: no call to action when its layout was "none"
+  const legacy = !Array.isArray(r.sections) && r.layout?.cta === 'none' ? DEFAULT_SECTIONS.filter((x) => x !== 'cta') : DEFAULT_SECTIONS;
 
   const fonts = s.fonts || {};
   return {
@@ -196,6 +263,7 @@ export function sanitizeSpec(raw) {
       ...Object.fromEntries(Object.entries(STYLE_OPTIONS).map(([k, v]) => [k, oneOf(s[k], v)])),
     },
     layout: Object.fromEntries(Object.entries(LAYOUTS).map(([k, v]) => [k, oneOf(r.layout?.[k], v)])),
+    sections: sanitizeSections(r.sections, legacy),
     icons: list(r.icons, 4, (v, i) => icon(v, d.icons[i])),
     copy,
   };
@@ -220,6 +288,7 @@ export function describeSpec(spec) {
     `Colori: primario ${colors.primary}, secondario ${colors.secondary}, accento ${colors.accent}, titoli ${colors.heading}, testo ${colors.text}.`,
     `Font: ${fonts.heading} (titoli), ${fonts.body} (testi).`,
     `Layout: header ${l.header}, hero ${l.hero} (bordo inferiore ${l.divider}), chi siamo ${l.about}, perché sceglierci ${l.features}, call to action ${l.cta}, servizi ${l.services}, recensioni ${l.testimonials} (senza foto dei clienti), contatti ${l.contact}, footer ${l.footer}.`,
+    `Sezioni della Home dopo l'hero: ${describeSections(spec.sections)}.`,
     `Tono di voce: ${spec.tone}.`,
   ]
     .filter(Boolean)
@@ -297,3 +366,18 @@ export function similarColor(a, b) {
   const diff = Math.abs(x.hue - y.hue);
   return Math.min(diff, 360 - diff) < 28;
 }
+
+/** Italian names of the Home sections (site prompt, template description). */
+export const SECTION_NAMES_IT = {
+  about: 'Chi siamo',
+  features: 'Perché sceglierci',
+  cta: 'Call to action',
+  services: 'I nostri servizi',
+  gallery: 'Galleria a carosello',
+  reviews: 'Recensioni',
+  stats: 'Numeri chiave',
+  process: 'Come lavoriamo (4 passi)',
+  faq: 'Domande frequenti',
+  highlights: 'Fascia con i punti di garanzia',
+};
+export const describeSections = (sections) => sections.map((x) => SECTION_NAMES_IT[x] || x).join(' · ');

@@ -91,20 +91,31 @@ Regole generali:
 ## 5. Pagine
 
 ### 5.1 Home
-Sezioni, in quest'ordine:
-1. **Hero / prima sezione** – esattamente come nel template, con immagine `{{IMG_HOME_HERO}}` e testi adattati al sito.
-2. **Chi siamo** – breve testo di presentazione + immagine (scelta liberamente dall'archivio) + pulsante **"Scopri di più"** che porta alla pagina *Chi Siamo*.
-3. **Perché sceglierci** – 4 punti di forza dell'attività (icone/box come da template, con eventuali immagini di sfondo o laterali prese dall'archivio), ciascuno con titolo e testo scritti per `{{NOME_SITO}}`: mai testo segnaposto o "lorem ipsum".
-4. **Call to action** – *solo se prevista dal template*; con invito a contattare e link a *Contatti* o al telefono; eventuale immagine di sfondo dall'archivio.
-5. **I nostri servizi** – 3 servizi in evidenza (immagine, titolo, breve descrizione, link all'articolo del servizio) + pulsante **"Tutti i servizi"** che porta alla pagina *Servizi*.
-6. **Recensioni** – 3 recensioni (vedi sezione 5.6).
+Prima l'**hero**, poi le sezioni del template in quest'ordine: {{SEZIONI_HOME}}.
+
+Le sezioni **Chi siamo, Perché sceglierci, I nostri servizi, Galleria a carosello e Recensioni** ci sono sempre; le altre (call to action, numeri chiave, come lavoriamo, domande frequenti, fascia di garanzie) sono state scelte dal template in base alle convenzioni del settore.
+
+- **Hero / prima sezione** – esattamente come nel template, con immagine `{{IMG_HOME_HERO}}` e testi adattati al sito.
+- **Chi siamo** – breve testo di presentazione + immagine (scelta liberamente dall'archivio) + pulsante **"Scopri di più"** che porta alla pagina *Chi Siamo*.
+- **Perché sceglierci** – 4 punti di forza dell'attività (icone/box come da template, con eventuali immagini di sfondo o laterali prese dall'archivio), ciascuno con titolo e testo scritti per `{{NOME_SITO}}`: mai testo segnaposto o "lorem ipsum".
+- **Call to action** – *solo se prevista dal template*; con invito a contattare e link a *Contatti* o al telefono; eventuale immagine di sfondo dall'archivio.
+- **I nostri servizi** – 3 servizi in evidenza (immagine, titolo, breve descrizione, link all'articolo del servizio) + pulsante **"Tutti i servizi"** che porta alla pagina *Servizi*.
+- **Galleria a carosello** – slider/carosello di immagini (widget Carosello immagini di Elementor) con tutte le foto dell'archivio (logo escluso), ritagliate alla stessa dimensione, con frecce, punti di navigazione, scorrimento automatico e lightbox, responsive (3 foto su desktop, 2 su tablet, 1 su mobile) + pulsante verso la pagina *Galleria*.
+- **Recensioni** – 3 recensioni (vedi sezione 5.6).
+- **Numeri chiave** (se previsti) – 4 cifre realistiche (es. anni di esperienza): sono esempi da verificare con il cliente, mai dati presentati come certi se non forniti.
+- **Come lavoriamo** (se previsto) – il metodo in 4 passi numerati.
+- **Domande frequenti** (se previste) – 4 domande tipiche dei clienti del settore con risposta, senza prezzi inventati.
+- **Fascia di garanzie** (se prevista) – 4 punti brevi (es. preventivo gratuito).
 
 ### 5.2 Chi Siamo
 1. Subheader (titolo "Chi Siamo" + `{{IMG_SUBHEADER}}`).
-2. **Chi siamo** – un'unica sezione intitolata **"Chi siamo"**, con un testo esteso che racconta storia, missione, valori ed esperienza, **senza sottotitoli** come "La nostra storia" o "La nostra missione", e un'immagine dall'archivio.
-3. **Perché sceglierci**.
-4. **Call to action** – *solo se prevista dal template*.
-5. **Recensioni** (le stesse 3 della Home).
+2. **Chi siamo** – il testo, lungo, è diviso in **due sezioni a layout alternato**, **senza sottotitoli** come "La nostra storia" o "La nostra missione":
+   - prima sezione: titolo **"Chi siamo"** + testo (chi siamo, storia, esperienza) a sinistra, immagine dall'archivio a destra;
+   - seconda sezione: immagine dall'archivio a sinistra, testo (valori, metodo, impegno verso i clienti) a destra, senza ripetere la prima parte.
+3. **Numeri chiave** – *solo se previsti dal template*.
+4. **Perché sceglierci**.
+5. **Call to action** – *solo se prevista dal template*.
+6. **Recensioni** (le stesse 3 della Home).
 
 ### 5.3 Servizi
 1. Subheader (titolo "Servizi" + `{{IMG_SUBHEADER}}`).
@@ -139,7 +150,11 @@ Ogni servizio deve essere un **articolo (post) separato**, con:
 - Immagine in evidenza: l'immagine associata al servizio (vedi tabella al punto 2).
 - Testo descrittivo originale in italiano di **minimo 300 caratteri** (ottimizzato SEO, con cosa comprende il servizio, a chi si rivolge e i vantaggi).
 - Categoria: "Servizi".
-- Usa il template del singolo articolo previsto dal template; alla fine dell'articolo aggiungi una call to action verso la pagina *Contatti*.
+- Usa il template del singolo articolo previsto dal template, curato e professionale:
+  - **hero** in alto con l'immagine in evidenza dell'articolo come sfondo (con sovrapposizione scura), etichetta "Servizi" e titolo del servizio;
+  - sotto, il **testo dell'articolo** e, alla fine, una call to action verso la pagina *Contatti*;
+  - una **barra laterale** con **"Altri servizi"**, che elenca automaticamente tutti gli altri servizi del sito (escluso quello dell'articolo) con il link al loro articolo, e un riquadro con i contatti (telefono, email, indirizzo).
+- **Commenti disattivati** su tutti gli articoli (nessun modulo commenti, commenti e pingback chiusi).
 
 ---
 
@@ -154,6 +169,10 @@ Fornisci:
 ## 8. Controlli finali
 - Nessuna immagine o testo di esempio del template rimasto (nemmeno "lorem ipsum" nei box di "Perché sceglierci"); nessun placeholder immagine vuoto o rotto.
 - Recensioni senza foto dei clienti.
+- Galleria a carosello presente in Home, con tutte le foto alla stessa dimensione.
+- Pagina Chi Siamo divisa in due sezioni alternate (testo | immagine, immagine | testo).
+- Articoli con hero, barra laterale "Altri servizi" e commenti disattivati.
+- Numeri chiave (se presenti) verificati con il cliente.
 - Ogni sezione che prevede un'immagine ne contiene una.
 - La Galleria contiene tutte le immagini caricate.
 - Nessuna sezione extra oltre a quelle elencate.

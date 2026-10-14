@@ -172,7 +172,8 @@ function contactFormInfo(ctx, hash) {
 /**
  * @param {object} p
  *   ctx, pages: [{ key, role, title, slug, seo, doc }] (the 5 site pages, doc = importable template or null),
- *   templates: [{ key, role, title, type, doc }], posts: [{ key, title, slug, content, excerpt, image, seo }],
+ *   templates: [{ key, role, title, type, doc }], posts: [{ key, title, slug, content, excerpt, image, seo, doc }]
+ *   (doc = Elementor document of the article, designed like the single post template),
  *   images: [{ file, alt, photo, logo }], imagesDir, category, globalStyles (template colors and fonts)
  * @returns {{ fileName: string, buffer: Buffer }}
  */
@@ -212,7 +213,7 @@ export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, c
     menu: ctx.menu,
     contactForm: contactFormInfo(ctx, hash),
     pages: pages.map((p) => ({ key: p.key, role: p.role, title: p.title, slug: p.slug, seo: p.seo || null, elementor: addDoc(p.key, p.doc) })),
-    posts,
+    posts: posts.map(({ doc, ...p }) => ({ ...p, elementor: doc ? addDoc(p.key, doc) : null })),
     templates: templates.map((t) => ({ key: t.key, role: t.role, title: t.title, type: t.type, elementor: addDoc(t.key, t.doc) })),
     globalStyles: globalStyles || null,
     // Without Elementor Pro the plugin itself displays the header and footer (no other addon needed)

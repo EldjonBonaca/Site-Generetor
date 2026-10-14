@@ -64,7 +64,7 @@ test('buildSite: every variant builds valid documents whose marks match the anal
   const variants = [
     {},
     { layout: { header: 'topbar', hero: 'split', features: 'cards', cta: 'split', services: 'boxed', contact: 'stacked', footer: 'light', testimonials: 'minimal', gallery: '4' } },
-    { layout: { header: 'centered', hero: 'left', cta: 'none' } },
+    { layout: { header: 'centered', hero: 'left' }, sections: ['highlights', 'about', 'stats', 'features', 'services', 'process', 'gallery', 'reviews', 'faq'] },
     // Every look and layout value of the design directions
     { style: { theme: 'dark', buttons: 'square', cards: 'accent', titles: 'bar', align: 'left', scale: 'xl', images: 'square', titleCase: 'upper' }, layout: { header: 'bold', hero: 'bottom', about: 'wide', features: 'list', services: 'overlay', testimonials: 'band', footer: 'brand', divider: 'tilt' } },
     { style: { theme: 'light', buttons: 'pill', cards: 'tinted', titles: 'plain', scale: 'large', images: 'framed' }, layout: { hero: 'card', about: 'image-right', features: 'cards', services: 'cards', testimonials: 'cards', footer: 'light', divider: 'waves' } },
@@ -101,7 +101,7 @@ test('buildSite: every variant builds valid documents whose marks match the anal
 });
 
 test('buildSite: structure required by the prompt', () => {
-  const { docs } = buildSite(sanitizeSpec({ layout: { cta: 'none' } }), sampleSite(5));
+  const { docs } = buildSite(sanitizeSpec({ sections: ['about', 'features', 'services', 'gallery', 'reviews'] }), sampleSite(5));
   const json = (role) => JSON.stringify(docs[role].doc);
   const count = (role, re) => (json(role).match(re) || []).length;
   const serviceSlots = (role) => [...docs[role].marks.values()].filter((m) => m.slot === 'service_list').map((m) => m.service);
@@ -109,7 +109,7 @@ test('buildSite: structure required by the prompt', () => {
   assert.deepEqual(serviceSlots('services'), [0, 1, 2, 3, 4], 'services page: one card per service');
   assert.equal(count('home', /"widgetType":"testimonial"/g), 3, '3 reviews');
   assert.equal(count('about', /"widgetType":"testimonial"/g), 3, 'the same 3 reviews on About');
-  assert.equal(docs.home.doc.content.length, 5, 'hero, about, why us, services, reviews (no call to action)');
+  assert.equal(docs.home.doc.content.length, 6, 'hero, about, why us, services, carousel, reviews (no call to action)');
   assert.match(json('home'), /"url":"\/chi-siamo\/"/, '"Scopri di più" -> Chi Siamo');
   assert.match(json('home'), /"url":"\/servizi\/"/, '"Tutti i servizi" -> Servizi');
   assert.match(json('contact'), /\[metform form_id=\\"INSERIRE_ID\\"\]/);
@@ -139,8 +139,8 @@ test('buildSite: structure required by the prompt', () => {
   for (const [role, d] of Object.entries(docs)) d.doc.content.forEach((el) => walk(el, role));
   const featureBoxes = JSON.parse(json('home')).content[2].elements[1].elements.map((e) => e.elements[0].settings);
   assert.deepEqual(featureBoxes.map((s) => s.title_text), DEFAULT_SPEC.copy.features.map((f) => f.title), '"Why choose us": the 4 strengths of the template');
-  // About: subheader, a single "Chi siamo" section, why us, reviews
-  assert.equal(docs.about.doc.content.length, 4);
+  // About: subheader, "Chi siamo" in two alternating rows (text | image, image | text), why us, reviews
+  assert.equal(docs.about.doc.content.length, 5, 'subheader, Chi siamo in two rows, why us, reviews');
   assert.match(json('about'), /"title":"Chi siamo"/);
   assert.doesNotMatch(json('about'), /nostra storia|missione/i);
   // Without logo: the site name
@@ -229,4 +229,78 @@ test('templates of the same category get really different designs', async () => 
   // The builder really renders the differences
   const docs = saved.map((spec) => JSON.stringify(buildSite(spec, sampleSite()).docs.home.doc));
   assert.equal(new Set(docs).size, 5);
+});
+
+test('industry analysis of a category drives directions and sections of its templates', async () => {
+  const { analyzeCategory, sanitizeProfile, buildProfilePrompt } = await import('../src/templates/industry.js');
+  const { REQUIRED_SECTIONS, OPTIONAL_SECTIONS } = await import('../src/templates/spec.js');
+  const { DIRECTIONS } = await import('../src/templates/directions.js');
+  const category = { name: 'Impresa edile', description: '' };
+  assert.match(buildProfilePrompt(category).prompt, /\| Nome della categoria \| `Impresa edile` \|/);
+
+  // Any answer becomes a usable profile: required sections always there, at least 5 known directions
+  const p = sanitizeProfile({ sections: ['faq', 'nope', 'reviews'], directions: ['industrial', 'unknown'], conventions: ['<b>Foto dei cantieri</b>', 3] });
+  for (const s of REQUIRED_SECTIONS) assert.ok(p.sections.includes(s), `required section ${s}`);
+  assert.ok(p.sections.includes('faq'));
+  assert.equal(p.directions[0], 'industrial');
+  assert.equal(p.directions.length, 5);
+  assert.ok(p.directions.every((d) => DIRECTIONS.some((x) => x.id === d)));
+  assert.deepEqual(p.conventions, ['Foto dei cantieri']);
+
+  const { profile } = await analyzeCategory(new MockProvider({}), category);
+  const saved = [];
+  for (let i = 0; i < 5; i++) {
+    const { spec } = await generateTemplateSpec(new MockProvider({}), { category, existing: saved, profile });
+    assert.ok(profile.directions.includes(spec.direction), 'a direction suitable for the industry');
+    for (const s of REQUIRED_SECTIONS) assert.ok(spec.sections.includes(s));
+    assert.ok(spec.sections.filter((s) => OPTIONAL_SECTIONS.includes(s)).every((s) => profile.sections.includes(s)), 'only recommended optional sections');
+    saved.push(spec);
+  }
+  assert.equal(new Set(saved.map((s) => s.direction)).size, 5);
+  assert.ok(new Set(saved.map((s) => s.sections.join())).size >= 4, 'the templates do not all have the same sections');
+  const { prompt } = buildTemplatePrompt({ category, direction: DIRECTIONS[0], plan: { fonts: { heading: 'Oswald', body: 'Roboto' }, style: saved[0].style, layout: saved[0].layout, sections: ['about', 'faq', 'features', 'services', 'gallery', 'reviews'] }, profile });
+  assert.match(prompt, /INDUSTRY ANALYSIS OF THE CATEGORY/);
+  assert.match(prompt, /Sections of the Home page after the hero, in this order: "about".*"faq"/);
+  assert.match(prompt, /"faq": \[4 ×/, 'copy asked for the optional sections of the template');
+  assert.doesNotMatch(prompt, /"steps": \[4 ×/, 'not for the sections it does not have');
+});
+
+test('Home carousel, About in two alternating rows, designed articles', async () => {
+  const { articleDoc } = await import('../src/templates/builder.js');
+  const spec = sanitizeSpec({ sections: ['highlights', 'about', 'stats', 'features', 'services', 'process', 'gallery', 'reviews', 'faq'] });
+  const { docs } = buildSite(spec, sampleSite(3));
+  const home = JSON.stringify(docs.home.doc);
+  assert.equal(docs.home.doc.content.length, 10, 'hero + 9 sections in the order of the template');
+  assert.match(home, /"widgetType":"image-carousel"/);
+  assert.ok([...docs.home.marks.values()].some((m) => m.slot === 'carousel'));
+  assert.match(home, /"widgetType":"accordion"/);
+  assert.match(home, /"title":"01"/);
+  // Hero edge in the color of the next section
+  assert.equal(docs.home.doc.content[0].settings.shape_divider_bottom_color, docs.home.doc.content[1].settings.background_color);
+
+  // About: text | image, then image | text
+  const [, row1, row2] = docs.about.doc.content;
+  const kinds = (row) => row.elements.map((col) => (JSON.stringify(col).includes('"widgetType":"image"') ? 'image' : 'text'));
+  assert.deepEqual(kinds(row1), ['text', 'image']);
+  assert.deepEqual(kinds(row2), ['image', 'text']);
+  assert.match(JSON.stringify(row1), /"title":"Chi siamo"/);
+  assert.doesNotMatch(JSON.stringify(row2), /"widgetType":"heading"/, 'no sub-title in the second row');
+  assert.match(JSON.stringify(docs.about.doc), /"title":"20\+"/, 'key figures on About too');
+
+  // Single post template: hero with the featured image (dynamic), sidebar with every service
+  const single = JSON.stringify(docs.single_post.doc);
+  assert.match(single, /post-featured-image/);
+  assert.match(single, /"title":"Altri servizi"/);
+  assert.doesNotMatch(single, /comments/i);
+  // Article of "Servizio 2": static, its image, its title and content, the other services only
+  const art = JSON.stringify(articleDoc(docs.single_post.doc, { title: 'Servizio 2', content: '<p>Testo</p>', imageUrl: 'https://x.it/s2.webp', url: '/servizio-2/' }));
+  assert.doesNotMatch(art, /theme-post-|__dynamic__/);
+  assert.match(art, /"url":"https:\/\/x\.it\/s2\.webp"/);
+  assert.match(art, /"editor":"<p>Testo<\/p>"/);
+  assert.match(art, /"text":"Servizio 1"/);
+  assert.match(art, /"text":"Servizio 3"/);
+  assert.doesNotMatch(art, /"text":"Servizio 2"/);
+  // A site with one service: no empty "Other services" box
+  const one = buildSite(spec, sampleSite(1)).docs.single_post.doc;
+  assert.doesNotMatch(JSON.stringify(articleDoc(one, { title: 'Servizio 1', content: '', imageUrl: null, url: '/servizio-1/' })), /Altri servizi|background_image/);
 });

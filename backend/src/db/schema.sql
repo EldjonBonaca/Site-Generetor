@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS template_categories (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   name        TEXT NOT NULL COLLATE NOCASE UNIQUE,
   description TEXT NOT NULL DEFAULT '',     -- what the businesses of the category do (sent to the AI)
+  profile_json TEXT,                        -- industry analysis of the category by the AI (templates/industry.js)
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

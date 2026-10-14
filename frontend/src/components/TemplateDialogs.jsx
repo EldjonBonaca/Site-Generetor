@@ -5,12 +5,73 @@
  */
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, RefreshCw, Save, Sparkles } from 'lucide-react';
+import { ArrowDown, ArrowUp, Bot, Plus, RefreshCw, Save, Sparkles, X } from 'lucide-react';
 import { api } from '../api.js';
 import { useT } from '../i18n/index.jsx';
 import { useToast } from './Toast.jsx';
 import { Alert, Badge, Button, EmptyState, Field, Input, Modal, Select, Spinner, Textarea, Toggle } from './ui.jsx';
 import { TemplatePreview, TemplateSwatches } from './TemplatePreview.jsx';
+
+/** Sections of the Home page after the hero (spec.sections); the first five are always present. */
+export const HOME_SECTION_LABELS = {
+  about: 'About us',
+  features: 'Why choose us',
+  services: 'Services',
+  gallery: 'Photo carousel',
+  reviews: 'Reviews',
+  cta: 'Call to action',
+  stats: 'Key figures',
+  process: 'How we work',
+  faq: 'Frequently asked questions',
+  highlights: 'Guarantees strip',
+};
+const REQUIRED_SECTIONS = ['about', 'features', 'services', 'gallery', 'reviews'];
+
+/** Order of the Home sections: move them, add or remove the optional ones. */
+function SectionsEditor({ value, onChange }) {
+  const { t } = useT();
+  const move = (i, d) => {
+    const next = [...value];
+    [next[i], next[i + d]] = [next[i + d], next[i]];
+    onChange(next);
+  };
+  const missing = Object.keys(HOME_SECTION_LABELS).filter((s) => !value.includes(s));
+  return (
+    <div>
+      <p className="mb-1 text-sm font-medium text-slate-700">{t('Home sections')}</p>
+      <p className="mb-2 text-xs text-slate-500">{t('After the hero, in this order. About us, Why choose us, Services, Photo carousel and Reviews are always present.')}</p>
+      <ol className="space-y-1">
+        {value.map((s, i) => (
+          <li key={s} className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700">
+            <span className="w-4 text-slate-400 tabular-nums">{i + 1}</span>
+            <span className="flex-1">{t(HOME_SECTION_LABELS[s] || s)}</span>
+            <button type="button" className="rounded p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => move(i, -1)} disabled={i === 0} aria-label={t('Move up')}>
+              <ArrowUp className="size-3.5" />
+            </button>
+            <button type="button" className="rounded p-0.5 text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => move(i, 1)} disabled={i === value.length - 1} aria-label={t('Move down')}>
+              <ArrowDown className="size-3.5" />
+            </button>
+            {!REQUIRED_SECTIONS.includes(s) && (
+              <button type="button" className="rounded p-0.5 text-slate-400 hover:text-red-600" onClick={() => onChange(value.filter((x) => x !== s))} aria-label={t('Remove')}>
+                <X className="size-3.5" />
+              </button>
+            )}
+          </li>
+        ))}
+      </ol>
+      {!!missing.length && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {missing.map((s) => (
+            <button key={s} type="button" onClick={() => onChange([...value, s])} className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-xs text-slate-600 hover:border-brand-400 hover:text-brand-700">
+              <Plus className="size-3" />
+              {t(HOME_SECTION_LABELS[s])}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export const SECTION_LABELS = {
   header: 'Header',
@@ -48,7 +109,6 @@ const VARIANT_LABELS = {
   'features.list': 'List in two columns beside the title',
   'cta.banner': 'Banner over a photo',
   'cta.split': 'Rounded colored band with a button',
-  'cta.none': 'No call to action',
   'services.cards': 'Outlined cards',
   'services.boxed': 'Boxed cards on a tinted background',
   'services.overlay': 'Text over the photos',
@@ -99,7 +159,7 @@ const LANGUAGE_OPTIONS = { it: 'Italiano', en: 'English', es: 'Español', fr: 'F
 export const variantLabel = (t, section, value) => t(VARIANT_LABELS[`${section}.${value}`] || value);
 
 /** Generate a template for `category` with the AI, then save it. */
-export function TemplateGenerator({ open, onClose, category, onSaved }) {
+export function TemplateGenerator({ open, onClose, category, onSaved, onAnalyzed }) {
   const { t } = useT();
   const toast = useToast();
   const [providers, setProviders] = useState(null);
@@ -143,6 +203,10 @@ export function TemplateGenerator({ open, onClose, category, onSaved }) {
       });
       setDiscarded(previous);
       setDraft(res);
+      if (res.analyzed) {
+        toast(t('The AI analyzed the industry of the category first.'));
+        onAnalyzed?.();
+      }
       setName((n) => n || `${category.name} – ${t('template')} ${category.template_count + 1}`);
     } catch (e) {
       toast(e.message, 'error');
@@ -236,6 +300,9 @@ export function TemplateGenerator({ open, onClose, category, onSaved }) {
                   {t('Direction')}: {t(draft.direction.name)}
                 </p>
                 <p className="text-xs text-slate-500">{t(draft.direction.summary)}</p>
+                <p className="text-xs text-slate-600">
+                  <span className="font-medium">{t('Home sections')}:</span> {draft.spec.sections.map((s) => t(HOME_SECTION_LABELS[s] || s)).join(' · ')}
+                </p>
                 <TemplateSwatches spec={draft.spec} />
                 {draft.spec.description && <p className="text-xs text-slate-600">{draft.spec.description}</p>}
                 <p className="text-xs text-slate-500">
@@ -260,7 +327,7 @@ export function TemplateGenerator({ open, onClose, category, onSaved }) {
                 </Button>
               )}
             </div>
-            {busy && <p className="text-right text-xs text-slate-500">{t('This can take up to a minute.')}</p>}
+            {busy && <p className="text-right text-xs text-slate-500">{category?.profile ? t('This can take up to a minute.') : t('The AI first analyzes the industry of the category, then designs the template: this can take up to two minutes.')}</p>}
           </div>
         </div>
       )}
@@ -386,6 +453,8 @@ export function TemplateEditor({ template, onClose, onSaved }) {
               {(id) => <input id={id} type="range" min="0" max="30" value={spec.style.radius} onChange={(e) => setStyle({ radius: Number(e.target.value) })} className="w-full accent-brand-600" />}
             </Field>
             <Toggle checked={spec.style.uppercase} onChange={(v) => setStyle({ uppercase: v })} label={t('Uppercase buttons and labels')} />
+
+            <SectionsEditor value={spec.sections} onChange={(sections) => setSpec((s) => ({ ...s, sections }))} />
 
             <div>
               <p className="mb-1 text-sm font-medium text-slate-700">{t('Look of the site')}</p>

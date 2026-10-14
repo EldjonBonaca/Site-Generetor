@@ -71,7 +71,7 @@ test('Italian full site: template, articles, gallery, reviews, contact form, men
   const cat = await api('POST', '/template-categories', { name: 'Edilizia', description: 'Imprese edili e ristrutturazioni' });
   const draft = await api('POST', `/template-categories/${cat.id}/templates/generate`, { providerId: provider.id, instructions: 'stile solido e moderno' });
   assert.match(draft.spec.copy.heroTitle, /^Edilizia/);
-  const spec = { ...draft.spec, layout: { ...draft.spec.layout, cta: 'banner', header: 'topbar', contact: 'split' } };
+  const spec = { ...draft.spec, sections: ['about', 'features', 'cta', 'services', 'gallery', 'reviews'], layout: { ...draft.spec.layout, cta: 'banner', header: 'topbar', contact: 'split' } };
   const tpl = await api('POST', `/template-categories/${cat.id}/templates`, { name: 'Edilizia moderna', spec, instructions: 'stile solido e moderno', language: 'it' });
   await api('PUT', `/projects/${pid}/template`, { template_id: tpl.id });
   await api('PATCH', `/projects/${pid}`, { settings: { generation: { providerId: provider.id } } });
@@ -138,7 +138,8 @@ test('Italian full site: template, articles, gallery, reviews, contact form, men
     scanned += urls.length;
     for (const u of urls) assert.ok(u.startsWith(baseUrl), `${f}: placeholder image ${u}`);
     // The reviews have no photo of the customer: their image is intentionally empty
-    const json = read(f).replace(/"testimonial_image":\{"url":"","id":""\}/g, '');
+    // (and the hero of the single post template shows the featured image of each article: dynamic tag)
+    const json = read(f).replace(/"testimonial_image":\{"url":"","id":""\}/g, '').replace(/"background_image":\{"url":"","id":""\}(?=.*post-featured-image)/g, '');
     assert.doesNotMatch(json, /template\.invalid|"url":""/, `${f}: empty or placeholder image`);
   }
   assert.ok(scanned > 20, `image URLs scanned: ${scanned}`);
@@ -153,9 +154,9 @@ test('Italian full site: template, articles, gallery, reviews, contact form, men
     assert.match(servicesJson, new RegExp(`"title":"${s.name}"`));
     assert.match(servicesJson, new RegExp(`"url":"/${s.slug}/"`));
   }
-  // Home: hero, chi siamo, perché sceglierci, call to action, 3 featured services, reviews
+  // Home: hero, chi siamo, perché sceglierci, call to action, 3 featured services, photo carousel, reviews
   const homeJson = read('templates/home.json');
-  assert.equal(JSON.parse(homeJson).content.length, 6);
+  assert.equal(JSON.parse(homeJson).content.length, 7);
   assert.equal([...homeJson.matchAll(/"link_to":"custom"/g)].length, 3);
   assert.equal([...homeJson.matchAll(/"widgetType":"testimonial"/g)].length, 3);
   assert.equal([...homeJson.matchAll(/"testimonial_image":\{"url":"","id":""\}/g)].length, 3, 'reviews without photos');

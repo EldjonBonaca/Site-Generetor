@@ -5,7 +5,12 @@
  *
  * The spec decides the visual identity: palette and fonts, the look of the whole site
  * (spec.style: light / dark theme, button corners, card style, title style and alignment, title
- * size, image treatment, title case) and the layout of every section (spec.layout).
+ * size, image treatment, title case), the layout of every section (spec.layout) and the sections
+ * of the Home page and their order (spec.sections).
+ *
+ * The single post template (Elementor Pro theme template, dynamic) is also turned into one static
+ * Elementor document per service article (articleDoc), so the articles have the same design with
+ * or without Elementor Pro.
  *
  * Everything that is not marketing copy is decided here and marked "fixed": page titles in the
  * subheaders, menus, service names and links, contact data, copyright. The AI only writes the
@@ -14,7 +19,7 @@
  *   { fixed }                 value already final (not sent to the AI)
  *   { hint, max, min }        AI field
  *   { share }                 same text on several pages (the 3 reviews of Home and About)
- *   { slot, service }         image slot role: hero | subheader | logo | service_list | photo | gallery
+ *   { slot, service }         image slot role: hero | subheader | logo | service_list | photo | gallery | carousel
  *
  * Every text widget gets its text (sample copy of the template or final data): an empty setting
  * would show the Elementor default ("Lorem ipsum…") and would never be given to the AI.
@@ -24,7 +29,7 @@
  */
 import crypto from 'node:crypto';
 import { telHref } from '../lib/util.js';
-import { mix, rgba, siteColors, tint } from './spec.js';
+import { DEFAULT_SECTIONS, mix, rgba, siteColors, tint } from './spec.js';
 
 /** Image of a template before a project fills it (never left in an exported site). */
 export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
@@ -33,18 +38,18 @@ export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
  * Version of the generated structure. Field ids depend on it: a generation made with another
  * version cannot be exported (exporter.js), it has to be generated again.
  */
-export const BUILDER_VERSION = 3;
+export const BUILDER_VERSION = 4;
 
 export const DOC_ROLES = ['home', 'about', 'services', 'gallery', 'contact', 'single_post', 'header', 'footer'];
 
 /** Fixed labels in the site language. */
 const LABELS = {
-  it: { links: 'Link', services: 'Servizi', contacts: 'Contatti', about: 'Chi siamo', readMore: 'Scopri di più', phone: 'Telefono', email: 'Email', address: 'Indirizzo' },
-  en: { links: 'Links', services: 'Services', contacts: 'Contact', about: 'About us', readMore: 'Read more', phone: 'Phone', email: 'Email', address: 'Address' },
-  es: { links: 'Enlaces', services: 'Servicios', contacts: 'Contacto', about: 'Quiénes somos', readMore: 'Leer más', phone: 'Teléfono', email: 'Email', address: 'Dirección' },
-  fr: { links: 'Liens', services: 'Services', contacts: 'Contact', about: 'Qui sommes-nous', readMore: 'En savoir plus', phone: 'Téléphone', email: 'E-mail', address: 'Adresse' },
-  de: { links: 'Links', services: 'Leistungen', contacts: 'Kontakt', about: 'Über uns', readMore: 'Mehr erfahren', phone: 'Telefon', email: 'E-Mail', address: 'Adresse' },
-  pt: { links: 'Links', services: 'Serviços', contacts: 'Contactos', about: 'Quem somos', readMore: 'Saiba mais', phone: 'Telefone', email: 'Email', address: 'Morada' },
+  it: { links: 'Link', services: 'Servizi', contacts: 'Contatti', about: 'Chi siamo', readMore: 'Scopri di più', phone: 'Telefono', email: 'Email', address: 'Indirizzo', otherServices: 'Altri servizi' },
+  en: { links: 'Links', services: 'Services', contacts: 'Contact', about: 'About us', readMore: 'Read more', phone: 'Phone', email: 'Email', address: 'Address', otherServices: 'Other services' },
+  es: { links: 'Enlaces', services: 'Servicios', contacts: 'Contacto', about: 'Quiénes somos', readMore: 'Leer más', phone: 'Teléfono', email: 'Email', address: 'Dirección', otherServices: 'Otros servicios' },
+  fr: { links: 'Liens', services: 'Services', contacts: 'Contact', about: 'Qui sommes-nous', readMore: 'En savoir plus', phone: 'Téléphone', email: 'E-mail', address: 'Adresse', otherServices: 'Autres services' },
+  de: { links: 'Links', services: 'Leistungen', contacts: 'Kontakt', about: 'Über uns', readMore: 'Mehr erfahren', phone: 'Telefon', email: 'E-Mail', address: 'Adresse', otherServices: 'Weitere Leistungen' },
+  pt: { links: 'Links', services: 'Serviços', contacts: 'Contactos', about: 'Quem somos', readMore: 'Saiba mais', phone: 'Telefone', email: 'Email', address: 'Morada', otherServices: 'Outros serviços' },
 };
 
 const PADDING = { compact: 64, normal: 96, airy: 128 };
@@ -140,9 +145,13 @@ function createDoc(role, spec, site) {
     }
     return o.bg ? { background_background: 'classic', background_color: o.bg } : {};
   };
-  /** Photo background (image slot) + gradient overlay [from, to, angle]. */
+  /**
+   * Photo background + gradient overlay [from, to, angle]: an image slot (o.slot), or the featured
+   * image of the post (o.dynamicBg, Elementor Pro dynamic tag; articleDoc() makes it static).
+   */
   const photo = (settings, el, o) => {
-    Object.assign(settings, { background_background: 'classic', background_color: c.dark, background_image: image(), background_position: 'center center', background_size: 'cover', background_repeat: 'no-repeat' });
+    Object.assign(settings, { background_background: 'classic', background_color: c.dark, background_image: o.dynamicBg ? { url: '', id: '' } : image(), background_position: 'center center', background_size: 'cover', background_repeat: 'no-repeat' });
+    if (o.dynamicBg) settings.__dynamic__ = { background_image: `[elementor-tag id="${id()}" name="post-featured-image" settings="%7B%7D"]` };
     if (o.overlay) {
       const [from, to, angle = 180] = o.overlay;
       Object.assign(settings, {
@@ -154,7 +163,7 @@ function createDoc(role, spec, site) {
         background_overlay_opacity: px(1),
       });
     }
-    mark(el, 'background_image', { slot: o.slot, ...(o.service !== undefined ? { service: o.service } : {}) });
+    if (o.slot) mark(el, 'background_image', { slot: o.slot, ...(o.service !== undefined ? { service: o.service } : {}) });
   };
 
   // --- containers -------------------------------------------------------------------------
@@ -178,7 +187,8 @@ function createDoc(role, spec, site) {
     };
     if (o.minHeight) settings.min_height = px(o.minHeight, 'vh');
     const el = { id: id(), elType: 'container', isInner: false, settings, elements };
-    if (o.slot) photo(settings, el, o);
+    if (o.slot || o.dynamicBg) photo(settings, el, o);
+    if (o.css) settings.css_classes = o.css;
     if (o.divider && o.divider.shape !== 'none') {
       Object.assign(settings, {
         shape_divider_bottom: o.divider.shape,
@@ -231,6 +241,7 @@ function createDoc(role, spec, site) {
     if (o.anim !== undefined && o.anim !== false) animate(settings, o.anim);
     const el = { id: id(), elType: 'container', isInner: true, settings, elements };
     if (o.slot) photo(settings, el, o);
+    if (o.css) settings.css_classes = o.css;
     return el;
   };
   const columns = (count) => ({ 1: 100, 2: 48, 3: 31, 4: 22.5 })[Math.min(4, Math.max(1, count))];
@@ -327,7 +338,7 @@ function createDoc(role, spec, site) {
     if (o.url) mark(el, 'link.url', { fixed: true });
     return el;
   };
-  /** icon list. items: [{ text, url?, icon? }] (all fixed), o: { inline, align, color, iconColor, hover, size, weight } */
+  /** icon list. items: [{ text, url?, icon?, hint? }] (fixed unless they have a hint), o: { inline, align, color, iconColor, hover, size, weight, css } */
   const iconList = (items, o = {}) => {
     const el = widget('icon-list', {
       view: o.inline ? 'inline' : 'traditional',
@@ -343,9 +354,11 @@ function createDoc(role, spec, site) {
       text_color: o.color || ink.text,
       text_color_hover: o.hover || ink.kicker,
       ...typo('icon_', fonts.body, o.size || 16, o.weight || '400'),
+      ...(o.css ? { _css_classes: o.css } : {}),
     });
     items.forEach((it, i) => {
-      mark(el, `icon_list.${i}.text`, { fixed: true });
+      if (it.hint) field(el, `icon_list.${i}.text`, { hint: it.hint, max: it.max || 40 });
+      else mark(el, `icon_list.${i}.text`, { fixed: true });
       if (it.url && !isContactLink(it.url)) mark(el, `icon_list.${i}.link.url`, { fixed: true });
     });
     return el;
@@ -437,7 +450,7 @@ function createDoc(role, spec, site) {
   const shortcode = (code) => widget('shortcode', { shortcode: code });
   const html = (code) => widget('html', { html: code });
 
-  return { c, ink, L, st, fonts, pad, radius, imgRadius, marks, mark, section, box, columns, heading, kicker, line, text, button, picture, iconList, iconBox, serviceCard, review, shortcode, html, widget, typo };
+  return { id, c, ink, L, st, fonts, pad, radius, imgRadius, marks, mark, section, box, columns, heading, kicker, line, text, button, picture, iconList, iconBox, serviceCard, review, shortcode, html, widget, typo };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -511,8 +524,7 @@ function features(b) {
 
 function cta(b, site) {
   const { copy, layout } = b.spec;
-  if (layout.cta === 'none') return null;
-  const banner = layout.cta === 'banner';
+  const banner = layout.cta !== 'split';
   const title = b.heading(copy.ctaTitle, { size: 40, color: '#FFFFFF', align: banner ? 'center' : 'left', hint: 'call to action title: invite to contact the business', max: 80 });
   const body = b.text(copy.ctaText, { color: 'rgba(255,255,255,0.9)', align: banner ? 'center' : 'left', size: 18, hint: 'call to action text (1–2 sentences)', max: 200 });
   const btn = b.button(copy.ctaButton, site.pages.contact.url, { variant: 'secondary', align: banner ? 'center' : 'right', hint: 'call to action button text (leads to the contact page)', max: 30 });
@@ -565,7 +577,7 @@ function reviews(b) {
  * right of the text, or ("wide") text on top and a wide photo below.
  */
 function mediaRow(b, content, o = {}) {
-  const variant = b.spec.layout.about;
+  const variant = o.imageFirst === undefined ? b.spec.layout.about : o.imageFirst ? 'image-left' : 'image-right';
   if (variant === 'wide') {
     return b.section(
       [b.box(content, { maxWidth: 860, gap: 16, align: 'stretch' }), b.box([b.picture('photo', { height: o.wideHeight || 460, frame: true })], { anim: 0 })],
@@ -642,58 +654,187 @@ function hero(b, site) {
   });
 }
 
-function home(b, site) {
+/** "Chi siamo" teaser of the Home page. */
+function aboutTeaser(b, site) {
+  const { copy } = b.spec;
+  return mediaRow(b, [
+    b.kicker(copy.aboutKicker, { hint: 'small label of the "about us" section', max: 30 }),
+    b.heading(copy.aboutTitle, { bar: b.st.titles === 'bar', hint: '"About us" section title', max: 70 }),
+    ...titleLine(b),
+    b.text(copy.aboutText, { hint: 'short presentation of the business (2–4 sentences)', max: 600 }),
+    b.button(copy.aboutButton, site.pages.about.url, { hint: 'button "Scopri di più" leading to the About page', max: 30 }),
+  ]);
+}
+
+/** Featured services (max 3) + "all services". */
+function featuredServices(b, site) {
   const { copy, layout } = b.spec;
-  const out = [hero(b, site)];
-
-  // 2. About teaser
-  out.push(
-    mediaRow(b, [
-      b.kicker(copy.aboutKicker, { hint: 'small label of the "about us" section', max: 30 }),
-      b.heading(copy.aboutTitle, { bar: b.st.titles === 'bar', hint: '"About us" section title', max: 70 }),
-      ...titleLine(b),
-      b.text(copy.aboutText, { hint: 'short presentation of the business (2–4 sentences)', max: 600 }),
-      b.button(copy.aboutButton, site.pages.about.url, { hint: 'button "Scopri di più" leading to the About page', max: 30 }),
-    ])
+  if (!site.services.length) return null;
+  const shown = site.services.slice(0, 3);
+  const boxed = layout.services === 'boxed';
+  const left = b.st.align === 'left' || b.st.titles === 'bar';
+  return b.section(
+    [
+      intro(b, {
+        kicker: { value: copy.servicesKicker, hint: 'small label of the services section', max: 30 },
+        title: { value: copy.servicesTitle, hint: 'title of the featured services section', max: 60 },
+        text: { value: copy.servicesText, hint: 'intro of the services section (1 sentence)', max: 200 },
+      }),
+      b.box(
+        shown.map((s, i) => b.serviceCard(s, i, copy.serviceText, { width: b.columns(shown.length), on: boxed ? 'alt' : 'base', anim: i * 120 })),
+        { row: true, gap: 28, align: 'stretch', justify: shown.length < 3 ? 'center' : 'space-between' }
+      ),
+      b.button(copy.servicesButton, site.pages.services.url, { align: left ? 'left' : 'center', hint: 'button "Tutti i servizi" leading to the Services page', max: 30 }),
+    ],
+    { bg: boxed ? b.ink.alt : b.ink.bg, align: 'center', gap: 44 }
   );
+}
 
-  // 3. Why choose us, 4. call to action
-  out.push(features(b));
-  const action = cta(b, site);
-  if (action) out.push(action);
+/** Photo carousel (Elementor image carousel, free): all the photos, cropped to the same size, with lightbox. */
+function homeGallery(b, site) {
+  const { copy } = b.spec;
+  const left = b.st.align === 'left' || b.st.titles === 'bar';
+  const carousel = b.widget('image-carousel', {
+    carousel: [image()],
+    thumbnail_size: 'large',
+    slides_to_show: '3',
+    slides_to_show_tablet: '2',
+    slides_to_show_mobile: '1',
+    slides_to_scroll: '1',
+    navigation: 'both',
+    image_stretch: 'yes',
+    link_to: 'file',
+    open_lightbox: 'yes',
+    autoplay: 'yes',
+    autoplay_speed: 4000,
+    pause_on_hover: 'yes',
+    infinite: 'yes',
+    speed: 600,
+    image_spacing: 'custom',
+    image_spacing_custom: px(18),
+    image_border_radius: corners(b.imgRadius),
+    arrows_size: px(26),
+    arrows_color: b.ink.dark ? '#FFFFFF' : b.c.heading,
+    dots_color: b.ink.dark ? 'rgba(255,255,255,0.4)' : tint(b.c.heading, 0.7),
+    dots_color_active: b.c.secondary,
+  });
+  b.mark(carousel, 'carousel', { slot: 'carousel' });
+  return b.section(
+    [
+      intro(b, {
+        kicker: { value: copy.galleryKicker, hint: 'small label of the photo gallery section of the Home page', max: 30 },
+        title: { value: copy.galleryTitle, hint: 'title of the photo gallery of the Home page (e.g. our works)', max: 60 },
+      }),
+      b.box([carousel], { anim: 0 }),
+      b.button(copy.galleryButton, site.pages.gallery.url, { variant: 'outline', outlineColor: b.ink.heading, align: left ? 'left' : 'center', hint: 'button leading to the Gallery page', max: 30 }),
+    ],
+    { bg: b.ink.bg, align: 'center', gap: 40 }
+  );
+}
 
-  // 5. Featured services (max 3) + "all services"
-  if (site.services.length) {
-    const shown = site.services.slice(0, 3);
-    const boxed = layout.services === 'boxed';
-    const left = b.st.align === 'left' || b.st.titles === 'bar';
-    out.push(
-      b.section(
-        [
-          intro(b, {
-            kicker: { value: copy.servicesKicker, hint: 'small label of the services section', max: 30 },
-            title: { value: copy.servicesTitle, hint: 'title of the featured services section', max: 60 },
-            text: { value: copy.servicesText, hint: 'intro of the services section (1 sentence)', max: 200 },
-          }),
-          b.box(
-            shown.map((s, i) => b.serviceCard(s, i, copy.serviceText, { width: b.columns(shown.length), on: boxed ? 'alt' : 'base', anim: i * 120 })),
-            { row: true, gap: 28, align: 'stretch', justify: shown.length < 3 ? 'center' : 'space-between' }
-          ),
-          b.button(copy.servicesButton, site.pages.services.url, { align: left ? 'left' : 'center', hint: 'button "Tutti i servizi" leading to the Services page', max: 30 }),
-        ],
-        { bg: boxed ? b.ink.alt : b.ink.bg, align: 'center', gap: 44 }
-      )
-    );
+/** Key numbers: 4 figures on a colored band. */
+function stats(b) {
+  const items = b.spec.copy.stats.map((x, i) =>
+    b.box(
+      [
+        b.heading(x.value, { tag: 'p', size: 46, align: 'center', color: b.c.secondary, hint: `key figure ${i + 1} of 4 of the business (e.g. "20+" years, "24h" response time): short, realistic for this business — the client will check it`, max: 12 }),
+        b.text(x.label, { align: 'center', color: 'rgba(255,255,255,0.85)', size: 15, hint: `label of key figure ${i + 1} (2–4 words)`, max: 40 }),
+      ],
+      { width: b.columns(4), tablet: 48, gap: 4, anim: i * 100 }
+    )
+  );
+  return b.section([b.box(items, { row: true, gap: 24, align: 'flex-start', justify: 'space-between' })], { gradient: [b.c.primaryText, b.c.dark, 135], padY: Math.round(b.pad * 0.75) });
+}
+
+/** How we work: 4 numbered steps. */
+function processSteps(b) {
+  const { copy } = b.spec;
+  const steps = copy.steps.map((x, i) =>
+    b.box(
+      [
+        b.heading(String(i + 1).padStart(2, '0'), { tag: 'p', size: 44, color: b.c.secondary, fixed: true }),
+        b.heading(x.title, { tag: 'h3', size: 20, hint: `step ${i + 1} of 4 of the way the business works with its customers (short title)`, max: 50 }),
+        b.text(x.text, { size: 15, hint: `explanation of step ${i + 1} (1–2 sentences)`, max: 160 }),
+      ],
+      { width: b.columns(4), card: true, on: 'base', pad: 28, gap: 8, anim: i * 120 }
+    )
+  );
+  return b.section(
+    [
+      intro(b, {
+        kicker: { value: copy.processKicker, hint: 'small label of the "how we work" section', max: 30 },
+        title: { value: copy.processTitle, hint: 'title of the "how we work" section', max: 60 },
+        text: { value: copy.processText, hint: 'intro of the "how we work" section (1 sentence)', max: 200 },
+      }),
+      b.box(steps, { row: true, gap: 24, align: 'stretch', justify: 'space-between' }),
+    ],
+    { bg: b.ink.bg, align: 'center', gap: 44 }
+  );
+}
+
+/** Frequently asked questions (accordion). */
+function faq(b) {
+  const { copy } = b.spec;
+  const accordion = b.widget('accordion', {
+    tabs: copy.faq.map((x) => ({ _id: b.id(), tab_title: x.q, tab_content: `<p>${escapeHtml(x.a)}</p>` })),
+    selected_icon: { value: 'fas fa-plus', library: 'fa-solid' },
+    selected_active_icon: { value: 'fas fa-minus', library: 'fa-solid' },
+    title_html_tag: 'h3',
+    border_width: px(1),
+    border_color: b.ink.border,
+    title_background: b.ink.card,
+    title_color: b.ink.heading,
+    tab_active_color: b.ink.kicker,
+    icon_color: b.c.secondary,
+    icon_active_color: b.c.secondary,
+    content_background_color: b.ink.card,
+    content_color: b.ink.text,
+    title_padding: sides(20, 24, 20, 24),
+    content_padding: sides(4, 24, 22, 24),
+    ...b.typo('title_', b.fonts.heading, 17, b.st.headingWeight),
+    ...b.typo('content_', b.fonts.body, 16, '400'),
+  });
+  copy.faq.forEach((_, i) => {
+    b.mark(accordion, `tabs.${i}.tab_title`, { hint: `frequently asked question ${i + 1} of 4 of the customers of this business`, max: 120 });
+    b.mark(accordion, `tabs.${i}.tab_content`, { hint: `answer to question ${i + 1} (1–3 sentences, no invented prices)`, max: 400 });
+  });
+  const parts = {
+    kicker: { value: copy.faqKicker, hint: 'small label of the FAQ section', max: 30 },
+    title: { value: copy.faqTitle, hint: 'title of the frequently asked questions section', max: 60 },
+  };
+  const left = b.st.align === 'left' || b.st.titles === 'bar';
+  if (left) return b.section([b.box([intro(b, parts, { align: 'left' })], { width: 34 }), b.box([accordion], { width: 60, anim: 0 })], { row: true, bg: b.ink.alt, align: 'flex-start' });
+  return b.section([intro(b, parts), b.box([accordion], { maxWidth: 860, anim: 0 })], { bg: b.ink.alt, align: 'center', gap: 40 });
+}
+
+/** Strip of 4 short guarantees. */
+function highlights(b) {
+  const items = b.spec.copy.highlights.map((x, i) => ({ text: x, icon: 'fas fa-check-circle', hint: `short guarantee ${i + 1} of 4 of the business (2–4 words, e.g. free estimate)`, max: 40 }));
+  return b.section([b.iconList(items, { inline: true, align: 'center', color: '#FFFFFF', iconColor: b.c.secondary, hover: '#FFFFFF', size: 16, weight: '600' })], {
+    gradient: [b.c.primaryText, b.c.dark, 90],
+    padY: 26,
+    align: 'center',
+  });
+}
+
+const HOME_SECTIONS = { about: aboutTeaser, features, cta, services: featuredServices, gallery: homeGallery, reviews, stats, process: processSteps, faq, highlights };
+
+function home(b, site) {
+  const out = [hero(b, site)];
+  for (const id of b.spec.sections || DEFAULT_SECTIONS) {
+    const el = HOME_SECTIONS[id]?.(b, site);
+    if (el) out.push(el);
   }
-
-  // 6. Reviews
-  out.push(reviews(b));
+  // The shaped bottom edge of the hero takes the color of the next section
+  const next = out[1]?.settings;
+  if (next && out[0].settings.shape_divider_bottom) out[0].settings.shape_divider_bottom_color = next.background_color || b.ink.bg;
   return out;
 }
 
 function about(b, site) {
   const { copy } = b.spec;
-  // A single "Chi siamo" section (history, mission, values in one text: no "Our story" / "Our mission" titles)
+  const sections = b.spec.sections || DEFAULT_SECTIONS;
+  // "Chi siamo" in two rows: text | image, then image | text (no "Our story" / "Our mission" titles)
   const out = [
     subheader(b, site, 'about'),
     mediaRow(
@@ -702,17 +843,28 @@ function about(b, site) {
         b.heading(b.L.about, { bar: b.st.titles === 'bar', fixed: true }),
         ...titleLine(b),
         b.text(copy.aboutPageText, {
-          hint: 'extended presentation of the business for the "About us" section of the About page: history, mission, values and experience in one flowing text of 3–4 paragraphs, WITHOUT sub-titles (no "Our story" / "Our mission" headings); it may include a short bullet list',
-          max: 1600,
-          min: 500,
+          hint: 'first part of the presentation of the business on the About page: who we are, history and experience (2 paragraphs), WITHOUT sub-titles',
+          max: 1200,
+          min: 300,
         }),
       ],
-      { height: 540, wideHeight: 500 }
+      { imageFirst: false, height: 500 }
     ),
-    features(b),
+    mediaRow(
+      b,
+      [
+        b.text(copy.aboutPageText2, {
+          hint: 'second part of the presentation on the About page, after the first one: values, way of working and commitment to the customers (2 paragraphs, may include a short list), WITHOUT sub-titles and without repeating the first part',
+          max: 1200,
+          min: 250,
+        }),
+      ],
+      { imageFirst: true, height: 500, bg: b.ink.alt }
+    ),
   ];
-  const action = cta(b, site);
-  if (action) out.push(action);
+  if (sections.includes('stats')) out.push(stats(b));
+  out.push(features(b));
+  if (sections.includes('cta')) out.push(cta(b, site));
   out.push(reviews(b));
   return out;
 }
@@ -820,25 +972,103 @@ function contact(b, site) {
 
 function singlePost(b, site) {
   const { copy } = b.spec;
-  return [
-    b.section(
-      [
-        b.widget('theme-post-featured-image', { image_size: 'large', height: px(460), height_mobile: px(240), 'object-fit': 'cover', image_border_radius: corners(b.imgRadius) }),
-        b.widget('theme-post-title', { header_size: 'h1', title_color: b.ink.heading, ...b.typo('', b.fonts.heading, 42, b.st.headingWeight, { typography_line_height: px(1.2, 'em') }) }),
-        b.line(),
-        b.widget('theme-post-content', { text_color: b.ink.text, ...b.typo('', b.fonts.body, 17, '400', { typography_line_height: px(1.8, 'em') }) }),
-        b.box(
-          [
-            b.heading(copy.postCtaTitle, { size: 28, color: '#FFFFFF', hint: 'call to action at the end of every service article', max: 70 }),
-            b.text(copy.postCtaText, { color: 'rgba(255,255,255,0.9)', hint: 'call to action text at the end of the articles (1 sentence)', max: 200 }),
-            b.button(copy.postCtaButton, site.pages.contact.url, { variant: 'secondary', hint: 'button leading to the contact page', max: 30 }),
-          ],
-          { card: true, gradient: [b.c.primaryText, b.c.dark, 135], pad: 44, gap: 14 }
-        ),
-      ],
-      { gap: 28, width: 900, bg: b.ink.bg }
-    ),
-  ];
+  const center = b.st.align === 'center' && b.st.titles !== 'bar';
+  const align = center ? 'center' : 'left';
+  const hero = b.section(
+    [
+      b.kicker(b.L.services, { align, color: b.c.secondary, fixed: true }),
+      b.widget('theme-post-title', {
+        header_size: 'h1',
+        align,
+        title_color: '#FFFFFF',
+        ...b.typo('', b.fonts.heading, Math.round(48 * ({ normal: 1, large: 1.1, xl: 1.2 }[b.st.scale] || 1)), b.st.headingWeight, {
+          typography_line_height: px(1.15, 'em'),
+          typography_font_size_mobile: px(32),
+          ...(b.st.titleCase === 'upper' ? { typography_text_transform: 'uppercase' } : {}),
+        }),
+      }),
+      ...(b.st.titles === 'plain' ? [] : [b.line(align)]),
+    ],
+    {
+      dynamicBg: true,
+      overlay: center ? [rgba(b.c.dark, 0.6), rgba(b.c.dark, 0.85), 180] : [rgba(b.c.dark, 0.92), rgba(b.c.dark, 0.45), 90],
+      padY: Math.round(b.pad * 1.35),
+      gap: 14,
+      align: center ? 'center' : 'flex-start',
+      divider: shape(b, b.ink.bg),
+    }
+  );
+  const main = b.box(
+    [
+      b.widget('theme-post-content', { text_color: b.ink.text, ...b.typo('', b.fonts.body, 17, '400', { typography_line_height: px(1.85, 'em') }) }),
+      b.box(
+        [
+          b.heading(copy.postCtaTitle, { size: 28, color: '#FFFFFF', hint: 'call to action at the end of every service article', max: 70 }),
+          b.text(copy.postCtaText, { color: 'rgba(255,255,255,0.9)', hint: 'call to action text at the end of the articles (1 sentence)', max: 200 }),
+          b.button(copy.postCtaButton, site.pages.contact.url, { variant: 'secondary', hint: 'button leading to the contact page', max: 30 }),
+        ],
+        { card: true, gradient: [b.c.primaryText, b.c.dark, 135], pad: 40, gap: 14 }
+      ),
+    ],
+    { width: 64, gap: 40 }
+  );
+  const sideTitle = (t) => [b.heading(t, { tag: 'h3', size: 20, fixed: true }), b.line()];
+  const sidebar = [];
+  // Other services: every service; each article removes itself (articleDoc)
+  if (site.services.length) {
+    sidebar.push(
+      b.box(
+        [...sideTitle(b.L.otherServices), b.iconList(site.services.map((s) => ({ text: s.name, url: s.url, icon: 'fas fa-chevron-right' })), { color: b.ink.heading, weight: '600', size: 15, css: OTHER_SERVICES })],
+        { card: true, on: 'base', pad: 30, gap: 14, css: OTHER_SERVICES_BOX }
+      )
+    );
+  }
+  sidebar.push(b.box([...sideTitle(b.L.contacts), b.iconList(contactItems(site), { size: 15 })], { card: true, on: 'base', pad: 30, gap: 14 }));
+  return [hero, b.section([main, b.box(sidebar, { width: 31, gap: 24 })], { row: true, bg: b.ink.bg, align: 'flex-start', gap: 40 })];
+}
+
+/** CSS classes marking the "Other services" list of the single post template. */
+const OTHER_SERVICES = 'esg-other-services';
+const OTHER_SERVICES_BOX = 'esg-other-services-box';
+
+/**
+ * Static Elementor document of one service article, from the final single post template document:
+ * featured image in the hero, title, content, and "Other services" without the article itself.
+ * Works without Elementor Pro (no dynamic tag, no theme widget).
+ * @param {object} doc   single post document (texts already filled)
+ * @param {{ title, content, imageUrl, url }} post
+ */
+export function articleDoc(doc, post) {
+  const out = structuredClone(doc);
+  const walk = (list) =>
+    list
+      .map((el) => {
+        const st = el.settings || {};
+        if (st.__dynamic__?.background_image) {
+          delete st.__dynamic__.background_image;
+          if (!Object.keys(st.__dynamic__).length) delete st.__dynamic__;
+          if (post.imageUrl) st.background_image = { url: post.imageUrl, id: '', alt: post.title, source: 'library' };
+          else delete st.background_image;
+        }
+        if (el.widgetType === 'theme-post-title') {
+          el.widgetType = 'heading';
+          st.title = post.title;
+        }
+        if (el.widgetType === 'theme-post-content') {
+          el.widgetType = 'text-editor';
+          st.editor = post.content || '';
+        }
+        if (st._css_classes === OTHER_SERVICES) st.icon_list = (st.icon_list || []).filter((it) => it.link?.url !== post.url);
+        el.elements = walk(el.elements || []);
+        return el;
+      })
+      // A list of other services left empty (a site with one service): no box
+      .filter((el) => !(el.settings?.css_classes === OTHER_SERVICES_BOX && !JSON.stringify(el).includes('"icon_list":[{')));
+  out.content = walk(out.content || []);
+  out.type = 'wp-post';
+  out.title = post.title;
+  out.page_settings = { hide_title: 'yes' };
+  return out;
 }
 
 const menuItems = (site) => ['home', 'about', 'services', 'gallery', 'contact'].map((r) => ({ text: site.pages[r].title, url: site.pages[r].url }));

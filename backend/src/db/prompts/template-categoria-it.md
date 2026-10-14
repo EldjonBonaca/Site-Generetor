@@ -18,17 +18,17 @@ Una categoria ha di solito **più template**, e ognuno deve avere un'**identità
 
 ---
 
-## 2. Struttura del sito (fissa)
-Il template viene applicato sempre alla stessa struttura, che **non devi cambiare**:
+## 2. Struttura del sito
+La struttura di base del sito resta sempre la stessa; le **sezioni facoltative della Home** e il loro **ordine** vengono scelti per ogni template in base all'**analisi del settore** della categoria (convenzioni dei siti del settore), così che ogni template sia adatto alla categoria e diverso dagli altri:
 
 - **Header**: logo, menu con le 5 pagine (Home, Chi Siamo, Servizi, Galleria, Contatti); a seconda della variante anche telefono ed email e un pulsante verso *Contatti*.
-- **Home**: Hero · Chi siamo (testo + immagine + pulsante "Scopri di più") · Perché sceglierci (4 punti di forza con icone) · Call to action (facoltativa) · I nostri servizi (3 servizi in evidenza + pulsante "Tutti i servizi") · Recensioni (3, **senza foto dei clienti**).
-- **Chi Siamo**: subheader · un'unica sezione **"Chi siamo"** (testo esteso con storia, missione, valori ed esperienza, senza sottotitoli come "La nostra storia" o "La nostra missione") + immagine · Perché sceglierci · Call to action (facoltativa) · Recensioni (le stesse della Home).
+- **Home**: Hero, poi le sezioni obbligatorie Chi siamo (testo + immagine + pulsante "Scopri di più") · Perché sceglierci (4 punti di forza con icone) · I nostri servizi (3 servizi in evidenza + pulsante "Tutti i servizi") · Galleria a carosello (tutte le foto, con lightbox) · Recensioni (3, **senza foto dei clienti**); e le sezioni facoltative scelte per il template tra Call to action · Numeri chiave · Come lavoriamo (4 passi) · Domande frequenti · Fascia di garanzie. L'ordine delle sezioni è indicato più sotto.
+- **Chi Siamo**: subheader · **"Chi siamo"** in due sezioni a layout alternato (testo | immagine, poi immagine | testo), senza sottotitoli come "La nostra storia" o "La nostra missione" · Numeri chiave (se previsti) · Perché sceglierci · Call to action (se prevista) · Recensioni (le stesse della Home).
 - **Servizi**: subheader · griglia con tutti i servizi (immagine, titolo, breve estratto, link all'articolo).
 - **Galleria**: subheader · galleria con tutte le immagini caricate, con lightbox.
 - **Contatti**: subheader · dati di contatto (telefono, email, indirizzo) · modulo di contatto MetForm · mappa Google.
 - **Footer** a 4 colonne: logo · Link (menu) · Servizi (tutti i servizi) · Contatti; in fondo il copyright.
-- **Articolo singolo** dei servizi, con call to action finale verso *Contatti*.
+- **Articolo singolo** dei servizi: hero con l'immagine in evidenza e il titolo, testo dell'articolo con call to action finale verso *Contatti*, barra laterale con "Altri servizi" (gli altri servizi del sito) e i contatti; commenti disattivati.
 
 ---
 
@@ -39,7 +39,7 @@ Il template viene applicato sempre alla stessa struttura, che **non devi cambiar
 3. **Coerenza con la direzione**: descrizione, tono e testi devono rispecchiare la direzione (es. "industriale" = frasi brevi e decise; "editoriale" = tono raffinato).
 4. **Icone** dei 4 punti di forza di "Perché sceglierci", pertinenti alla categoria.
 5. **Tono di voce** del sito (es. "professionale e rassicurante", "caldo e familiare").
-6. **Testi di esempio** per ogni sezione, nella lingua indicata: realistici per la categoria, senza nomi, telefoni, email o indirizzi. Servono come guida di tono e di lunghezza: per ogni cliente verranno riscritti. I 4 punti di forza di "Perché sceglierci" devono avere un titolo breve (2–4 parole) e una spiegazione concreta di 1–2 frasi, specifica per la categoria (mai testo generico o "lorem ipsum").
+6. **Testi di esempio** per ogni sezione presente nel template (comprese quelle facoltative), nella lingua indicata: realistici per la categoria, senza nomi, telefoni, email o indirizzi. Servono come guida di tono e di lunghezza: per ogni cliente verranno riscritti. I 4 punti di forza di "Perché sceglierci" devono avere un titolo breve (2–4 parole) e una spiegazione concreta di 1–2 frasi, specifica per la categoria (mai testo generico o "lorem ipsum").
 7. Una **descrizione** breve del concetto grafico (2–3 frasi).
 
 ## 4. Regole

@@ -5,7 +5,7 @@
 import { LANGUAGES, stripHtml } from '../lib/util.js';
 import { exportNames, galleryPool } from '../lib/images.js';
 import { contactForm, copyrightText } from './plan.js';
-import { describeSpec } from '../templates/spec.js';
+import { DEFAULT_SECTIONS, describeSections, describeSpec } from '../templates/spec.js';
 
 /** Variables available in user prompts (also shown in the UI). */
 export const PROMPT_VARIABLES = [
@@ -33,6 +33,7 @@ export const PROMPT_VARIABLES = [
   { name: 'template_name', alias: 'NOME_TEMPLATE', description: 'Name of the template used by the site' },
   { name: 'template_category', alias: 'CATEGORIA_TEMPLATE', description: 'Category of the template' },
   { name: 'template_style', alias: 'STILE_TEMPLATE', description: 'Design of the template: colors, fonts, layouts, tone of voice' },
+  { name: 'home_sections', alias: 'SEZIONI_HOME', description: 'Sections of the Home page after the hero, in the order of the template' },
   { name: 'form_plugin', alias: 'PLUGIN_MODULO', description: 'Contact form plugin (MetForm or Contact Form 7)' },
   { name: 'template_structure', alias: 'STRUTTURA_TEMPLATE', description: 'List of text fields to fill, extracted from the template' },
   { name: 'notes', alias: 'NOTE', description: 'Additional notes' },
@@ -137,6 +138,7 @@ export function buildVariables({ project, services, service, fields, pageTitle, 
     template_name: ctx?.template?.name || none,
     template_category: ctx?.template?.category.name || none,
     template_style: ctx?.template ? describeSpec(ctx.template.spec) : none,
+    home_sections: ctx?.template ? describeSections(ctx.template.spec.sections) : describeSections(DEFAULT_SECTIONS),
     form_plugin: ctx ? contactForm(ctx).name : 'MetForm',
   };
   services.forEach((s, i) => {

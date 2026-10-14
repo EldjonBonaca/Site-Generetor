@@ -5,6 +5,8 @@
  *    instructions (JSON answer, site language, fields to fill) to it for every page.
  *  - TEMPLATE_PROMPT (db/prompts/template-categoria-it.md): the design of a reusable template for a
  *    category (colors, fonts, layout variants, icons, tone, sample texts).
+ *  - INDUSTRY_PROMPT (db/prompts/analisi-categoria-it.md): the industry analysis of a category, done
+ *    once before its templates are designed (business, customers, design conventions, sections).
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,4 +22,9 @@ export const SITE_PROMPT = Object.freeze({
 export const TEMPLATE_PROMPT = Object.freeze({
   name: 'Template per categoria (IT)',
   content: fs.readFileSync(path.join(DIR, 'template-categoria-it.md'), 'utf8'),
+});
+
+export const INDUSTRY_PROMPT = Object.freeze({
+  name: 'Analisi del settore (IT)',
+  content: fs.readFileSync(path.join(DIR, 'analisi-categoria-it.md'), 'utf8'),
 });

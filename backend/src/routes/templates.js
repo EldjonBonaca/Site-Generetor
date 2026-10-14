@@ -4,6 +4,10 @@
  *
  * Generating a template does not save it: the UI shows the result, then saves it (possibly after
  * a few regenerations) with POST /template-categories/:cid/templates.
+ *
+ * Before its first template, a category is analyzed by the AI (industry.js): business, customers,
+ * design conventions of the industry, recommended Home sections and suitable design directions.
+ * The analysis is saved on the category and used by every template generation.
  */
 import { Router } from 'express';
 import { all, get, run, parseJson } from '../db/index.js';
@@ -13,6 +17,7 @@ import { AIError } from '../ai/AIProvider.js';
 import { COLOR_KEYS, FONTS, ICONS, LAYOUTS, SPACINGS, STYLE_OPTIONS, WEIGHTS, sanitizeSpec } from '../templates/spec.js';
 import { directionById, directionList } from '../templates/directions.js';
 import { generateTemplateSpec } from '../templates/generate.js';
+import { analyzeCategory, sanitizeProfile } from '../templates/industry.js';
 import { touch } from './projects.js';
 
 const router = Router();
@@ -26,6 +31,29 @@ const CATEGORIES_SQL = `
 const TEMPLATES_SQL = `
   SELECT t.*, c.name AS category_name, (SELECT COUNT(*) FROM projects p WHERE p.template_id = t.id) AS used_by
   FROM site_templates t JOIN template_categories c ON c.id = t.category_id`;
+
+/** Category row -> API object (the industry analysis parsed, or null). */
+function serializeCategory(row) {
+  const { profile_json, ...rest } = row;
+  const raw = parseJson(profile_json, null);
+  return { ...rest, profile: raw ? { ...sanitizeProfile(raw), analyzed_at: raw.analyzed_at || null, analyzed_by: raw.analyzed_by || '' } : null };
+}
+const listCategories = () => all(CATEGORIES_SQL).map(serializeCategory);
+const categoryById = (id) => listCategories().find((c) => c.id === Number(id));
+
+/** Ask the AI for the industry analysis of a category and save it. */
+async function analyzeAndSave(provider, row, cat) {
+  const { profile, tokens } = await analyzeCategory(provider, cat);
+  const stored = { ...profile, analyzed_at: new Date().toISOString(), analyzed_by: `${row.name} · ${row.model}` };
+  run('UPDATE template_categories SET profile_json = ? WHERE id = ?', JSON.stringify(stored), cat.id);
+  return { profile: stored, tokens };
+}
+
+const requireProvider = (id) => {
+  const row = id ? get('SELECT * FROM ai_providers WHERE id = ?', Number(id)) : null;
+  if (!row) throw badRequest('Select an AI provider (Settings → AI Providers to add one).');
+  return row;
+};
 
 const requireCategory = (id) => {
   const row = get('SELECT * FROM template_categories WHERE id = ?', id);
@@ -68,20 +96,35 @@ router.get('/template-options', (req, res) =>
 
 // ---------------------------------------------------------------- categories --
 
-router.get('/template-categories', (req, res) => res.json(all(CATEGORIES_SQL)));
+router.get('/template-categories', (req, res) => res.json(listCategories()));
 
 router.post('/template-categories', (req, res) => {
   const description = String(req.body?.description ?? '').trim().slice(0, 1000);
   const { lastInsertRowid } = run('INSERT INTO template_categories (name, description) VALUES (?, ?)', categoryName(req.body?.name), description);
-  res.status(201).json(all(CATEGORIES_SQL).find((c) => c.id === Number(lastInsertRowid)));
+  res.status(201).json(categoryById(lastInsertRowid));
 });
 
 router.patch('/template-categories/:cid', (req, res) => {
   const cat = requireCategory(req.params.cid);
   const name = req.body?.name !== undefined ? categoryName(req.body.name, cat.id) : cat.name;
   const description = req.body?.description !== undefined ? String(req.body.description).trim().slice(0, 1000) : cat.description;
-  run('UPDATE template_categories SET name = ?, description = ? WHERE id = ?', name, description, cat.id);
-  res.json(all(CATEGORIES_SQL).find((c) => c.id === cat.id));
+  // A new name or description changes the business: the industry analysis must be done again
+  const changed = name !== cat.name || description !== cat.description;
+  run('UPDATE template_categories SET name = ?, description = ?, profile_json = CASE WHEN ? THEN NULL ELSE profile_json END WHERE id = ?', name, description, changed ? 1 : 0, cat.id);
+  res.json(categoryById(cat.id));
+});
+
+/** (Re)run the industry analysis of the category. Body: { providerId } -> category (with its profile) + tokens */
+router.post('/template-categories/:cid/analyze', async (req, res) => {
+  const cat = requireCategory(req.params.cid);
+  const row = requireProvider(req.body?.providerId);
+  try {
+    const { tokens } = await analyzeAndSave(createProvider(row), row, cat);
+    res.json({ ...categoryById(cat.id), tokens });
+  } catch (err) {
+    if (err instanceof AIError) throw new HttpError(502, err.message);
+    throw err;
+  }
 });
 
 /** Delete a category and its templates. Projects that used them must choose another template. */
@@ -92,18 +135,22 @@ router.delete('/template-categories/:cid', (req, res) => {
 });
 
 /**
- * Generate a template for the category with the AI (not saved). Its design direction, fonts, look and
- * layouts are chosen to differ as much as possible from the saved templates of the category.
+ * Generate a template for the category with the AI (not saved). The category is analyzed first if it
+ * has no industry analysis yet. Its design direction (among the ones suitable for the industry),
+ * fonts, look, layouts and optional sections are chosen to differ as much as possible from the
+ * saved templates of the category.
  * Body: { providerId, instructions?, language?, direction? (id, else automatic),
  *         exclude? (directions of discarded drafts), avoidColors? (their primary colors) }
- * -> { spec, tokens, generated_by, direction: { id, name, summary } }
+ * -> { spec, tokens, generated_by, direction: { id, name, summary }, profile, analyzed }
  */
 router.post('/template-categories/:cid/templates/generate', async (req, res) => {
   const cat = requireCategory(req.params.cid);
-  const row = req.body?.providerId ? get('SELECT * FROM ai_providers WHERE id = ?', Number(req.body.providerId)) : null;
-  if (!row) throw badRequest('Select an AI provider (Settings → AI Providers to add one).');
+  const row = requireProvider(req.body?.providerId);
   const provider = createProvider(row);
   try {
+    let profile = serializeCategory(cat).profile;
+    let analysisTokens = 0;
+    if (!profile) ({ profile, tokens: analysisTokens } = await analyzeAndSave(provider, row, cat));
     const existing = all('SELECT name, spec_json FROM site_templates WHERE category_id = ? ORDER BY id', cat.id).map((t) => ({ name: t.name, ...sanitizeSpec(parseJson(t.spec_json, {})) }));
     const list = (v, max) => (Array.isArray(v) ? v.map(String).slice(0, max) : []);
     const { spec, tokens, direction } = await generateTemplateSpec(provider, {
@@ -114,8 +161,16 @@ router.post('/template-categories/:cid/templates/generate', async (req, res) => 
       direction: String(req.body?.direction ?? ''),
       exclude: list(req.body?.exclude, 20),
       avoidColors: list(req.body?.avoidColors, 20).filter((c) => /^#[0-9a-f]{6}$/i.test(c)),
+      profile,
     });
-    res.json({ spec, tokens, generated_by: `${row.name} · ${row.model}`, direction: { id: direction.id, name: direction.name, summary: direction.summary } });
+    res.json({
+      spec,
+      tokens: tokens + analysisTokens,
+      generated_by: `${row.name} · ${row.model}`,
+      direction: { id: direction.id, name: direction.name, summary: direction.summary },
+      profile,
+      analyzed: analysisTokens > 0,
+    });
   } catch (err) {
     if (err instanceof AIError) throw new HttpError(502, err.message);
     throw err;
