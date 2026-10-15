@@ -16,6 +16,11 @@ async function request(method, url, body) {
     body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
   });
   if (res.status === 204) return null;
+  // Session expired / logged out: back to the login page, then to this page again
+  if (res.status === 401 && url !== '/login') {
+    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+    return new Promise(() => {}); // the page is leaving
+  }
   const text = await res.text();
   let data = null;
   try {

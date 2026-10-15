@@ -169,6 +169,7 @@ export function TemplateGenerator({ open, onClose, category, onSaved, onAnalyzed
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState(null);
   const [name, setName] = useState('');
+  const [shared, setShared] = useState(false);
   const [directions, setDirections] = useState([]);
   const [direction, setDirection] = useState('');
   // Drafts discarded in this dialog: a new generation avoids their direction and colors
@@ -218,7 +219,7 @@ export function TemplateGenerator({ open, onClose, category, onSaved, onAnalyzed
   const save = async () => {
     setBusy(true);
     try {
-      const tpl = await api.post(`/template-categories/${category.id}/templates`, { name, spec: draft.spec, instructions, language, generated_by: draft.generated_by, tokens_used: draft.tokens });
+      const tpl = await api.post(`/template-categories/${category.id}/templates`, { name, spec: draft.spec, shared, instructions, language, generated_by: draft.generated_by, tokens_used: draft.tokens });
       toast(t('Template "{name}" saved', { name: tpl.name }));
       onSaved?.(tpl);
       onClose();
@@ -309,6 +310,7 @@ export function TemplateGenerator({ open, onClose, category, onSaved, onAnalyzed
                   {draft.generated_by} · {t('{n} tokens', { n: draft.tokens.toLocaleString() })}
                 </p>
                 <Field label={t('Template name')}>{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />}</Field>
+                <Toggle checked={shared} onChange={setShared} label={t('Share with everyone')} description={t('The other users see it and can use it in their projects. Only you can change or delete it.')} />
               </div>
             )}
             <div className="flex flex-wrap justify-end gap-2">

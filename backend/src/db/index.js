@@ -23,6 +23,10 @@ addColumn('projects', 'copyright', "TEXT NOT NULL DEFAULT ''");
 addColumn('projects', 'template_id', 'INTEGER REFERENCES site_templates(id) ON DELETE SET NULL'); // replaces kit_id
 addColumn('images', 'library_image_id', 'INTEGER'); // Gallery image it was copied from
 addColumn('template_categories', 'profile_json', 'TEXT'); // industry analysis of the category
+// Users (lib/owner.js): owner = username (NULL = everyone), templates can be shared with everyone
+addColumn('ai_providers', 'owner', 'TEXT');
+addColumn('site_templates', 'owner', 'TEXT');
+addColumn('site_templates', 'shared', 'INTEGER NOT NULL DEFAULT 0');
 // Databases created before templates replaced the Template Kits keep the old `kits` / `kit_mappings`
 // tables and `projects.kit_id` (SQLite cannot drop a foreign-key column): they are no longer used.
 

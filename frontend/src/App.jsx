@@ -1,5 +1,7 @@
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { Bot, FolderKanban, Images, LayoutTemplate, Languages } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Bot, FolderKanban, Images, LayoutTemplate, Languages, LogOut, UserRound } from 'lucide-react';
+import { api } from './api.js';
 import { useT, LOCALES } from './i18n/index.jsx';
 import { cx } from './components/ui.jsx';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
@@ -8,6 +10,35 @@ import ProjectWizard from './pages/ProjectWizard.jsx';
 import TemplatesPage from './pages/TemplatesPage.jsx';
 import GalleryPage from './pages/GalleryPage.jsx';
 import ProvidersPage from './pages/ProvidersPage.jsx';
+
+/** Logged-in user + logout (nothing when the login is disabled, e.g. local use). */
+function UserMenu() {
+  const { t } = useT();
+  const [me, setMe] = useState(null);
+  useEffect(() => {
+    api.get('/me').then(setMe).catch(() => {});
+  }, []);
+  if (!me?.auth) return null;
+  const logout = async () => {
+    try {
+      await api.post('/logout');
+    } finally {
+      window.location.href = '/login';
+    }
+  };
+  return (
+    <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
+      <span className="hidden items-center gap-1.5 text-sm font-medium text-slate-700 sm:inline-flex">
+        <UserRound className="size-4 text-slate-400" />
+        {me.user}
+      </span>
+      <button type="button" onClick={logout} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100" title={t('Log out')}>
+        <LogOut className="size-4" />
+        <span className="hidden md:inline">{t('Log out')}</span>
+      </button>
+    </div>
+  );
+}
 
 export default function App() {
   const { t, locale, setLocale } = useT();
@@ -47,6 +78,7 @@ export default function App() {
               ))}
             </select>
           </label>
+          <UserMenu />
         </div>
       </header>
 

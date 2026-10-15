@@ -44,6 +44,15 @@ On first start the backend creates `backend/.env` with a random `ENCRYPTION_KEY`
 
 ---
 
+## Users and login
+
+Set the users in `backend/.env`, on one line: `APP_USERS=mz:password1,eb:password2,dr:password3` (a password cannot contain a comma), then restart the server. Without users the app has no login (local use only).
+
+- **Login page** (`/login`) and a signed session cookie (30 days); **Log out** at the top right. Removing a user or changing their password in `.env` ends their sessions. 10 failed logins from one address block it for 15 minutes.
+- **Shared by everyone:** projects, images (Gallery) and template categories.
+- **Per user:** AI providers (API keys): each user sees and generates only with their own. Templates: each user sees their own and the ones shared with everyone; when saving a template (or later, in Templates) the owner can **share it with everyone**. Only the owner can edit, share or delete a template; the others can duplicate a shared one.
+- Providers and templates created before the users existed belong to everyone.
+
 ## Configuration
 
 `backend/.env` (copy from [`backend/.env.example`](backend/.env.example)):

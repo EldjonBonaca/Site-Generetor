@@ -59,7 +59,7 @@ router.get('/projects/:id', (req, res) => {
   res.json({
     ...serializeProject(ctx.project),
     services: ctx.services,
-    readiness: checkReadiness(ctx),
+    readiness: checkReadiness(ctx, req.user),
   });
 });
 
@@ -93,7 +93,7 @@ router.patch('/projects/:id', (req, res) => {
     row.id
   );
   const ctx = loadContext(row.id);
-  res.json({ ...serializeProject(ctx.project), services: ctx.services, readiness: checkReadiness(ctx) });
+  res.json({ ...serializeProject(ctx.project), services: ctx.services, readiness: checkReadiness(ctx, req.user) });
 });
 
 router.post('/projects/:id/duplicate', (req, res) => {
@@ -142,7 +142,7 @@ router.delete('/projects/:id', (req, res) => {
 router.get('/projects/:id/readiness', (req, res) => {
   const ctx = loadContext(req.params.id);
   if (!ctx) throw notFound('Project');
-  res.json(checkReadiness(ctx));
+  res.json(checkReadiness(ctx, req.user));
 });
 
 router.get('/languages', (req, res) => res.json(LANGUAGES));

@@ -5,6 +5,7 @@ import { Router } from 'express';
 import { all, get, run, tx } from '../db/index.js';
 import { config } from '../config.js';
 import { badRequest, notFound, slugify } from '../lib/util.js';
+import { requireOwnProvider } from '../lib/owner.js';
 import { loadContext } from '../generation/plan.js';
 import { createProvider } from '../ai/registry.js';
 import { extractJson, validateValues } from '../ai/json.js';
@@ -213,8 +214,7 @@ router.post('/projects/:id/images/alt-text', async (req, res) => {
   const ctx = loadContext(req.params.id);
   if (!ctx) throw notFound('Project');
   const providerId = req.body?.providerId || ctx.settings.generation.providerId;
-  const providerRow = providerId ? get('SELECT * FROM ai_providers WHERE id = ?', providerId) : null;
-  if (!providerRow) throw badRequest('Select an AI provider first (step "AI & Prompts").');
+  const providerRow = requireOwnProvider(providerId, req.user, 'Select an AI provider first (step "AI").');
   const overwrite = Boolean(req.body?.overwrite);
   const targets = ctx.images.filter((i) => i.role && (overwrite || !i.alt_text.trim()));
   if (!targets.length) return res.json({ updated: 0, images: ctx.images });

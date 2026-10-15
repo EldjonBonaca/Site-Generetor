@@ -11,6 +11,7 @@ import { SITE_PROMPT } from '../generation/site-prompt.js';
 import { BUILDER_VERSION } from '../templates/builder.js';
 import { exportGeneration, pluginFile } from '../generation/exporter.js';
 import { buildPagePrompt, estimateTokens } from '../generation/prompt-builder.js';
+import { canUseProvider } from '../lib/owner.js';
 
 const router = Router();
 
@@ -46,7 +47,7 @@ const requireGen = (id) => {
 router.get('/projects/:id/plan', (req, res) => {
   const ctx = loadContext(req.params.id);
   if (!ctx) throw notFound('Project');
-  const readiness = checkReadiness(ctx);
+  const readiness = checkReadiness(ctx, req.user);
   if (!ctx.template) return res.json({ pages: [], estimatedTokens: 0, readiness });
   const links = siteLinks(ctx);
   let total = 0;
@@ -70,7 +71,7 @@ router.get('/projects/:id/generations', (req, res) => {
 router.post('/projects/:id/generations', (req, res) => {
   const ctx = loadContext(req.params.id);
   if (!ctx) throw notFound('Project');
-  const readiness = checkReadiness(ctx);
+  const readiness = checkReadiness(ctx, req.user);
   if (!readiness.ready) throw new HttpError(422, 'The project is not ready for generation.', readiness.items.filter((i) => i.level === 'error'));
   const active = get("SELECT id FROM generations WHERE project_id = ? AND status IN ('queued', 'running')", ctx.project.id);
   if (active && isRunning(active.id)) throw badRequest('A generation is already running for this project.');
@@ -131,12 +132,19 @@ router.patch('/generations/:gid/pages/:key', (req, res) => {
   res.json(page);
 });
 
+/** Regenerating uses the AI provider of the generation: only its owner (or shared providers) may use it. */
+function ownProvider(gen, user) {
+  const row = gen.provider_id ? get('SELECT id, owner FROM ai_providers WHERE id = ?', gen.provider_id) : null;
+  if (row && !canUseProvider(row, user)) throw new HttpError(403, 'This generation was made with the AI provider of another user: start a new generation with one of yours.');
+}
+
 /** Regenerate a whole page (background) */
 router.post('/generations/:gid/pages/:key/regenerate', (req, res) => {
   const g = requireGen(req.params.gid);
   if (isRunning(g.id)) throw badRequest('A generation is already running.');
   const output = parseJson(g.output_json, { pages: [] });
   if (!output.pages.some((p) => p.key === req.params.key)) throw notFound('Page');
+  ownProvider(g, req.user);
   runGeneration(g.id, { pageKeys: [req.params.key] }).catch((e) => console.error('[generation]', e));
   res.status(202).json({ ok: true });
 });
@@ -147,6 +155,7 @@ router.post('/generations/:gid/pages/:key/fields/regenerate', async (req, res) =
   if (isRunning(g.id)) throw badRequest('A generation is already running.');
   const fieldId = String(req.body?.fieldId || '');
   if (!fieldId) throw badRequest('fieldId is required');
+  ownProvider(g, req.user);
   try {
     res.json(await regenerateField(g.id, req.params.key, fieldId));
   } catch (err) {

@@ -8,6 +8,9 @@
  * Before its first template, a category is analyzed by the AI (industry.js): business, customers,
  * design conventions of the industry, recommended Home sections and suitable design directions.
  * The analysis is saved on the category and used by every template generation.
+ *
+ * Users (lib/owner.js): categories are shared; a template belongs to the user who saved it, who can
+ * share it with everyone. Templates saved before users existed (no owner) are shared.
  */
 import { Router } from 'express';
 import { all, get, run, parseJson } from '../db/index.js';
@@ -19,6 +22,7 @@ import { directionById, directionList } from '../templates/directions.js';
 import { generateTemplateSpec } from '../templates/generate.js';
 import { analyzeCategory, sanitizeProfile } from '../templates/industry.js';
 import { touch } from './projects.js';
+import { canEditTemplate, canUseTemplate, forbidden, requireOwnProvider } from '../lib/owner.js';
 
 const router = Router();
 
@@ -49,11 +53,7 @@ async function analyzeAndSave(provider, row, cat) {
   return { profile: stored, tokens };
 }
 
-const requireProvider = (id) => {
-  const row = id ? get('SELECT * FROM ai_providers WHERE id = ?', Number(id)) : null;
-  if (!row) throw badRequest('Select an AI provider (Settings → AI Providers to add one).');
-  return row;
-};
+const requireProvider = (id, user) => requireOwnProvider(id, user);
 
 const requireCategory = (id) => {
   const row = get('SELECT * FROM template_categories WHERE id = ?', id);
@@ -61,16 +61,26 @@ const requireCategory = (id) => {
   return row;
 };
 
-function serializeTemplate(row) {
+/** Template row -> API object. can_edit: the user may change, share or delete it. */
+function serializeTemplate(row, user = null) {
   const { spec_json, ...rest } = row;
   const spec = sanitizeSpec(parseJson(spec_json, {}));
-  return { ...rest, spec, direction_name: directionById(spec.direction)?.name || '' };
+  return {
+    ...rest,
+    owner: row.owner || null,
+    shared: row.owner == null || row.shared === 1,
+    can_edit: canEditTemplate(row, user),
+    spec,
+    direction_name: directionById(spec.direction)?.name || '',
+  };
 }
 
-const requireTemplate = (id) => {
+/** Template the user may see (404 otherwise); { edit: true }: the user must be allowed to change it. */
+const requireTemplate = (id, user = null, { edit = false } = {}) => {
   const row = get(`${TEMPLATES_SQL} WHERE t.id = ?`, id);
-  if (!row) throw notFound('Template');
-  return serializeTemplate(row);
+  if (!canUseTemplate(row, user)) throw notFound('Template');
+  if (edit && !canEditTemplate(row, user)) throw forbidden('template');
+  return serializeTemplate(row, user);
 };
 
 /** Category name: trimmed, non-empty, unique (case-insensitive). */
@@ -117,7 +127,7 @@ router.patch('/template-categories/:cid', (req, res) => {
 /** (Re)run the industry analysis of the category. Body: { providerId } -> category (with its profile) + tokens */
 router.post('/template-categories/:cid/analyze', async (req, res) => {
   const cat = requireCategory(req.params.cid);
-  const row = requireProvider(req.body?.providerId);
+  const row = requireProvider(req.body?.providerId, req.user);
   try {
     const { tokens } = await analyzeAndSave(createProvider(row), row, cat);
     res.json({ ...categoryById(cat.id), tokens });
@@ -130,6 +140,8 @@ router.post('/template-categories/:cid/analyze', async (req, res) => {
 /** Delete a category and its templates. Projects that used them must choose another template. */
 router.delete('/template-categories/:cid', (req, res) => {
   const cat = requireCategory(req.params.cid);
+  const others = all('SELECT owner FROM site_templates WHERE category_id = ?', cat.id).filter((t) => !canEditTemplate(t, req.user));
+  if (others.length) throw new HttpError(403, 'This category contains templates of other users: it cannot be deleted.');
   run('DELETE FROM template_categories WHERE id = ?', cat.id);
   res.status(204).end();
 });
@@ -145,7 +157,7 @@ router.delete('/template-categories/:cid', (req, res) => {
  */
 router.post('/template-categories/:cid/templates/generate', async (req, res) => {
   const cat = requireCategory(req.params.cid);
-  const row = requireProvider(req.body?.providerId);
+  const row = requireProvider(req.body?.providerId, req.user);
   const provider = createProvider(row);
   try {
     let profile = serializeCategory(cat).profile;
@@ -177,13 +189,15 @@ router.post('/template-categories/:cid/templates/generate', async (req, res) => 
   }
 });
 
-/** Save a template in the category. Body: { name, spec, instructions?, language?, generated_by?, tokens_used? } */
+/** Save a template in the category, owned by the user. Body: { name, spec, shared?, instructions?, language?, generated_by?, tokens_used? } */
 router.post('/template-categories/:cid/templates', (req, res) => {
   const cat = requireCategory(req.params.cid);
   const b = req.body || {};
   if (!b.spec || typeof b.spec !== 'object') throw badRequest('Generate the template first.');
   const { lastInsertRowid } = run(
-    'INSERT INTO site_templates (category_id, name, instructions, language, spec_json, generated_by, tokens_used) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO site_templates (owner, shared, category_id, name, instructions, language, spec_json, generated_by, tokens_used) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    req.user,
+    b.shared ? 1 : 0,
     cat.id,
     templateName(b.name),
     String(b.instructions ?? '').slice(0, 2000),
@@ -192,36 +206,47 @@ router.post('/template-categories/:cid/templates', (req, res) => {
     String(b.generated_by ?? '').slice(0, 200),
     Math.max(0, Math.round(Number(b.tokens_used) || 0))
   );
-  res.status(201).json(requireTemplate(lastInsertRowid));
+  res.status(201).json(requireTemplate(lastInsertRowid, req.user));
 });
 
 // ----------------------------------------------------------------- templates --
 
-/** All saved templates, or the ones of a category (?category=<id>). */
+/** The templates the user can see (own + shared), or the ones of a category (?category=<id>). */
 router.get('/templates', (req, res) => {
   const rows = req.query.category
     ? all(`${TEMPLATES_SQL} WHERE t.category_id = ? ORDER BY t.id DESC`, Number(req.query.category))
     : all(`${TEMPLATES_SQL} ORDER BY c.name COLLATE NOCASE, t.id DESC`);
-  res.json(rows.map(serializeTemplate));
+  res.json(rows.filter((r) => canUseTemplate(r, req.user)).map((r) => serializeTemplate(r, req.user)));
 });
 
-router.get('/templates/:tid', (req, res) => res.json(requireTemplate(req.params.tid)));
+/** A template; ?project=<id>: also another user's private template when that (shared) project uses it (read-only). */
+router.get('/templates/:tid', (req, res) => {
+  const project = req.query.project ? get('SELECT template_id FROM projects WHERE id = ?', Number(req.query.project)) : null;
+  if (project && project.template_id === Number(req.params.tid)) {
+    const row = get(`${TEMPLATES_SQL} WHERE t.id = ?`, project.template_id);
+    if (row) return res.json(serializeTemplate(row, req.user));
+  }
+  res.json(requireTemplate(req.params.tid, req.user));
+});
 
-/** Rename, edit the design (colors, fonts, layouts, texts) or move to another category. */
+/** Rename, edit the design (colors, fonts, layouts, texts), move to another category or share it (owner only). */
 router.patch('/templates/:tid', (req, res) => {
-  const tpl = requireTemplate(req.params.tid);
+  const tpl = requireTemplate(req.params.tid, req.user, { edit: true });
   const b = req.body || {};
+  if (b.shared !== undefined) run('UPDATE site_templates SET shared = ? WHERE id = ?', b.shared ? 1 : 0, tpl.id);
   const name = b.name !== undefined ? templateName(b.name) : tpl.name;
   const spec = b.spec && typeof b.spec === 'object' ? sanitizeSpec(b.spec) : tpl.spec;
   const categoryId = b.category_id !== undefined ? requireCategory(Number(b.category_id)).id : tpl.category_id;
   run("UPDATE site_templates SET name = ?, spec_json = ?, category_id = ?, updated_at = datetime('now') WHERE id = ?", name, JSON.stringify(spec), categoryId, tpl.id);
-  res.json(requireTemplate(tpl.id));
+  res.json(requireTemplate(tpl.id, req.user));
 });
 
+/** Copy of a visible template, owned by the user (not shared). */
 router.post('/templates/:tid/duplicate', (req, res) => {
-  const tpl = requireTemplate(req.params.tid);
+  const tpl = requireTemplate(req.params.tid, req.user);
   const { lastInsertRowid } = run(
-    'INSERT INTO site_templates (category_id, name, instructions, language, spec_json, generated_by, tokens_used) VALUES (?, ?, ?, ?, ?, ?, 0)',
+    'INSERT INTO site_templates (owner, category_id, name, instructions, language, spec_json, generated_by, tokens_used) VALUES (?, ?, ?, ?, ?, ?, ?, 0)',
+    req.user,
     tpl.category_id,
     `${tpl.name} (copy)`.slice(0, 120),
     tpl.instructions,
@@ -229,12 +254,12 @@ router.post('/templates/:tid/duplicate', (req, res) => {
     JSON.stringify(tpl.spec),
     tpl.generated_by
   );
-  res.status(201).json(requireTemplate(lastInsertRowid));
+  res.status(201).json(requireTemplate(lastInsertRowid, req.user));
 });
 
-/** Delete a template. Projects that used it must choose another one. */
+/** Delete a template (owner only). Projects that used it must choose another one. */
 router.delete('/templates/:tid', (req, res) => {
-  const tpl = requireTemplate(req.params.tid);
+  const tpl = requireTemplate(req.params.tid, req.user, { edit: true });
   run('DELETE FROM site_templates WHERE id = ?', tpl.id);
   res.status(204).end();
 });
@@ -244,7 +269,7 @@ router.delete('/templates/:tid', (req, res) => {
 router.put('/projects/:id/template', (req, res) => {
   const project = get('SELECT * FROM projects WHERE id = ?', req.params.id);
   if (!project) throw notFound('Project');
-  const templateId = req.body?.template_id ? requireTemplate(Number(req.body.template_id)).id : null;
+  const templateId = req.body?.template_id ? requireTemplate(Number(req.body.template_id), req.user).id : null;
   run('UPDATE projects SET template_id = ? WHERE id = ?', templateId, project.id);
   touch(project.id);
   res.json({ template_id: templateId });

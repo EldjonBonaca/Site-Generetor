@@ -3,11 +3,11 @@
  * Saved templates are reused by every project of the category (Template step of the wizard).
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Copy, FileText, FolderPlus, LayoutTemplate, Pencil, Sparkles, Trash2 } from 'lucide-react';
+import { Copy, FileText, FolderPlus, LayoutTemplate, Lock, Pencil, Sparkles, Trash2, Users } from 'lucide-react';
 import { api } from '../api.js';
 import { useT } from '../i18n/index.jsx';
 import { useToast } from '../components/Toast.jsx';
-import { Button, Card, EmptyState, Field, IconButton, Input, Modal, PageHeader, Spinner, Textarea, cx } from '../components/ui.jsx';
+import { Badge, Button, Card, EmptyState, Field, IconButton, Input, Modal, PageHeader, Spinner, Textarea, cx } from '../components/ui.jsx';
 import { TemplatePreview, TemplateSwatches } from '../components/TemplatePreview.jsx';
 import { TemplateEditor, TemplateGenerator } from '../components/TemplateDialogs.jsx';
 import { IndustryProfile } from '../components/IndustryProfile.jsx';
@@ -75,6 +75,16 @@ export default function TemplatesPage() {
       await api.del(`/template-categories/${cat.id}`);
       toast(t('Category deleted'));
       loadCategories();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+
+  const toggleShared = async (tpl) => {
+    try {
+      await api.patch(`/templates/${tpl.id}`, { shared: !tpl.shared });
+      toast(tpl.shared ? t('Template "{name}" is now visible only to you', { name: tpl.name }) : t('Template "{name}" shared with everyone', { name: tpl.name }));
+      await refresh();
     } catch (e) {
       toast(e.message, 'error');
     }
@@ -198,11 +208,21 @@ export default function TemplatesPage() {
                           <p className="text-xs text-slate-500">
                             {formatDate(tpl.created_at)} · {t('used by {n} project(s)', { n: tpl.used_by })}
                           </p>
+                          <p className="mt-1">
+                            {tpl.can_edit ? (
+                              <Badge color={tpl.shared ? 'green' : 'gray'}>{tpl.shared ? t('Shared with everyone') : t('Only you')}</Badge>
+                            ) : (
+                              <Badge color="blue">{tpl.owner ? t('Shared by {user}', { user: tpl.owner }) : t('Shared with everyone')}</Badge>
+                            )}
+                          </p>
                         </div>
                         <div className="flex shrink-0 gap-0.5">
-                          <IconButton icon={Pencil} label={t('Edit')} onClick={() => setEditing(tpl)} />
+                          {tpl.can_edit && tpl.owner && (
+                            <IconButton icon={tpl.shared ? Lock : Users} label={tpl.shared ? t('Stop sharing') : t('Share with everyone')} onClick={() => toggleShared(tpl)} />
+                          )}
+                          {tpl.can_edit && <IconButton icon={Pencil} label={t('Edit')} onClick={() => setEditing(tpl)} />}
                           <IconButton icon={Copy} label={t('Duplicate')} onClick={() => duplicate(tpl)} />
-                          <IconButton icon={Trash2} label={t('Delete')} onClick={() => setToDelete(tpl)} className="hover:text-red-600" />
+                          {tpl.can_edit && <IconButton icon={Trash2} label={t('Delete')} onClick={() => setToDelete(tpl)} className="hover:text-red-600" />}
                         </div>
                       </div>
                       <TemplateSwatches spec={tpl.spec} direction={tpl.direction_name && t(tpl.direction_name)} />

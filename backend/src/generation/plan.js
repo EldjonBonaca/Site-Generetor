@@ -3,6 +3,7 @@
  * The Elementor documents of a project are built from its template (templates/builder.js).
  */
 import { get, all, parseJson } from '../db/index.js';
+import { canUseProvider } from '../lib/owner.js';
 import { analyzeDocument } from '../elementor/analyze.js';
 import { buildSite } from '../templates/builder.js';
 import { sanitizeSpec } from '../templates/spec.js';
@@ -232,7 +233,7 @@ export function classifyField(field) {
 }
 
 /** What is missing before generation? Errors block generation, warnings don't. */
-export function checkReadiness(ctx) {
+export function checkReadiness(ctx, user = null) {
   const items = [];
   const add = (step, level, message) => items.push({ step, level, message });
   const p = ctx.project;
@@ -267,9 +268,11 @@ export function checkReadiness(ctx) {
 
   if (!ctx.template) add('template', 'error', 'Choose a category and one of its saved templates (or generate a new one).');
 
+  // Each user generates with their own AI provider (the project is shared, the API keys are not)
   const providerId = ctx.settings.generation.providerId;
-  const provider = providerId ? get('SELECT id FROM ai_providers WHERE id = ?', providerId) : null;
+  const provider = providerId ? get('SELECT id, owner FROM ai_providers WHERE id = ?', providerId) : null;
   if (!provider) add('ai', 'error', 'Select an AI provider (Settings → AI Providers to add one).');
+  else if (!canUseProvider(provider, user)) add('ai', 'error', 'The AI provider of this project belongs to another user: choose one of yours in the AI step.');
 
   return { ready: !items.some((i) => i.level === 'error'), items };
 }

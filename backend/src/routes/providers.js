@@ -1,6 +1,8 @@
 /**
  * AI provider accounts. API keys are encrypted at rest and NEVER returned:
  * the frontend only sees a masked hint (sk-...abcd).
+ * Each user sees and uses only their own providers (lib/owner.js); providers created before users
+ * existed (no owner) are shared.
  */
 import { Router } from 'express';
 import { all, get, run, parseJson } from '../db/index.js';
@@ -8,12 +10,14 @@ import { encrypt, maskKey } from '../lib/crypto.js';
 import { badRequest, notFound } from '../lib/util.js';
 import { listProviderTypes, getAdapter, createProvider } from '../ai/registry.js';
 import { AIError } from '../ai/AIProvider.js';
+import { canUseProvider } from '../lib/owner.js';
 
 const router = Router();
 
 function serialize(row) {
   return {
     id: row.id,
+    owner: row.owner || null, // null = shared by everyone
     type: row.type,
     name: row.name,
     key_hint: row.key_hint,
@@ -58,21 +62,28 @@ function testError(err) {
 
 router.get('/providers/types', (req, res) => res.json(listProviderTypes()));
 
-router.get('/providers', (req, res) => res.json(all('SELECT * FROM ai_providers ORDER BY id').map(serialize)));
+/** Provider the user may use / change, else 404 (other users' providers are invisible). */
+function requireProvider(req) {
+  const row = get('SELECT * FROM ai_providers WHERE id = ?', req.params.id);
+  if (!canUseProvider(row, req.user)) throw notFound('Provider');
+  return row;
+}
+
+router.get('/providers', (req, res) => res.json(all('SELECT * FROM ai_providers ORDER BY id').filter((r) => canUseProvider(r, req.user)).map(serialize)));
 
 router.post('/providers', (req, res) => {
   const v = validate(req.body || {});
   const { lastInsertRowid } = run(
-    `INSERT INTO ai_providers (type, name, encrypted_api_key, key_hint, base_url, model, models_json, temperature, max_tokens)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO ai_providers (owner, type, name, encrypted_api_key, key_hint, base_url, model, models_json, temperature, max_tokens)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    req.user,
     v.type, v.name, encrypt(v.apiKey), maskKey(v.apiKey), v.baseUrl, v.model, JSON.stringify(v.models), v.temperature, v.maxTokens
   );
   res.status(201).json(serialize(get('SELECT * FROM ai_providers WHERE id = ?', lastInsertRowid)));
 });
 
 router.patch('/providers/:id', (req, res) => {
-  const row = get('SELECT * FROM ai_providers WHERE id = ?', req.params.id);
-  if (!row) throw notFound('Provider');
+  const row = requireProvider(req);
   const v = validate(req.body || {}, row);
   // Key only replaced when a new one is typed
   const encrypted = v.apiKey ? encrypt(v.apiKey) : row.encrypted_api_key;
@@ -85,14 +96,13 @@ router.patch('/providers/:id', (req, res) => {
 });
 
 router.delete('/providers/:id', (req, res) => {
-  run('DELETE FROM ai_providers WHERE id = ?', req.params.id);
+  run('DELETE FROM ai_providers WHERE id = ?', requireProvider(req).id);
   res.status(204).end();
 });
 
 /** Test a saved provider. Optional body.model to test another model of the list. */
 router.post('/providers/:id/test', async (req, res) => {
-  const row = get('SELECT * FROM ai_providers WHERE id = ?', req.params.id);
-  if (!row) throw notFound('Provider');
+  const row = requireProvider(req);
   try {
     const provider = createProvider({ ...row, model: req.body?.model || row.model });
     res.json(await provider.testConnection());

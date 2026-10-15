@@ -23,7 +23,7 @@ export default function TemplateStep({ project, reload }) {
   const [editing, setEditing] = useState(null);
   const [newCategory, setNewCategory] = useState('');
 
-  const loadCurrent = useCallback(() => (project.template_id ? api.get(`/templates/${project.template_id}`).catch(() => null) : Promise.resolve(null)).then(setCurrent), [project.template_id]);
+  const loadCurrent = useCallback(() => (project.template_id ? api.get(`/templates/${project.template_id}?project=${project.id}`).catch(() => null) : Promise.resolve(null)).then(setCurrent), [project.template_id]);
 
   useEffect(() => {
     loadCurrent();
