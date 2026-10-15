@@ -28,6 +28,13 @@ const storageDir = path.resolve(BACKEND_ROOT, process.env.STORAGE_DIR || '../sto
 
 export const config = {
   port: Number(process.env.PORT || 4000),
+  // 127.0.0.1 = reachable only through a reverse proxy (nginx) on the same machine
+  host: process.env.HOST || '127.0.0.1',
+  // Number of reverse proxies in front of the app (for the client IP); 0 = none
+  trustProxy: Number(process.env.TRUST_PROXY || 0),
+  // Login for the whole app (HTTP Basic Auth). Empty password = no login (local use only)
+  appUser: process.env.APP_USER || 'admin',
+  appPassword: process.env.APP_PASSWORD || '',
   encryptionKey: process.env.ENCRYPTION_KEY,
   storageDir,
   dbPath: path.join(storageDir, 'app.sqlite'),
