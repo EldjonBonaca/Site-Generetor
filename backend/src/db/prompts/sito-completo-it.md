@@ -64,7 +64,7 @@ Regole generali:
 
 ### Plugin e widget
 - Il template usa i **widget nativi di Elementor** (titoli, testi, pulsanti, immagini, box icona, box immagine, elenchi, recensioni, galleria) e, per il modulo di contatto, **{{PLUGIN_MODULO}}**.
-- **Non impostare UAE (Ultimate Addons for Elementor) in automatico**: il template non lo richiede, perché header e footer vengono mostrati senza addon aggiuntivi.
+- Senza Elementor Pro, header e footer sono template di **UAE (Ultimate Addons for Elementor)** – Header Footer Builder, mostrati su tutto il sito.
 - Elenca nella guida finale tutti i plugin necessari da installare/attivare prima dell'importazione.
 - Dove possibile preferisci i widget nativi di Elementor per ridurre le dipendenze.
 
@@ -73,14 +73,14 @@ Regole generali:
 ## 4. Header e Footer (template separati)
 
 ### Header
-- Creato come template separato (Theme Builder → Header), secondo lo stile del template.
+- Creato come template separato (Theme Builder → Header con Elementor Pro, altrimenti UAE → Header Footer Builder), secondo lo stile del template.
 - Contiene: logo `{{LOGO}}`, menu di navigazione con le 5 pagine (Home, Chi Siamo, Servizi, Galleria, Contatti) e un pulsante verso *Contatti*.
 - **Desktop**: logo, menu e pulsante allineati in orizzontale sulla stessa riga, con spaziature e proporzioni coerenti.
 - **Mobile e tablet**: il menu diventa un **menu hamburger** che si apre e si chiude al tocco; logo e pulsante dell'hamburger restano allineati sulla stessa riga. Sul telefono il pulsante verso *Contatti* si trova dentro il menu aperto.
 - Se il template lo prevede, mostra anche telefono ed email.
 
 ### Footer
-- Creato come template separato (Theme Builder → Footer), secondo lo stile del template.
+- Creato come template separato (Theme Builder → Footer con Elementor Pro, altrimenti UAE → Header Footer Builder), secondo lo stile del template.
 - Organizzato in **4 colonne/blocchi**:
   1. **Logo** `{{LOGO}}`.
   2. **Link** – titolo "Link" con il menu di navigazione (Home, Chi Siamo, Servizi, Galleria, Contatti).
@@ -181,5 +181,5 @@ Fornisci:
 - Footer con: logo, Link (menu), Servizi (tutti i servizi), Contatti (indirizzo, email, telefono) e copyright.
 - Tutti i pulsanti e i link puntano alle pagine corrette.
 - Telefono, email e indirizzo identici in header, footer e pagina Contatti.
-- UAE non attivato.
+- Header e footer attivi su tutto il sito (Theme Builder o UAE).
 - Layout responsive verificato su desktop, tablet e mobile.

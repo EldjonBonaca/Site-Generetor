@@ -10,13 +10,14 @@
  * License: GPL-2.0-or-later
  *
  * Generated file. On activation it opens Tools → {{MENU_TITLE}}, which creates the website:
- *  1. setup: Hello Elementor theme (replacing a block theme, or any theme without Elementor Pro) and
- *     the contact form plugin (MetForm or Contact Form 7); no other addon (no UAE);
+ *  1. setup: Hello Elementor theme (replacing a block theme, or any theme without Elementor Pro),
+ *     Contact Form 7 and, without Elementor Pro, Ultimate Addons for Elementor (UAE);
  *  2. images (Media Library), a few per request;
  *  3. the 5 pages (Home, About, Services, Gallery, Contact) built with Elementor, one article per
  *     service, the menu, the contact form, header/footer/single post templates and the template colors.
- * Header and footer: Elementor Pro Theme Builder templates; without Pro this plugin displays them
- * on every page (Hello Elementor hooks), so it must stay active.
+ * Header and footer: Elementor Pro Theme Builder templates; without Pro, UAE Header Footer Builder
+ * templates shown on the whole site, which keep working after this plugin is deleted. Only when UAE
+ * cannot be installed this plugin displays them itself (Hello Elementor hooks).
  * Running it again updates what it created (tracked in the option OPTION).
  */
 
@@ -32,9 +33,9 @@ const SCHEME = 'esg-image://';
 const IMAGES_PER_REQUEST = 3;
 // Header / footer template ids displayed by this plugin when Elementor Pro is not active
 const OPTION_HF = 'esg_site_{{HASH}}_hf';
-// Contact form plugins (installed from wordpress.org)
-const METFORM = array('slug' => 'metform', 'file' => 'metform/metform.php', 'name' => 'MetForm');
+// Plugins installed from wordpress.org: the contact form, and the header/footer builder used without Elementor Pro
 const CF7 = array('slug' => 'contact-form-7', 'file' => 'contact-form-7/wp-contact-form-7.php', 'name' => 'Contact Form 7');
+const UAE = array('slug' => 'header-footer-elementor', 'file' => 'header-footer-elementor/header-footer-elementor.php', 'name' => 'Ultimate Addons for Elementor');
 
 register_activation_hook(__FILE__, __NAMESPACE__ . '\\activate');
 register_uninstall_hook(__FILE__, __NAMESPACE__ . '\\uninstall');
@@ -78,7 +79,7 @@ function t($key, array $vars = array()) {
 /** IDs of everything this plugin created, so a new run updates instead of duplicating. */
 function state() {
 	$state = get_option(OPTION, array());
-	$defaults = array('images' => array(), 'pages' => array(), 'posts' => array(), 'templates' => array(), 'menu_items' => array(), 'form' => null, 'done_at' => 0);
+	$defaults = array('images' => array(), 'pages' => array(), 'posts' => array(), 'templates' => array(), 'uae' => array(), 'menu_items' => array(), 'form' => null, 'done_at' => 0);
 	return is_array($state) ? array_merge($defaults, $state) : $defaults;
 }
 
@@ -391,15 +392,26 @@ function ensure_theme(array &$messages) {
 	$messages[] = array('level' => 'info', 'text' => t('themeSwitched'));
 }
 
-/** First step: the theme and the contact form plugin (MetForm or Contact Form 7). No other addon. */
+/**
+ * First step: the theme, Contact Form 7 and, without Elementor Pro, Ultimate Addons for Elementor
+ * (its Header Footer Builder shows the header and footer of the site, also after this plugin is removed).
+ */
 function setup_dependencies() {
 	$messages = array();
 	ensure_theme($messages);
-	$form = data()['contactForm'];
-	if (!empty($form)) {
-		ensure_plugin($form['plugin'] === 'cf7' ? CF7 : METFORM, $messages);
+	if (!empty(data()['contactForm'])) {
+		ensure_plugin(CF7, $messages);
+	}
+	if (!defined('ELEMENTOR_PRO_VERSION') && has_header_footer()) {
+		ensure_plugin(UAE, $messages);
 	}
 	return array('done' => true, 'messages' => $messages);
+}
+
+/** Ultimate Addons for Elementor is active: header and footer are saved as its templates. */
+function use_uae() {
+	require_once ABSPATH . 'wp-admin/includes/plugin.php';
+	return !defined('ELEMENTOR_PRO_VERSION') && is_plugin_active(UAE['file']) && post_type_exists('elementor-hf');
 }
 
 // ---------------------------------------------------------------------------- images
@@ -611,7 +623,7 @@ function category_id(array $category) {
 }
 
 /**
- * The contact form (created once, MetForm or Contact Form 7, mail sent to the site email) and its
+ * The contact form (created once with Contact Form 7, mail sent to the site email) and its
  * shortcode; null when the form plugin is not active.
  */
 function contact_form(array &$state, array &$messages) {
@@ -622,25 +634,8 @@ function contact_form(array &$state, array &$messages) {
 	if (!$state['form'] && !empty($state['cf7'])) {
 		$state['form'] = array('plugin' => 'cf7', 'id' => (int) $state['cf7']); // created by an earlier version of the plugin
 	}
-	$known = (is_array($state['form']) && $state['form']['plugin'] === $cf['plugin']) ? (int) $state['form']['id'] : 0;
-	$created = function ($id) use (&$state, &$messages, $cf) {
-		$state['form'] = array('plugin' => $cf['plugin'], 'id' => (int) $id);
-		save_state($state);
-		$messages[] = array('level' => 'info', 'text' => t('formCreated', array('title' => $cf['title'], 'plugin' => $cf['name'], 'email' => $cf['recipient'])));
-	};
-
-	if ($cf['plugin'] === 'metform') {
-		if (!post_type_exists('metform-form')) {
-			$messages[] = array('level' => 'warning', 'text' => t('noForm', array('plugin' => $cf['name'])));
-			return null;
-		}
-		$id = ($known && get_post($known)) ? $known : create_metform($cf);
-		if ($id !== $known) {
-			$created($id);
-		}
-		return '[metform form_id="' . $id . '"]';
-	}
-
+	// A MetForm form made by an earlier version is replaced by a Contact Form 7 one
+	$known = (is_array($state['form']) && $state['form']['plugin'] === 'cf7') ? (int) $state['form']['id'] : 0;
 	if (!class_exists('WPCF7_ContactForm')) {
 		$messages[] = array('level' => 'warning', 'text' => t('noForm', array('plugin' => $cf['name'])));
 		return null;
@@ -648,39 +643,21 @@ function contact_form(array &$state, array &$messages) {
 	$form = $known ? \WPCF7_ContactForm::get_instance($known) : null;
 	if (!$form) {
 		$form = \WPCF7_ContactForm::get_template(array('title' => $cf['title']));
-		if (!empty($cf['recipient'])) {
-			$props = $form->get_properties();
-			$props['mail']['recipient'] = $cf['recipient'];
-			$form->set_properties($props);
-		}
+		$props = $form->get_properties();
+		// Fields of the site (name, email, phone, message, privacy consent) and the email to the site owner
+		$props['form'] = $cf['form'];
+		$props['mail']['recipient'] = $cf['recipient'];
+		$props['mail']['subject'] = $cf['subject'];
+		$props['mail']['body'] = $cf['body'];
+		$props['mail']['additional_headers'] = $cf['replyTo'];
+		$props['messages']['mail_sent_ok'] = $cf['success'];
+		$form->set_properties($props);
 		$form->save();
-		$created($form->id());
+		$state['form'] = array('plugin' => 'cf7', 'id' => (int) $form->id());
+		save_state($state);
+		$messages[] = array('level' => 'info', 'text' => t('formCreated', array('title' => $cf['title'], 'plugin' => $cf['name'], 'email' => $cf['recipient'])));
 	}
 	return method_exists($form, 'shortcode') ? $form->shortcode() : sprintf('[contact-form-7 id="%d" title="%s"]', $form->id(), esc_attr($form->title()));
-}
-
-/** MetForm form: its fields are MetForm Elementor widgets, its settings send every message to the site email. */
-function create_metform(array $cf) {
-	$id = wp_insert_post(wp_slash(array('post_type' => 'metform-form', 'post_status' => 'publish', 'post_title' => $cf['title'])), true);
-	if (is_wp_error($id)) {
-		throw new \RuntimeException($id->get_error_message());
-	}
-	update_post_meta($id, '_wp_page_template', 'elementor_canvas');
-	update_post_meta($id, '_elementor_edit_mode', 'builder');
-	update_post_meta($id, '_elementor_template_type', 'wp-post');
-	update_post_meta($id, '_elementor_version', defined('ELEMENTOR_VERSION') ? ELEMENTOR_VERSION : '3.0.0');
-	update_post_meta($id, '_elementor_data', wp_slash(wp_json_encode($cf['elementor'])));
-	update_post_meta($id, 'metform_form__form_setting', array(
-		'form_title' => $cf['title'],
-		'success_message' => $cf['success'],
-		'store_entries' => 1,
-		'enable_admin_notification' => 1,
-		'admin_email_to' => $cf['recipient'],
-		'admin_email_subject' => $cf['subject'],
-		'admin_email_from' => get_option('admin_email'),
-		'admin_email_reply_to' => $cf['recipient'],
-	));
-	return (int) $id;
 }
 
 function site_menu(array $menu) {
@@ -818,10 +795,27 @@ function import_content() {
 	// The single post template is saved without display condition: the service articles are already
 	// built with its design (it can be assigned by hand to articles written later).
 	$pro = defined('ELEMENTOR_PRO_VERSION');
+	$uae = use_uae();
 	$hf = array();
 	foreach ($data['templates'] as $tpl) {
 		$doc = element_doc($tpl['elementor']);
 		if (!$doc) {
+			continue;
+		}
+		// Without Pro: header and footer are Ultimate Addons for Elementor templates shown on the whole
+		// site, so they do not depend on this plugin
+		if ($uae && in_array($tpl['role'], array('header', 'footer'), true)) {
+			$id = upsert_post($state, 'uae', $tpl['key'], array(
+				'post_type' => 'elementor-hf',
+				'post_status' => 'publish',
+				'post_title' => $tpl['title'],
+				'post_name' => sanitize_title($data['site']['name'] . ' ' . $tpl['title']),
+			));
+			set_elementor($id, $doc, 'wp-post', $r);
+			update_post_meta($id, 'ehf_template_type', $tpl['role'] === 'header' ? 'type_header' : 'type_footer');
+			update_post_meta($id, 'ehf_target_include_locations', array('rule' => array('basic-global'), 'specific' => array()));
+			update_post_meta($id, 'ehf_target_exclude_locations', array());
+			update_post_meta($id, 'ehf_target_user_roles', array('all'));
 			continue;
 		}
 		$type = $pro ? $tpl['type'] : 'section';
@@ -848,9 +842,15 @@ function import_content() {
 		if ($data['templates']) {
 			regenerate_theme_conditions($messages);
 		}
+	} elseif ($uae) {
+		delete_option(OPTION_HF); // UAE shows them: this plugin must not print them a second time
+		if (has_header_footer()) {
+			$messages[] = array('level' => 'info', 'text' => t('uaeReady'));
+		}
 	} elseif ($hf) {
+		// UAE could not be installed: this plugin shows header and footer, so the site still has them
 		update_option(OPTION_HF, $hf, true);
-		$messages[] = array('level' => 'info', 'text' => t('hfReady'));
+		$messages[] = array('level' => 'warning', 'text' => t('uaeMissing'));
 		if (get_template() !== 'hello-elementor') {
 			$messages[] = array('level' => 'warning', 'text' => t('hfTheme'));
 		}

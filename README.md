@@ -6,7 +6,7 @@ There are no Template Kits to upload: you create **categories** (e.g. *Plumbers*
 
 The site always has **5 pages: Home, About Us, Services, Gallery and Contact**. Services are published as WordPress articles, and the Gallery shows every uploaded photo.
 
-The app produces a **downloadable zip** with a **WordPress plugin** (`<site>-site.zip`): upload and activate it, and it creates the whole site by itself (images in the Media Library, the 5 Elementor pages, one article per service, menu, header/footer, MetForm contact form). The zip also contains everything needed to import the site manually (single templates, optimized images, `wordpress-import.xml`, `content.md`, `seo.csv`, `INSTRUCTIONS.md`).
+The app produces a **downloadable zip** with a **WordPress plugin** (`<site>-site.zip`): upload and activate it, and it creates the whole site by itself (images in the Media Library, the 5 Elementor pages, one article per service, menu, header/footer as Ultimate Addons for Elementor templates, Contact Form 7 contact form). The zip also contains everything needed to import the site manually (single templates, optimized images, `wordpress-import.xml`, `content.md`, `seo.csv`, `INSTRUCTIONS.md`).
 
 ---
 
@@ -112,7 +112,7 @@ Its Italian variables are filled automatically:
 - **Services:** `{{SERVIZIO_1}}`…`{{SERVIZIO_N}}`
 - **Images:** `{{ELENCO_IMMAGINI}}` (the shared archive: every photo, logo excluded), `{{LOGO}}`, `{{IMG_HOME_HERO}}`, `{{IMG_SUBHEADER}}`, `{{IMG_SERVIZIO_n}}`, `{{ALTRE_IMMAGINI}}` (photos without a specific use), `{{ELENCO_IMMAGINI_GALLERIA}}` (each becomes the exported file name plus its ALT text)
 - **Template:** `{{NOME_TEMPLATE}}`, `{{CATEGORIA_TEMPLATE}}`, `{{STILE_TEMPLATE}}` (colors, fonts, layouts and tone of voice of the template)
-- **Contact form:** `{{PLUGIN_MODULO}}` (MetForm, or Contact Form 7 if chosen in the Template step)
+- **Contact form:** `{{PLUGIN_MODULO}}` (Contact Form 7)
 
 A line containing `{{SERVIZIO_N}}` is repeated for every service after the last numbered one. Lines that refer to a service that doesn't exist are removed.
 
@@ -132,8 +132,8 @@ The generator builds the files itself; the AI only writes the texts. This is how
 | Home photo carousel | Elementor's free *Image Carousel* widget with every photo of the archive (logo excluded), cropped to the same size (`settings.image.carousel`, 900×640 by default) so the slides line up: arrows, dots, autoplay, lightbox, 3 / 2 / 1 photos on desktop / tablet / mobile, and a button to the Gallery page. |
 | Services as **articles** (category "Servizi", featured image, ≥ 300 characters, CTA to Contatti) | Always articles (there are no per-service pages). Each article's text is validated at ≥ 300 characters. `wordpress-import.xml` (WXR) contains the category, articles, featured images, empty pages and the menu. Articles are designed like the single post template: a **hero** with the featured image and the title, the text with a call to action to the contact page, and a **sidebar** with **"Other services"** (every other service of the site, with its link) and the contacts. The exporter builds one static Elementor document per article from that template (`articleDoc` in `builder.js`, `templates/post-<slug>.json`), so the articles look the same **with or without Elementor Pro**; the Pro single post template (dynamic featured image and title) is saved too, without display condition, for articles written later. **Comments are disabled**: the articles are created with comments and pings closed, and the plugin keeps them closed on articles and pages. |
 | Header and footer as separate templates, footer in 4 columns | Header: logo, menu with the 5 pages and a button to the contact page **on one line** on desktop (the row never wraps: logo and button take their width, the menu the rest), plus a top bar with phone and email depending on the template. Below 1025px the menu becomes a **hamburger menu**: a button opening a dropdown panel (closed by tapping it again, tapping outside, a link or Escape; `aria-expanded`, current page highlighted); on phones the header button moves into the panel. The menu is an Elementor **HTML widget** with its own CSS and a few lines of JavaScript, so it needs neither Elementor Pro nor an addon (Jeg Kit, UAE…) and also works with the manual import. Footer: logo · **Link** (5 pages) · **Servizi** (every service, linked to its article) · **Contatti** (address, `mailto:`, `tel:`), then the copyright from *Site data → Copyright*. |
-| Contatti: `tel:`/`mailto:`, form, Google Maps | Contact details with `tel:`/`mailto:` links, a Shortcode widget with the **MetForm** placeholder `[metform form_id="INSERIRE_ID"]` (or the Contact Form 7 one) and a Google Maps iframe with your address. |
-| Plugins: no UAE, native widgets | The template uses only native Elementor widgets and MetForm. The WordPress plugin never installs Ultimate Addons for Elementor: without Elementor Pro it displays header and footer itself. |
+| Contatti: `tel:`/`mailto:`, form, Google Maps | Contact details with `tel:`/`mailto:` links, a Shortcode widget with the **Contact Form 7** placeholder `[contact-form-7 id="INSERIRE_ID" title="…"]` (styled with the template colors) and a Google Maps iframe with your address. |
+| Plugins: native widgets, UAE for header/footer | The pages use only native Elementor widgets and Contact Form 7. Without Elementor Pro the WordPress plugin installs Ultimate Addons for Elementor and saves header and footer as its templates, so they stay on the site after the generated plugin is deleted. |
 | Output: templates, articles, menu, import guide | WordPress plugin `<site>-site.zip` (see [The WordPress plugin](#the-wordpress-plugin)), plus `templates/*.json`, `wordpress-import.xml`, `menu.md`, `ISTRUZIONI.md` (in Italian for Italian sites, with the plugins to activate) for the manual import |
 | Final checks | `CONTROLLI.md` lists leftover placeholder images and sample texts, wrong links, emails that differ from yours, short articles and missing featured images. Responsive layout must still be checked by hand. |
 
@@ -153,7 +153,7 @@ The project wizard autosaves at every step. The sidebar shows ✓ / ⚠ / ✕ fo
    - `gallery` (no specific spot)
 
    Every image except the logo is a site photo: it appears in the Gallery and can fill image slots on any page. Each image also has an ALT text (typed or generated by the AI) and an editable file name. **SEO rename** names files like `plumber-london-boiler-repair.webp`. Resizing and WEBP conversion are applied on export.
-4. **Template**: choose the category of the business and one of its saved templates, or **Generate template** right there (it is saved in the category). The selected template is shown with its sections; *Edit design* changes it for every project that uses it. The same step sets the **contact form plugin** (MetForm by default, or Contact Form 7), the menu name and the Google map.
+4. **Template**: choose the category of the business and one of its saved templates, or **Generate template** right there (it is saved in the category). The selected template is shown with its sections; *Edit design* changes it for every project that uses it. The same step sets the menu name and the Google map.
 5. **AI**: choose the provider. The built-in site prompt is used automatically; you can preview the final prompt of each page with the variables already replaced.
 6. **Generate & Preview**: shows the plan with the estimated token usage, then a live progress bar and log. Afterwards you get an editable preview of every field and the SEO fields, and can regenerate a single field or a whole page. Fields filled by the template (titles, menus, contacts, links) are marked *Template*; the reviews of the About page are marked *Shared*.
 7. **Download**: export the zip and download the WordPress plugin. The images base URL is only needed for the manual import.
@@ -259,9 +259,9 @@ Built by [`generation/wp-plugin.js`](backend/src/generation/wp-plugin.js) from t
 
 It requires Elementor (`Requires Plugins: elementor`); Elementor Pro is optional. Activating it opens **Tools → Site &lt;name&gt;**, which starts by itself and runs in AJAX steps (a few images per request, so slow hosts don't time out):
 
-0. installs and activates from wordpress.org what the site needs: **MetForm** (or **Contact Form 7**) and the **Hello Elementor** theme when the active theme is a block theme, or when Elementor Pro is not active (classic themes are kept with Pro). **Ultimate Addons for Elementor is never installed**;
+0. installs and activates from wordpress.org what the site needs: **Contact Form 7**, **Ultimate Addons for Elementor** (only without Elementor Pro, for header and footer) and the **Hello Elementor** theme when the active theme is a block theme, or when Elementor Pro is not active (classic themes are kept with Pro);
 1. copies the bundled images into the Media Library (with ALT texts and thumbnails);
-2. creates the services category, the menu and the contact form — a MetForm form (name, email, phone, message, privacy consent, send button; notifications to the site email) or a Contact Form 7 form — whose shortcode replaces the `INSERIRE_ID` placeholder;
+2. creates the services category, the menu and the Contact Form 7 form (name, email, phone, message, privacy consent, send button; email to the site address with Reply-To the visitor), whose shortcode replaces the `INSERIRE_ID` placeholder;
 3. creates the 5 pages with `_elementor_data`: each `esg-image://` becomes the attachment id + URL, internal links become absolute;
 4. creates one article per service (category, featured image, excerpt, Yoast / Rank Math title and description);
 5. creates the header, footer and single post template: with Elementor Pro as Theme Builder templates (display conditions for header and footer; the single post template has none, since the articles are already built with its design); **without Pro** header and footer are saved as Elementor sections and **displayed by the plugin itself** on every page and article (Hello Elementor hooks), so the plugin must stay active. It also sets the template colors/fonts as the Elementor global colors and fonts;
@@ -331,8 +331,8 @@ Missing strings fall back to English. A partial Italian locale is included as an
 
 - **Stack**: Node.js + Express backend, React + Vite + Tailwind frontend, SQLite through Node's built‑in `node:sqlite`. One `npm run dev` starts everything.
 - **Templates instead of Template Kits**: the AI designs a validated *spec* (colors, fonts, layout variants, icons, tone, sample texts) and a deterministic builder produces the Elementor JSON. Asking the AI for whole Elementor documents would be slow, expensive and easy to break; with a spec every saved template always produces valid, consistent pages with exactly the sections of the prompt.
-- **Contact form**: MetForm, as the prompt requires; Contact Form 7 can be chosen per project. The form is created by the WordPress plugin and inserted through its shortcode.
-- **Header and footer without Elementor Pro**: displayed by the generated plugin (Hello Elementor hooks) instead of an addon, because the prompt excludes UAE.
+- **Contact form**: Contact Form 7, created by the WordPress plugin and inserted through its shortcode.
+- **Header and footer without Elementor Pro**: Ultimate Addons for Elementor (Header Footer Builder) templates shown on the whole site; only if UAE cannot be installed, the generated plugin displays them itself (Hello Elementor hooks).
 - **Images in templates** (manual import): images are referenced by the configurable base URL. When Elementor imports a template, it downloads each referenced image into the Media Library, so the images must be online at that URL first. `INSTRUCTIONS.md` explains this, including the duplicate images it creates.
 - **ALT text generation** is text‑only: it uses the image role, the service name and the business data. No image is sent to the AI.
 - **SEO data**: each page request also asks for `_seo.title` and `_seo.description`. Slugs come from the role or the service slug and are editable in the preview.
@@ -345,7 +345,6 @@ Missing strings fall back to English. A partial Italian locale is included as an
 - **Fixed structure**: templates change the design, not the structure: the sections are always the ones of the prompt.
 - **Template preview** is a sketch drawn in the app (fonts named, photos drawn as gradients); the exact result is visible after importing into WordPress.
 - **Header menu** is an HTML widget: its links are edited in the HTML code of the widget (or by exporting again), not in the WordPress menu. The WordPress menu created by the plugin is still there for themes and widgets that use it.
-- **MetForm forms** are created with MetForm's own widgets and settings; if a future MetForm version stores them differently, recreate the form in MetForm and put its shortcode in the contact page.
 - **Pages created by `wordpress-import.xml` are empty**: their Elementor content is inserted from `templates/*.json` (Elementor data is not embedded in the XML, for reliability).
 - **Links** assume permalinks set to "Post name" (`/chi-siamo/`, `/<service>/`).
 - **Text links** inside text-editor HTML written by the AI are not validated (button and list links are set by the template).

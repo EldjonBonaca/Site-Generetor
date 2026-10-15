@@ -13,18 +13,20 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'db', 'prompts');
+// LF line endings, also when git checked the files out with CRLF (Windows)
+const read = (file) => fs.readFileSync(path.join(DIR, file), 'utf8').replace(/\r\n/g, '\n');
 
 export const SITE_PROMPT = Object.freeze({
   name: 'Sito completo Elementor (IT)',
-  content: fs.readFileSync(path.join(DIR, 'sito-completo-it.md'), 'utf8'),
+  content: read('sito-completo-it.md'),
 });
 
 export const TEMPLATE_PROMPT = Object.freeze({
   name: 'Template per categoria (IT)',
-  content: fs.readFileSync(path.join(DIR, 'template-categoria-it.md'), 'utf8'),
+  content: read('template-categoria-it.md'),
 });
 
 export const INDUSTRY_PROMPT = Object.freeze({
   name: 'Analisi del settore (IT)',
-  content: fs.readFileSync(path.join(DIR, 'analisi-categoria-it.md'), 'utf8'),
+  content: read('analisi-categoria-it.md'),
 });

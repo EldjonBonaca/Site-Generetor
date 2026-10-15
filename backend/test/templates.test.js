@@ -49,7 +49,7 @@ const sampleSite = (services = 4) => ({
   copyright: '© 2026 Edil Test',
   hasLogo: true,
   mapEmbed: true,
-  contactShortcode: '[metform form_id="INSERIRE_ID"]',
+  contactShortcode: '[contact-form-7 id="INSERIRE_ID" title="Modulo di contatto"]',
   pages: {
     home: { title: 'Home', url: '/' },
     about: { title: 'Chi Siamo', url: '/chi-siamo/' },
@@ -112,7 +112,7 @@ test('buildSite: structure required by the prompt', () => {
   assert.equal(docs.home.doc.content.length, 6, 'hero, about, why us, services, carousel, reviews (no call to action)');
   assert.match(json('home'), /"url":"\/chi-siamo\/"/, '"Scopri di più" -> Chi Siamo');
   assert.match(json('home'), /"url":"\/servizi\/"/, '"Tutti i servizi" -> Servizi');
-  assert.match(json('contact'), /\[metform form_id=\\"INSERIRE_ID\\"\]/);
+  assert.match(json('contact'), /\[contact-form-7 id=\\"INSERIRE_ID\\"/);
   assert.match(json('contact'), /google\.com\/maps\?q=Via%20Roma%201%2C%20Milano/);
   assert.match(json('contact'), /"url":"tel:\+39021234567"/);
   assert.equal(docs.gallery.doc.content[1].elements[0].widgetType, 'image-gallery');

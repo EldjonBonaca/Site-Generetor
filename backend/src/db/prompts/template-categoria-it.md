@@ -26,7 +26,7 @@ La struttura di base del sito resta sempre la stessa; le **sezioni facoltative d
 - **Chi Siamo**: subheader · **"Chi siamo"** in due sezioni a layout alternato (testo | immagine, poi immagine | testo), senza sottotitoli come "La nostra storia" o "La nostra missione" · Numeri chiave (se previsti) · Perché sceglierci · Call to action (se prevista) · Recensioni (le stesse della Home).
 - **Servizi**: subheader · griglia con tutti i servizi (immagine, titolo, breve estratto, link all'articolo).
 - **Galleria**: subheader · galleria con tutte le immagini caricate, con lightbox.
-- **Contatti**: subheader · dati di contatto (telefono, email, indirizzo) · modulo di contatto MetForm · mappa Google.
+- **Contatti**: subheader · dati di contatto (telefono, email, indirizzo) · modulo di contatto Contact Form 7 · mappa Google.
 - **Footer** a 4 colonne: logo · Link (menu) · Servizi (tutti i servizi) · Contatti; in fondo il copyright.
 - **Articolo singolo** dei servizi: hero con l'immagine in evidenza e il titolo, testo dell'articolo con call to action finale verso *Contatti*, barra laterale con "Altri servizi" (gli altri servizi del sito) e i contatti; commenti disattivati.
 
@@ -43,7 +43,7 @@ La struttura di base del sito resta sempre la stessa; le **sezioni facoltative d
 7. Una **descrizione** breve del concetto grafico (2–3 frasi).
 
 ## 4. Regole
-- Il template usa **solo widget nativi di Elementor** (titoli, testi, pulsanti, immagini, box icona, box immagine, elenchi, recensioni, galleria) più il modulo **MetForm**: nessun altro addon. **Non usare UAE (Ultimate Addons for Elementor).**
+- Il template usa **solo widget nativi di Elementor** (titoli, testi, pulsanti, immagini, box icona, box immagine, elenchi, recensioni, galleria) più il modulo **Contact Form 7**; header e footer senza Elementor Pro sono template di **UAE (Ultimate Addons for Elementor)**. Nelle sezioni delle pagine non usare widget di UAE o di altri addon.
 - Nessuna immagine nel template: tutte le immagini arrivano dall'archivio del cliente.
 - Le **recensioni non hanno foto dei clienti**: solo stelle, testo, nome e ruolo/città.
 - Il template deve essere **esteticamente curato**: gerarchia chiara dei titoli, spazi generosi, sezioni alternate chiare/scure o su foto, call to action ben visibili. Scegli varianti di layout che creino ritmo (es. non tutte le sezioni sullo stesso sfondo).

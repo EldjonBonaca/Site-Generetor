@@ -44,8 +44,9 @@ const UI = {
     viewSite: 'Visita il sito',
     edit: 'modifica',
     noTemplate: 'Pagina "{title}": nessun template Elementor, la pagina è stata creata senza layout.',
-    hfNotice: 'Elementor Pro non è necessario: senza Pro header e footer vengono mostrati su tutto il sito da questo plugin, che quindi deve restare attivo.',
-    hfReady: 'Header e footer pubblicati su tutto il sito (mostrati da questo plugin: lascialo attivo).',
+    hfNotice: 'Elementor Pro non è necessario: senza Pro header e footer diventano template del plugin gratuito Ultimate Addons for Elementor (installato in automatico) e restano sul sito anche dopo aver eliminato questo plugin.',
+    uaeReady: 'Header e footer creati come template di Ultimate Addons for Elementor (Aspetto → UAE → Header Footer Builder): restano sul sito anche se questo plugin viene eliminato.',
+    uaeMissing: 'Ultimate Addons for Elementor non è attivo: header e footer sono mostrati da questo plugin (lascialo attivo). Installa UAE e clicca "Aggiorna il sito" per renderli indipendenti.',
     hfTheme: 'Senza Elementor Pro header e footer vengono mostrati solo con il tema Hello Elementor: attivalo e clicca "Aggiorna il sito".',
     pluginReady: 'Plugin "{name}" installato e attivato.',
     installFailed: 'Impossibile installare o attivare "{name}" ({error}). Installalo a mano da Plugin → Aggiungi nuovo, poi clicca "Aggiorna il sito".',
@@ -81,8 +82,9 @@ const UI = {
     viewSite: 'View the website',
     edit: 'edit',
     noTemplate: 'Page "{title}": no Elementor template, the page was created without a layout.',
-    hfNotice: 'Elementor Pro is not needed: without Pro the header and footer are shown on the whole site by this plugin, so keep it active.',
-    hfReady: 'Header and footer published on the whole site (shown by this plugin: keep it active).',
+    hfNotice: 'Elementor Pro is not needed: without Pro the header and footer become templates of the free Ultimate Addons for Elementor plugin (installed automatically) and stay on the site after this plugin is deleted.',
+    uaeReady: 'Header and footer created as Ultimate Addons for Elementor templates (Appearance → UAE → Header Footer Builder): they stay on the site even if this plugin is deleted.',
+    uaeMissing: 'Ultimate Addons for Elementor is not active: the header and footer are shown by this plugin (keep it active). Install UAE and click "Update the website" to make them independent.',
     hfTheme: 'Without Elementor Pro the header and footer are shown only with the Hello Elementor theme: activate it, then click "Update the website".',
     pluginReady: 'Plugin "{name}" installed and activated.',
     installFailed: 'Could not install or activate "{name}" ({error}). Install it from Plugins → Add New Plugin, then click "Update the website".',
@@ -125,36 +127,39 @@ const FORM_TEXTS = {
   },
 };
 
-/** Elementor content of the MetForm form (MetForm field widgets inside one container). */
-function metformDoc(texts, hash) {
-  let n = 0;
-  const id = () => crypto.createHash('md5').update(`metform:${hash}:${n++}`).digest('hex').slice(0, 7);
-  const widget = (widgetType, settings) => ({ id: id(), elType: 'widget', widgetType, settings, elements: [] });
-  const input = (type, name, [label, placeholder], required = 'yes') =>
-    widget(type, { mf_input_label: label, mf_input_name: name, mf_input_placeholder: placeholder, mf_input_required: required });
-  return [
-    {
-      id: id(),
-      elType: 'container',
-      isInner: false,
-      settings: { content_width: 'full', flex_direction: 'column', flex_gap: { unit: 'px', size: 16, column: '16', row: '16', isLinked: true } },
-      elements: [
-        input('mf-text', 'mf-name', texts.name),
-        input('mf-email', 'mf-email', texts.email),
-        input('mf-telephone', 'mf-phone', texts.phone, ''),
-        input('mf-textarea', 'mf-message', texts.message),
-        widget('mf-gdpr-consent', { mf_input_name: 'mf-privacy', mf_gdpr_consent_option_text: texts.consent, mf_input_required: 'yes' }),
-        widget('mf-button', { mf_btn_text: texts.submit }),
-      ],
-    },
-  ];
+/** Text inside a Contact Form 7 tag option ("…"): no quotes or brackets. */
+const cf7Text = (v) => String(v).replace(/["[\]]/g, '');
+
+/**
+ * Contact Form 7 form: its fields (form tags) and the email sent to the site owner. The field
+ * names are used in the email body; Reply-To is the visitor, so answering the email reaches them.
+ */
+function cf7Form(texts) {
+  const field = (tag, [label, placeholder]) => `<label> ${label}\n    [${tag} placeholder "${cf7Text(placeholder)}"] </label>`;
+  const form = [
+    field('text* your-name autocomplete:name', texts.name),
+    field('email* your-email autocomplete:email', texts.email),
+    field('tel your-phone autocomplete:tel', texts.phone),
+    field('textarea* your-message', texts.message),
+    `[acceptance your-consent] ${texts.consent} [/acceptance]`,
+    `[submit "${cf7Text(texts.submit)}"]`,
+  ].join('\n\n');
+  const body = [
+    `${texts.name[0]}: [your-name]`,
+    `${texts.email[0]}: [your-email]`,
+    `${texts.phone[0]}: [your-phone]`,
+    '',
+    `${texts.message[0]}:`,
+    '[your-message]',
+  ].join('\n');
+  return { form, body, replyTo: 'Reply-To: [your-name] <[your-email]>' };
 }
 
 /**
- * Contact form the plugin creates (MetForm by default, or Contact Form 7). The contact page
+ * Contact form the plugin creates (Contact Form 7). The contact page
  * contains its placeholder shortcode (id INSERIRE_ID), replaced by the shortcode of the created form.
  */
-function contactFormInfo(ctx, hash) {
+function contactFormInfo(ctx) {
   const form = contactForm(ctx);
   const texts = FORM_TEXTS[ctx.project.language] || FORM_TEXTS.en;
   return {
@@ -165,7 +170,7 @@ function contactFormInfo(ctx, hash) {
     recipient: ctx.project.email,
     subject: `${texts.subject} – ${ctx.project.site_name}`,
     success: texts.success,
-    elementor: form.plugin === 'metform' ? metformDoc(texts, hash) : null,
+    ...cf7Form(texts),
   };
 }
 
@@ -211,7 +216,7 @@ export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, c
     logo: images.find((i) => i.logo)?.file || null,
     category,
     menu: ctx.menu,
-    contactForm: contactFormInfo(ctx, hash),
+    contactForm: contactFormInfo(ctx),
     pages: pages.map((p) => ({ key: p.key, role: p.role, title: p.title, slug: p.slug, seo: p.seo || null, elementor: addDoc(p.key, p.doc) })),
     posts: posts.map(({ doc, ...p }) => ({ ...p, elementor: doc ? addDoc(p.key, doc) : null })),
     templates: templates.map((t) => ({ key: t.key, role: t.role, title: t.title, type: t.type, elementor: addDoc(t.key, t.doc) })),

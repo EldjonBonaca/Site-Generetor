@@ -154,7 +154,6 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
 
   p = await api('PATCH', `/projects/${pid}`, { settings: { generation: { providerId: provider.id } } });
   assert.equal(p.readiness.ready, true, JSON.stringify(p.readiness.items));
-  assert.equal(p.settings.contactForm, 'metform', 'MetForm by default (as the prompt requires)');
   assert.equal((await api('GET', `/templates/${tpl.id}`)).used_by, 1);
 
   // One built-in prompt for every site: it cannot be uploaded, created or chosen
@@ -169,7 +168,7 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.match(preview.prompt, /\| Settore \/ tipo di cliente \| `Plumber` \|/);
   assert.match(preview.prompt, /template Elementor `Plumber blue` della categoria `Idraulici`/);
   assert.match(preview.prompt, new RegExp(`Font: ${spec.style.fonts.heading} \\(titoli\\)`), 'template style described');
-  assert.match(preview.prompt, /realizzato con \*\*MetForm\*\*/);
+  assert.match(preview.prompt, /realizzato con \*\*Contact Form 7\*\*/);
   assert.match(preview.prompt, /\| Altre immagini \| `team\.webp` \|/, 'images without a specific use');
   assert.doesNotMatch(preview.prompt, /\{\{[A-Z_]+\}\}/, 'no unresolved variable');
   assert.doesNotMatch(preview.prompt, /Template Kit/);
@@ -226,8 +225,8 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   const instructions = zip.readAsText(root + 'INSTRUCTIONS.md');
   assert.match(instructions, /Upload Plugin\*\* → choose `rossi-idraulica-site\.zip`/);
   assert.match(instructions, /template \*\*Plumber blue\*\* \(category \*Idraulici\*\)/);
-  assert.match(instructions, /\*\*MetForm\*\*/);
-  assert.match(instructions, /Ultimate Addons for Elementor \(UAE\) and other addons are not needed/);
+  assert.match(instructions, /\*\*Contact Form 7\*\*/);
+  assert.match(instructions, /without Pro it creates the header and footer as UAE templates/);
   const webp = names.filter((n) => n.startsWith(root + 'images/') && n.endsWith('.webp'));
   assert.equal(webp.filter((n) => !/-(hero|subheader|carousel)\.webp$/.test(n)).length, 6, '6 images');
   assert.equal(webp.filter((n) => /-(hero|subheader)\.webp$/.test(n)).length, 2, 'hero and subheader crops');
@@ -265,7 +264,9 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   const footer = zip.readAsText(root + 'templates/footer.json');
   for (const t of ['Riparazione caldaie', '/bagni-su-misura/', 'mailto:info@rossi-idraulica.it', `© ${new Date().getFullYear()} Rossi Idraulica. All rights reserved.`]) assert.ok(footer.includes(t), `footer: ${t}`);
   const contact = zip.readAsText(root + 'templates/contact.json');
-  assert.ok(contact.includes('[metform form_id=\\"INSERIRE_ID\\"]'));
+  assert.ok(contact.includes('[contact-form-7 id=\\"INSERIRE_ID\\" title=\\"Contact form\\"]'));
+  assert.match(contact, /"css_classes":\s*"esg-form"/, 'Contact Form 7 styled by the template');
+  assert.match(contact, /\.esg-form input\[type=submit\]\{width:100%/);
 
   const csv = zip.readAsText(root + 'seo.csv');
   assert.match(csv, /"\/riparazione-caldaie\/"/);
@@ -282,7 +283,12 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.match(php, /Requires Plugins: elementor/);
   assert.match(php, /^namespace ESG\\Site_[0-9a-f]{8};$/m);
   assert.doesNotMatch(php, /\{\{[A-Z_]+\}\}/, 'no unfilled placeholder');
-  assert.doesNotMatch(php, /header-footer-elementor|elementor-hf/, 'UAE is never installed');
+  // Without Elementor Pro the header/footer are UAE templates (they survive the deletion of this plugin)
+  assert.match(php, /'slug' => 'header-footer-elementor'/);
+  assert.match(php, /'post_type' => 'elementor-hf'/);
+  assert.ok(php.includes("'ehf_template_type', $tpl['role'] === 'header' ? 'type_header' : 'type_footer'"), 'UAE header / footer type');
+  assert.ok(php.includes("array('rule' => array('basic-global')"), 'shown on the entire site');
+  assert.ok(!php.includes("'metform") && !php.includes('metform-form') && !php.includes('[metform'), 'Contact Form 7 only');
   const site = JSON.parse(plugin.readAsText(pr + 'data/site.json'));
   assert.deepEqual(site.pages.map((x) => [x.role, x.title, x.slug]), [
     ['home', 'Home', 'home'],
@@ -319,24 +325,19 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.equal(site.headerFooter, true);
   assert.equal(site.globalStyles.system_colors[0].color, spec.style.colors.primary, 'template colors -> Elementor global colors');
   assert.equal(site.globalStyles.system_typography[0].typography_font_family, spec.style.fonts.heading);
-  assert.equal(site.contactForm.plugin, 'metform');
-  assert.equal(site.contactForm.placeholder, '[metform form_id="INSERIRE_ID"]');
+  assert.equal(site.contactForm.plugin, 'cf7');
+  assert.equal(site.contactForm.placeholder, '[contact-form-7 id="INSERIRE_ID" title="Contact form"]');
   assert.equal(site.contactForm.recipient, 'info@rossi-idraulica.it');
-  assert.deepEqual(site.contactForm.elementor[0].elements.map((w) => w.widgetType), ['mf-text', 'mf-email', 'mf-telephone', 'mf-textarea', 'mf-gdpr-consent', 'mf-button']);
+  // Same fields as before: name, email, phone, message, privacy consent; reply goes to the visitor
+  for (const tag of ['[text* your-name', '[email* your-email', '[tel your-phone', '[textarea* your-message', '[acceptance your-consent]', '[submit "Send message"]']) assert.ok(site.contactForm.form.includes(tag), tag);
+  assert.match(site.contactForm.body, /Phone: \[your-phone\]/);
+  assert.equal(site.contactForm.replyTo, 'Reply-To: [your-name] <[your-email]>');
   assert.equal(site.menu.slug, 'main-menu');
   assert.equal(site.ui.run, 'Create the website');
   const pluginHome = plugin.readAsText(pr + 'data/elementor/home.json');
   assert.match(pluginHome, /"url":"esg-image:\/\/plumber-roma-home[^"]*\.webp"/, 'images point to the bundled files');
   assert.doesNotMatch(pluginHome, /rossi-idraulica\.it\/wp-content|template\.invalid/, 'no base URL / placeholder image in the plugin');
   assert.match(pluginHome, /Idraulico a Roma 24\/7/);
-
-  // 8. Contact Form 7 instead of MetForm
-  await api('PATCH', `/projects/${pid}`, { settings: { contactForm: 'cf7' } });
-  const exp2 = await api('POST', `/generations/${gen.id}/export`);
-  const site2 = JSON.parse(new AdmZip(new AdmZip(Buffer.from(await (await fetch(base.replace('/api', '') + exp2.download)).arrayBuffer())).readFile(root + 'rossi-idraulica-site.zip')).readAsText(pr + 'data/site.json'));
-  assert.equal(site2.contactForm.plugin, 'cf7');
-  assert.equal(site2.contactForm.placeholder, '[contact-form-7 id="INSERIRE_ID" title="Contact form"]');
-  assert.equal(site2.contactForm.elementor, null);
 
   // 9. Another template: the old generation cannot be exported with it
   const other = await api('POST', `/template-categories/${cat.id}/templates`, { name: 'Other', spec: draft.spec });

@@ -1,7 +1,7 @@
 /**
  * End-to-end test of the Italian full-site prompt ("Sito completo Elementor (IT)") with a
  * category template: Home / Chi Siamo / Servizi / Galleria / Contatti, services as articles (WXR),
- * header/footer, service cards, shared image archive, reviews, MetForm, map, menu and final checks.
+ * header/footer, service cards, shared image archive, reviews, Contact Form 7, map, menu and final checks.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -173,9 +173,9 @@ test('Italian full site: template, articles, gallery, reviews, contact form, men
   assert.equal(galleryWidget.settings.wp_gallery.length, 9);
   assert.equal(galleryWidget.settings.gallery_link, 'file');
   assert.equal(galleryWidget.settings.open_lightbox, 'yes');
-  // Contact: MetForm placeholder shortcode + map with the real address + tel/mailto links
+  // Contact: Contact Form 7 placeholder shortcode + map with the real address + tel/mailto links
   const contact = read('templates/contact.json');
-  assert.ok(contact.includes('"shortcode":"[metform form_id=\\"INSERIRE_ID\\"]"'));
+  assert.ok(contact.includes('"shortcode":"[contact-form-7 id=\\"INSERIRE_ID\\" title=\\"Modulo di contatto\\"]"'));
   assert.match(contact, /google\.com\/maps\?q=Via%20Milano%2010%2C%2020100%20Milano/);
   assert.match(contact, /tel:\+39021234567/);
   assert.match(contact, /mailto:info@edilbianchi\.it/);
@@ -202,11 +202,11 @@ test('Italian full site: template, articles, gallery, reviews, contact form, men
   assert.match(xml, /<wp:post_name><!\[CDATA\[chi-siamo\]\]><\/wp:post_name>/);
   const istruzioni = read('ISTRUZIONI.md');
   assert.match(istruzioni, /template \*\*Edilizia moderna\*\* \(categoria \*Edilizia\*\)/);
-  assert.match(istruzioni, /MetForm/);
-  assert.match(istruzioni, /non serve Ultimate Addons for Elementor \(UAE\)/);
+  assert.match(istruzioni, /Contact Form 7/);
+  assert.match(istruzioni, /senza Pro crea header e footer come template di UAE/);
   assert.match(read('menu.md'), /\| 2 \| Chi Siamo \| `\/chi-siamo\/` \|/);
 
-  // WordPress plugin: 5 pages, 5 articles, every photo in the gallery, MetForm form, Italian admin texts
+  // WordPress plugin: 5 pages, 5 articles, every photo in the gallery, Contact Form 7 form, Italian admin texts
   assert.match(istruzioni, /Carica plugin\*\* → scegli `edil-bianchi-site\.zip`/);
   const plugin = new AdmZip(zip.readFile(root + 'edil-bianchi-site.zip'));
   const site = JSON.parse(plugin.readAsText('edil-bianchi-site/data/site.json'));
@@ -217,12 +217,13 @@ test('Italian full site: template, articles, gallery, reviews, contact form, men
   assert.deepEqual(site.category, { name: 'Servizi', slug: 'servizi' });
   assert.deepEqual(site.menu, { name: 'Menu principale', slug: 'menu-principale' });
   assert.deepEqual(site.templates.map((x) => x.type), ['header', 'footer', 'single-post']);
-  assert.equal(site.contactForm.plugin, 'metform');
+  assert.equal(site.contactForm.plugin, 'cf7');
   assert.equal(site.contactForm.title, 'Modulo di contatto');
   assert.equal(site.contactForm.recipient, 'info@edilbianchi.it');
-  assert.equal(site.contactForm.elementor[0].elements[0].settings.mf_input_label, 'Nome e cognome');
+  assert.match(site.contactForm.form, /<label> Nome e cognome\n    \[text\* your-name/);
+  assert.match(site.contactForm.form, /\[submit "Invia messaggio"\]/);
   assert.equal(site.ui.run, 'Crea il sito');
-  assert.match(site.ui.hfNotice, /deve restare attivo/);
+  assert.match(site.ui.hfNotice, /restano sul sito anche dopo aver eliminato questo plugin/);
   const photos = site.images.filter((i) => i.photo).map((i) => `esg-image://${i.file}`);
   assert.equal(photos.length, 9);
   const pluginGallery = JSON.parse(plugin.readAsText('edil-bianchi-site/data/elementor/gallery.json')).content[1].elements[0];

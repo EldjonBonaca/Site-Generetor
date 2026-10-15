@@ -78,11 +78,10 @@ router.patch('/projects/:id', (req, res) => {
     const s = req.body.settings;
     settings = {
       ...settings,
-      ...pick(s, ['subheaderPerPage', 'mapEmbed', 'contactForm', 'menuName']),
+      ...pick(s, ['subheaderPerPage', 'mapEmbed', 'menuName']),
       image: { ...(settings.image || {}), ...(s.image || {}) },
       generation: { ...(settings.generation || {}), ...(s.generation || {}) },
     };
-    if (!['metform', 'cf7'].includes(settings.contactForm)) settings.contactForm = 'metform';
     if (typeof settings.menuName === 'string') settings.menuName = settings.menuName.slice(0, 100);
   }
 

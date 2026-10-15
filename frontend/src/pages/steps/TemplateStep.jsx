@@ -266,14 +266,12 @@ function SiteStructureCard({ project, reload }) {
         {t('The site has 5 pages (Home, About, Services, Gallery, Contact), a header, a 4-column footer and the single post template. Services are published as WordPress articles, one per service, in the services category.')}
       </p>
       <div className="mt-5 grid gap-5 md:grid-cols-2">
-        <Field label={t('Contact form plugin')} hint={t('The WordPress plugin installs it, creates the form (name, email, phone, message, privacy consent) and puts it on the contact page. MetForm is the one required by the prompt.')}>
-          {(id) => (
-            <Select id={id} value={s.contactForm} onChange={(e) => save({ contactForm: e.target.value })}>
-              <option value="metform">MetForm</option>
-              <option value="cf7">Contact Form 7</option>
-            </Select>
-          )}
-        </Field>
+        <div>
+          <p className="text-sm font-medium text-slate-700">{t('Contact form')}</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {t('Contact Form 7: the WordPress plugin installs it, creates the form (name, email, phone, message, privacy consent) and puts it on the contact page.')}
+          </p>
+        </div>
         <Field label={t('Menu name')} hint={t('Created by the WordPress plugin (or wordpress-import.xml). The header and footer already link to the pages.')}>
           {(id) => (
             <Input

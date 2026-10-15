@@ -38,7 +38,7 @@ export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
  * Version of the generated structure. Field ids depend on it: a generation made with another
  * version cannot be exported (exporter.js), it has to be generated again.
  */
-export const BUILDER_VERSION = 5;
+export const BUILDER_VERSION = 6;
 
 export const DOC_ROLES = ['home', 'about', 'services', 'gallery', 'contact', 'single_post', 'header', 'footer'];
 
@@ -913,6 +913,30 @@ function contactItems(site) {
   ].filter((i) => i.text);
 }
 
+/** Contact Form 7 has no design of its own: fields, consent and button in the colors and corners of the template. */
+function formCss(b) {
+  const { c } = b;
+  const radius = b.st.buttons === 'pill' ? 50 : b.st.buttons === 'square' ? 0 : b.radius;
+  const field = Math.min(radius, 12);
+  return `<style>
+.esg-form .wpcf7-form{display:flex;flex-direction:column;gap:16px;margin:0}
+.esg-form .wpcf7-form>p{margin:0}
+.esg-form .wpcf7-form label{display:block;font-size:14px;font-weight:600;color:${c.heading}}
+.esg-form .wpcf7-form-control-wrap{display:block;margin-top:6px}
+.esg-form input[type=text],.esg-form input[type=email],.esg-form input[type=tel],.esg-form textarea{width:100%;box-sizing:border-box;padding:14px 16px;border:1px solid #D9DEE5;border-radius:${field}px;background:#F7F8FA;color:${c.heading};font-size:15px;transition:border-color .2s,box-shadow .2s,background .2s}
+.esg-form textarea{height:150px;resize:vertical}
+.esg-form input:focus,.esg-form textarea:focus{outline:none;border-color:${c.primary};background:#FFFFFF;box-shadow:0 0 0 3px ${rgba(c.primary, 0.18)}}
+.esg-form .wpcf7-acceptance label{display:flex;gap:10px;align-items:flex-start;font-weight:400;color:${c.text}}
+.esg-form .wpcf7-list-item{margin:0}
+.esg-form input[type=submit]{width:100%;padding:16px 32px;border:0;border-radius:${radius}px;background:${c.primary};color:${c.onPrimary};font-size:16px;font-weight:600;cursor:pointer;transition:background .2s}
+.esg-form input[type=submit]:hover{background:${c.dark};color:#FFFFFF}
+.esg-form input[type=submit]:disabled{opacity:.6;cursor:not-allowed}
+.esg-form .wpcf7-not-valid-tip{margin-top:4px;font-size:13px}
+.esg-form .wpcf7-response-output{margin:4px 0 0!important;padding:12px 16px!important;border-radius:${field}px}
+.esg-form .wpcf7-spinner{display:block;margin:10px auto 0}
+</style>`;
+}
+
 function contact(b, site) {
   const { copy, layout } = b.spec;
   const stacked = layout.contact === 'stacked';
@@ -922,12 +946,13 @@ function contact(b, site) {
     text: { value: copy.contactText, hint: 'invitation to contact the business (1–2 sentences)', max: 300 },
   };
   const infoBox = (it, o) => b.iconBox(it.icon, b.L[it.label], it.text, { fixed: true, url: it.url, titleSize: 17, ...o });
-  // The form card is always light: the fields of the form plugin are styled for light backgrounds
-  const form = b.box([b.heading(copy.formTitle, { size: 26, color: b.c.heading, hint: 'title above the contact form', max: 60 }), b.line(), b.shortcode(site.contactShortcode)], {
+  // The form card is always light: the Contact Form 7 fields are styled for light backgrounds
+  const form = b.box([b.heading(copy.formTitle, { size: 26, color: b.c.heading, hint: 'title above the contact form', max: 60 }), b.line(), b.shortcode(site.contactShortcode), b.html(formCss(b))], {
     card: true,
     bg: '#FFFFFF',
     pad: 40,
     gap: 16,
+    css: 'esg-form',
     ...(stacked ? { maxWidth: 860 } : { width: 52 }),
     anim: 0,
   });

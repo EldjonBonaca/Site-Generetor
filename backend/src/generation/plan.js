@@ -34,18 +34,12 @@ export const servicesCategory = (lang) => SERVICES_CATEGORY[lang] || SERVICES_CA
 export const oneLine = (s) => String(s || '').replace(/\s*\n+\s*/g, ', ').trim();
 
 /**
- * Contact form plugins. The contact page gets a placeholder shortcode (INSERIRE_ID) that the
- * WordPress plugin replaces with the form it creates. MetForm is the one required by the prompt.
+ * Contact form: always Contact Form 7. The contact page gets a placeholder shortcode (INSERIRE_ID)
+ * that the WordPress plugin replaces with the form it creates.
  */
-export const CONTACT_FORM_PLUGINS = {
-  metform: { name: 'MetForm', placeholder: () => '[metform form_id="INSERIRE_ID"]' },
-  cf7: { name: 'Contact Form 7', placeholder: (title) => `[contact-form-7 id="INSERIRE_ID" title="${title}"]` },
-};
-
 export function contactForm(ctx) {
-  const plugin = ctx.settings.contactForm === 'cf7' ? 'cf7' : 'metform';
   const title = FORM_TITLE[ctx.project.language] || FORM_TITLE.en;
-  return { plugin, name: CONTACT_FORM_PLUGINS[plugin].name, title, placeholder: CONTACT_FORM_PLUGINS[plugin].placeholder(title) };
+  return { plugin: 'cf7', name: 'Contact Form 7', title, placeholder: `[contact-form-7 id="INSERIRE_ID" title="${title}"]` };
 }
 
 /** Exact size (px) of the Home hero and of the page subheader images: they are cropped to it. */
@@ -55,7 +49,6 @@ export const DEFAULT_CROP_SIZES = { hero: { width: 1920, height: 1080 }, subhead
 export function defaultSettings(settings = {}) {
   return {
     subheaderPerPage: false,
-    contactForm: 'metform', // metform | cf7
     mapEmbed: true,
     menuName: '',
     ...settings,
