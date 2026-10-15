@@ -367,7 +367,15 @@ function PageEditor({ gen, page, locked, onPageChange }) {
       )}
 
       {hasSeo && (
-        <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-[1fr_1fr_160px]">
+        <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-2 lg:grid-cols-[200px_1fr_1fr_140px]">
+          <Field label={t('Focus keyphrase (Yoast)')}>
+            {(id) => (
+              <div className="flex gap-1">
+                <Input id={id} value={seo.keyphrase || ''} onChange={(e) => setSeoField('keyphrase', e.target.value)} disabled={locked} />
+                <IconButton icon={regenerating === '_seo.keyphrase' ? Loader2 : Sparkles} label={t('Regenerate')} onClick={() => regenerate('_seo.keyphrase')} disabled={locked || !!regenerating} className={regenerating === '_seo.keyphrase' ? 'animate-spin' : ''} />
+              </div>
+            )}
+          </Field>
           <Field label={`${t('SEO title')} (${(seo.title || '').length}/60)`}>
             {(id) => (
               <div className="flex gap-1">

@@ -189,6 +189,7 @@ ${pages.length ? `Site structure: ${pages.map((l) => `${l.label} (${l.url})`).jo
       ? `\n- Fields marked [link]: the value must be exactly one of these URLs (choose the one matching the button/link text): ${links.map((l) => l.url).join(' , ')}`
       : ''
   }
+- "_seo.keyphrase" (if present): Yoast SEO focus keyphrase, the 2–4 word search that should find this page (e.g. service + city), in ${languageLabel}. Use it in the SEO title (at the beginning), in the meta description and in the main title and first paragraph of the page.
 - "_seo.title" (if present): SEO title for this page, max 60 characters. "_seo.description" (if present): meta description, max 155 characters.${extra}
 ${includeStructure ? `\nFields:\n${formatTemplateStructure(fields)}\n` : ''}
 Expected JSON shape:

@@ -106,7 +106,7 @@ router.post('/generations/:gid/cancel', (req, res) => {
   res.json({ ok: true });
 });
 
-/** Manual edits from the preview: { fields: { id: value }, seo: { title, description, slug } } */
+/** Manual edits from the preview: { fields: { id: value }, seo: { keyphrase, title, description, slug } } */
 router.patch('/generations/:gid/pages/:key', (req, res) => {
   const g = requireGen(req.params.gid);
   if (isRunning(g.id)) throw badRequest('Wait for the generation to finish before editing.');
@@ -122,6 +122,7 @@ router.patch('/generations/:gid/pages/:key', (req, res) => {
   if (typeof req.body?.title === 'string' && req.body.title.trim()) page.title = req.body.title.trim().slice(0, 200);
   if (req.body?.seo) {
     const s = req.body.seo;
+    if (typeof s.keyphrase === 'string') page.seo.keyphrase = s.keyphrase.slice(0, 100);
     if (typeof s.title === 'string') page.seo.title = s.title.slice(0, 200);
     if (typeof s.description === 'string') page.seo.description = s.description.slice(0, 400);
     if (typeof s.slug === 'string' && page.seo.slug !== null) page.seo.slug = slugify(s.slug, 120);

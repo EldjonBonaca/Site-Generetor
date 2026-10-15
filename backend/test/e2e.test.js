@@ -190,6 +190,7 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.equal(gen.pages_done, 10);
   const home = gen.pages.find((pg) => pg.key === 'home');
   assert.ok(home.seo.title);
+  assert.ok(home.seo.keyphrase, 'Yoast focus keyphrase written with the SEO fields');
   assert.ok(home.fields.some((f) => f.id.startsWith('home.s5.heading') && f.value === 'Riparazione caldaie'), 'service card title = service name');
   const about = gen.pages.find((pg) => pg.key === 'about');
   assert.equal(about.fields.find((f) => f.id === 'about.intro.heading1.title').value, 'About Us', 'subheader title = page title');
@@ -263,6 +264,9 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   for (const url of ['/about-us/', '/services/', '/gallery/', '/contact/']) assert.ok(header.includes(`href=\\"${url}\\"`), `header menu: ${url}`);
   const footer = zip.readAsText(root + 'templates/footer.json');
   for (const t of ['Riparazione caldaie', '/bagni-su-misura/', 'mailto:info@rossi-idraulica.it', `© ${new Date().getFullYear()} Rossi Idraulica. All rights reserved.`]) assert.ok(footer.includes(t), `footer: ${t}`);
+  // Legal pages created later by the site owner
+  assert.ok(footer.includes('<a href=\\"/cookie-policy/\\"'), 'footer: Cookie Policy link');
+  assert.ok(footer.includes('<a href=\\"/informativa-sul-trattamento-dei-dati-personali/\\"'), 'footer: Privacy Policy link');
   const contact = zip.readAsText(root + 'templates/contact.json');
   assert.ok(contact.includes('[contact-form-7 id=\\"INSERIRE_ID\\" title=\\"Contact form\\"]'));
   assert.match(contact, /"css_classes":\s*"esg-form"/, 'Contact Form 7 styled by the template');
@@ -303,6 +307,9 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
     ['Bagni su misura', 'bagni-su-misura', 'plumber-roma-bagni-su-misura.webp'],
   ]);
   assert.ok(site.posts.every((x) => x.content.length > 100 && x.seo));
+  // Yoast SEO: installed by the plugin, focus keyphrase / title / description on pages and articles
+  assert.ok(site.posts.every((x) => x.seo.keyphrase) && site.pages.every((x) => x.seo.keyphrase), 'every page and article has a focus keyphrase');
+  assert.ok(php.includes("'slug' => 'wordpress-seo'") && php.includes("'_yoast_wpseo_focuskw'") && php.includes("'wpseo_titles'"), 'Yoast SEO installed and filled in');
   assert.equal(site.images.length, 13, '6 images + hero / subheader crops + 5 carousel crops');
   assert.equal(site.images.filter((i) => i.photo).length, 5, 'every image except the logo is a gallery photo');
   assert.equal(site.logo, site.images.find((i) => !i.photo && !/-(hero|subheader|carousel)\./.test(i.file)).file);

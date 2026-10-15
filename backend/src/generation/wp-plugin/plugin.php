@@ -36,6 +36,8 @@ const OPTION_HF = 'esg_site_{{HASH}}_hf';
 // Plugins installed from wordpress.org: the contact form, and the header/footer builder used without Elementor Pro
 const CF7 = array('slug' => 'contact-form-7', 'file' => 'contact-form-7/wp-contact-form-7.php', 'name' => 'Contact Form 7');
 const UAE = array('slug' => 'header-footer-elementor', 'file' => 'header-footer-elementor/header-footer-elementor.php', 'name' => 'Ultimate Addons for Elementor');
+// SEO: the focus keyphrase, SEO title and meta description of every page and article are filled in
+const YOAST = array('slug' => 'wordpress-seo', 'file' => 'wordpress-seo/wp-seo.php', 'name' => 'Yoast SEO');
 
 register_activation_hook(__FILE__, __NAMESPACE__ . '\\activate');
 register_uninstall_hook(__FILE__, __NAMESPACE__ . '\\uninstall');
@@ -402,6 +404,7 @@ function setup_dependencies() {
 	if (!empty(data()['contactForm'])) {
 		ensure_plugin(CF7, $messages);
 	}
+	ensure_plugin(YOAST, $messages);
 	if (!defined('ELEMENTOR_PRO_VERSION') && has_header_footer()) {
 		ensure_plugin(UAE, $messages);
 	}
@@ -600,7 +603,12 @@ function upsert_post(array &$state, $bucket, $key, array $post) {
 	return (int) $result;
 }
 
+/** SEO of a page / article for Yoast SEO (and Rank Math): focus keyphrase, SEO title, meta description. */
 function set_seo($post_id, $seo) {
+	if (!empty($seo['keyphrase'])) {
+		update_post_meta($post_id, '_yoast_wpseo_focuskw', wp_slash($seo['keyphrase']));
+		update_post_meta($post_id, 'rank_math_focus_keyword', wp_slash($seo['keyphrase']));
+	}
 	if (!empty($seo['title'])) {
 		update_post_meta($post_id, '_yoast_wpseo_title', wp_slash($seo['title']));
 		update_post_meta($post_id, 'rank_math_title', wp_slash($seo['title']));
@@ -609,6 +617,23 @@ function set_seo($post_id, $seo) {
 		update_post_meta($post_id, '_yoast_wpseo_metadesc', wp_slash($seo['description']));
 		update_post_meta($post_id, 'rank_math_description', wp_slash($seo['description']));
 	}
+}
+
+/** Yoast SEO site representation: the business as an organization, with its name and logo (structured data). */
+function yoast_site_settings(array $data, array $images, array &$messages) {
+	if (!defined('WPSEO_VERSION')) {
+		return;
+	}
+	$titles = get_option('wpseo_titles', array());
+	$titles = is_array($titles) ? $titles : array();
+	$titles['company_or_person'] = 'company';
+	$titles['company_name'] = $data['site']['name'];
+	if (!empty($data['logo']) && isset($images[$data['logo']])) {
+		$titles['company_logo'] = $images[$data['logo']]['url'];
+		$titles['company_logo_id'] = $images[$data['logo']]['id'];
+	}
+	update_option('wpseo_titles', $titles);
+	$messages[] = array('level' => 'info', 'text' => t('yoastReady'));
 }
 
 function category_id(array $category) {
@@ -863,6 +888,7 @@ function import_content() {
 	if (!empty($data['logo']) && isset($images[$data['logo']])) {
 		set_theme_mod('custom_logo', $images[$data['logo']]['id']);
 	}
+	yoast_site_settings($data, $images, $messages);
 	if (isset($page_ids['home'])) {
 		update_option('show_on_front', 'page');
 		update_option('page_on_front', $page_ids['home']);

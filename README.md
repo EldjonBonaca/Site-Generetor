@@ -259,7 +259,7 @@ Built by [`generation/wp-plugin.js`](backend/src/generation/wp-plugin.js) from t
 
 It requires Elementor (`Requires Plugins: elementor`); Elementor Pro is optional. Activating it opens **Tools → Site &lt;name&gt;**, which starts by itself and runs in AJAX steps (a few images per request, so slow hosts don't time out):
 
-0. installs and activates from wordpress.org what the site needs: **Contact Form 7**, **Ultimate Addons for Elementor** (only without Elementor Pro, for header and footer) and the **Hello Elementor** theme when the active theme is a block theme, or when Elementor Pro is not active (classic themes are kept with Pro);
+0. installs and activates from wordpress.org what the site needs: **Contact Form 7**, **Yoast SEO** (focus keyphrase, SEO title and meta description of every page and article, business name and logo are filled in), **Ultimate Addons for Elementor** (only without Elementor Pro, for header and footer) and the **Hello Elementor** theme when the active theme is a block theme, or when Elementor Pro is not active (classic themes are kept with Pro);
 1. copies the bundled images into the Media Library (with ALT texts and thumbnails);
 2. creates the services category, the menu and the Contact Form 7 form (name, email, phone, message, privacy consent, send button; email to the site address with Reply-To the visitor), whose shortcode replaces the `INSERIRE_ID` placeholder;
 3. creates the 5 pages with `_elementor_data`: each `esg-image://` becomes the attachment id + URL, internal links become absolute;

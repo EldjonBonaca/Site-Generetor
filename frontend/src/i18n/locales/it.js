@@ -152,6 +152,7 @@ export default {
   'Site structure': 'Struttura del sito',
   'Contact form, navigation menu and map.': 'Modulo di contatto, menu di navigazione e mappa.',
   'Contact form': 'Modulo di contatto',
+  'Focus keyphrase (Yoast)': 'Frase chiave (Yoast)',
   'Contact Form 7: the WordPress plugin installs it, creates the form (name, email, phone, message, privacy consent) and puts it on the contact page.': 'Contact Form 7: il plugin WordPress lo installa, crea il modulo (nome, email, telefono, messaggio, consenso privacy) e lo inserisce nella pagina Contatti.',
   'Menu name': 'Nome del menu',
   'Google Maps on the contact page': 'Google Maps nella pagina Contatti',

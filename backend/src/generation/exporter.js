@@ -296,7 +296,7 @@ function contentMarkdown(ctx, pages, allPages) {
   for (const page of pages) {
     lines.push(`## ${page.title}${page.role === 'post' ? ' (article)' : ''}`, '');
     if (page.seo?.title || page.seo?.description) {
-      lines.push(`- **SEO title:** ${page.seo.title || '—'}`, `- **Meta description:** ${page.seo.description || '—'}`, `- **Slug:** /${page.seo.slug ?? ''}`, '');
+      lines.push(`- **Focus keyphrase:** ${page.seo.keyphrase || '—'}`, `- **SEO title:** ${page.seo.title || '—'}`, `- **Meta description:** ${page.seo.description || '—'}`, `- **Slug:** /${page.seo.slug ?? ''}`, '');
     }
     for (const f of page.fields) {
       const current = fieldValue(allPages, f);
@@ -310,10 +310,10 @@ function contentMarkdown(ctx, pages, allPages) {
 const csvCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
 
 function seoCsv(pages) {
-  const rows = [['page', 'type', 'title', 'meta_description', 'slug'].join(',')];
+  const rows = [['page', 'type', 'focus_keyphrase', 'title', 'meta_description', 'slug'].join(',')];
   for (const p of pages) {
     if (p.seo?.slug === null || p.seo?.slug === undefined) continue; // header/footer/single post template
-    rows.push([p.title, p.role === 'post' ? 'post' : 'page', p.seo.title, p.seo.description, `/${p.seo.slug}${p.seo.slug ? '/' : ''}`].map(csvCell).join(','));
+    rows.push([p.title, p.role === 'post' ? 'post' : 'page', p.seo.keyphrase || '', p.seo.title, p.seo.description, `/${p.seo.slug}${p.seo.slug ? '/' : ''}`].map(csvCell).join(','));
   }
   return '﻿' + rows.join('\r\n') + '\r\n'; // BOM so Excel opens UTF-8 correctly
 }
@@ -342,7 +342,7 @@ function pluginInput(ctx, pages, allPages, posts, exported, links, category, ima
       role,
       title,
       slug: page?.seo?.slug || pageSlug(lang, role) || slugify(title) || 'home',
-      seo: page?.seo ? { title: page.seo.title, description: page.seo.description } : null,
+      seo: page?.seo ? { keyphrase: page.seo.keyphrase || '', title: page.seo.title, description: page.seo.description } : null,
       doc: b ? toImportable(b.doc, b.page) : null,
     };
   });
@@ -365,7 +365,7 @@ function pluginInput(ctx, pages, allPages, posts, exported, links, category, ima
       content: sanitizeHtml(p.content),
       excerpt: p.excerpt,
       image: p.image?.name || null,
-      seo: { title: p.page.seo?.title || '', description: p.page.seo?.description || '' },
+      seo: { keyphrase: p.page.seo?.keyphrase || '', title: p.page.seo?.title || '', description: p.page.seo?.description || '' },
       doc: postDoc(single, p, p.image ? PLUGIN_IMAGE_SCHEME + p.image.name : null),
     })),
     // Uploaded images (photos + logo) and their hero / subheader crops (not shown in the gallery)

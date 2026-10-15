@@ -69,7 +69,7 @@ export function initPages(ctx) {
         }
         return entry;
       }),
-      seo: { title: '', description: '', slug: page.slug },
+      seo: { keyphrase: '', title: '', description: '', slug: page.slug },
     };
   });
 }
@@ -164,8 +164,9 @@ export async function generatePage({ provider, ctx, page, promptRow, log, onlyFi
   const wantSeo = !onlyFieldIds ? page.slug !== null : onlyFieldIds.some((id) => id.startsWith('_seo.'));
   const seoFields = wantSeo
     ? [
-        { id: '_seo.title', format: 'text', maxLength: 60, label: 'SEO title', hint: 'SEO title of the page' },
-        { id: '_seo.description', format: 'text', maxLength: 155, label: 'Meta description', hint: 'meta description of the page' },
+        { id: '_seo.keyphrase', format: 'text', maxLength: 60, label: 'Focus keyphrase', hint: 'Yoast SEO focus keyphrase: the 2–4 word search people type to find this page (e.g. service + city), different on every page' },
+        { id: '_seo.title', format: 'text', maxLength: 60, label: 'SEO title', hint: 'SEO title of the page: starts with the focus keyphrase' },
+        { id: '_seo.description', format: 'text', maxLength: 155, label: 'Meta description', hint: 'meta description of the page: contains the focus keyphrase' },
       ].filter((f) => !onlyFieldIds || onlyFieldIds.includes(f.id))
     : [];
   const all = [...targets.map((f) => ({ ...f, original: f.original })), ...seoFields];
@@ -194,6 +195,7 @@ export async function generatePage({ provider, ctx, page, promptRow, log, onlyFi
         f.source = 'ai';
       }
     }
+    if (values['_seo.keyphrase']) page.seo.keyphrase = values['_seo.keyphrase'];
     if (values['_seo.title']) page.seo.title = values['_seo.title'];
     if (values['_seo.description']) page.seo.description = values['_seo.description'];
     if (missing.length) {

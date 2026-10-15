@@ -38,7 +38,7 @@ export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
  * Version of the generated structure. Field ids depend on it: a generation made with another
  * version cannot be exported (exporter.js), it has to be generated again.
  */
-export const BUILDER_VERSION = 6;
+export const BUILDER_VERSION = 7;
 
 export const DOC_ROLES = ['home', 'about', 'services', 'gallery', 'contact', 'single_post', 'header', 'footer'];
 
@@ -1225,6 +1225,14 @@ function header(b, site) {
   return out;
 }
 
+/**
+ * Legal links after the copyright. The Cookie Policy and Privacy Policy pages are created by the
+ * site owner afterwards with these slugs, so the links work as soon as the pages exist.
+ */
+const LEGAL_LINKS =
+  ' | <a href="/cookie-policy/" style="color:inherit">Cookie Policy</a>' +
+  ' | <a href="/informativa-sul-trattamento-dei-dati-personali/" style="color:inherit">Privacy Policy</a>';
+
 function footer(b, site) {
   const variant = b.spec.layout.footer;
   const light = variant === 'light';
@@ -1243,7 +1251,7 @@ function footer(b, site) {
   cols.push(b.box([...colTitle(b.L.contacts), list(contactItems(site))], { width: 22, gap: 12 }));
   return [
     b.section(cols, { row: true, ...style, align: 'flex-start', padY: Math.round(b.pad * 0.8) }),
-    b.section([b.text(`<p>${escapeHtml(site.copyright)}</p>`, { align: 'center', size: 14, color, fixed: true })], {
+    b.section([b.text(`<p>${escapeHtml(site.copyright)}${LEGAL_LINKS}</p>`, { align: 'center', size: 14, color, fixed: true })], {
       ...(variant === 'brand' ? { bg: b.c.dark } : style),
       padY: 20,
       borderTop: light ? b.ink.border : 'rgba(255,255,255,0.12)',
