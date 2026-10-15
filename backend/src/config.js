@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
+import { parseUsers } from './lib/auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const BACKEND_ROOT = path.resolve(__dirname, '..');
@@ -32,9 +33,9 @@ export const config = {
   host: process.env.HOST || '127.0.0.1',
   // Number of reverse proxies in front of the app (for the client IP); 0 = none
   trustProxy: Number(process.env.TRUST_PROXY || 0),
-  // Login for the whole app (HTTP Basic Auth). Empty password = no login (local use only)
-  appUser: process.env.APP_USER || 'admin',
-  appPassword: process.env.APP_PASSWORD || '',
+  // Login for the whole app (HTTP Basic Auth): APP_USERS=mz:pass1,eb:pass2 (or APP_USER + APP_PASSWORD).
+  // No user = no login (local use only)
+  users: parseUsers({ users: process.env.APP_USERS, user: process.env.APP_USER, password: process.env.APP_PASSWORD }),
   encryptionKey: process.env.ENCRYPTION_KEY,
   storageDir,
   dbPath: path.join(storageDir, 'app.sqlite'),

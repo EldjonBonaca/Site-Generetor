@@ -27,7 +27,7 @@ if (config.trustProxy) app.set('trust proxy', config.trustProxy);
 
 // Health check stays public (uptime monitors); everything else needs the login when APP_PASSWORD is set.
 app.get('/api/health', (req, res) => res.json({ ok: true }));
-if (config.appPassword) app.use(basicAuth({ user: config.appUser, password: config.appPassword }));
+if (config.users.length) app.use(basicAuth(config.users));
 app.use(express.json({ limit: '2mb' }));
 
 // Local tool: refuse cross-site requests from other origins (basic CSRF guard).

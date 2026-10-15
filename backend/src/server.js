@@ -8,11 +8,12 @@ import { config } from './config.js';
 import app from './app.js';
 
 const loopback = ['127.0.0.1', 'localhost', '::1'].includes(config.host);
-if (!loopback && !config.appPassword) {
-  console.error(`[api] Refusing to listen on ${config.host} without APP_PASSWORD: set it in backend/.env.`);
+if (!loopback && !config.users.length) {
+  console.error(`[api] Refusing to listen on ${config.host} without a login: set APP_USERS in backend/.env.`);
   process.exit(1);
 }
-if (!config.appPassword) console.warn('[api] APP_PASSWORD is not set: no login. Fine locally, NOT behind a public domain.');
+if (!config.users.length) console.warn('[api] APP_USERS is not set: no login. Fine locally, NOT behind a public domain.');
+else console.log(`[api] Login enabled for ${config.users.length} user(s): ${config.users.map((u) => u.user).join(', ')}`);
 
 app.listen(config.port, config.host, () => {
   console.log(`[api] Listening on http://${config.host}:${config.port}`);
