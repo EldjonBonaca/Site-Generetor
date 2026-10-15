@@ -6,7 +6,6 @@
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Requires Plugins: elementor
- * Author: Elementor Site Generator
  * License: GPL-2.0-or-later
  *
  * Generated file. On activation it opens Tools → {{MENU_TITLE}}, which creates the website:

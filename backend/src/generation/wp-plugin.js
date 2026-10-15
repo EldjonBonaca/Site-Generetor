@@ -211,7 +211,6 @@ export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, c
   });
 
   const site = {
-    generator: 'Elementor Site Generator',
     site: { name: project.site_name, language: project.language },
     ui,
     images: imageEntries,
