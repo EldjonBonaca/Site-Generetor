@@ -61,6 +61,8 @@ export class AIProvider {
     this.temperature = cfg.temperature ?? 0.7;
     this.maxTokens = cfg.maxTokens ?? 8192;
     this.timeoutMs = cfg.timeoutMs ?? 180000;
+    /** Waits before retrying a temporary provider error (5xx). */
+    this.retryDelays = cfg.retryDelays ?? [4000, 10000, 25000];
   }
 
   /**
@@ -85,14 +87,24 @@ export class AIProvider {
    * POST JSON with timeout and normalized errors.
    * If the provider rejects an optional parameter (e.g. some models refuse `temperature`),
    * the parameters listed in `droppable` are removed one by one and the call retried.
+   * A temporary error of the provider (5xx, e.g. 503 "model overloaded") is retried after
+   * `retryDelays` (every call: templates, analysis, regenerated fields, not only site generation).
    */
   async postJson(url, { headers = {}, body, droppable = [] }) {
     const payload = { ...body };
     const remaining = droppable.filter((k) => k in payload);
+    let overloaded = 0;
     for (;;) {
       try {
         return await this.#post(url, headers, payload);
       } catch (err) {
+        if (err.code === 'server' && err.status >= 500 && overloaded < this.retryDelays.length) {
+          await new Promise((r) => setTimeout(r, this.retryDelays[overloaded++]));
+          continue;
+        }
+        if (err.code === 'server' && err.status >= 500) {
+          err.message += ` (tried ${overloaded + 1} times) Try again in a few minutes, or choose another model / provider in AI Providers.`;
+        }
         const param = err.code === 'bad_request' && remaining.find((k) => new RegExp(k, 'i').test(err.message));
         if (!param) throw err;
         delete payload[param];

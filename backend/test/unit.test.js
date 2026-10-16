@@ -97,3 +97,31 @@ test('encryption round-trip and masking', () => {
 test('renderTemplate replaces known variables only', () => {
   assert.equal(renderTemplate('Hi {{site_name}} {{ city }} {{unknown}}', { site_name: 'A', city: 'B' }), 'Hi A B {{unknown}}');
 });
+
+test('a temporary provider error (503 overloaded) is retried, then explained', async () => {
+  const http = await import('node:http');
+  const { default: GeminiProvider } = await import('../src/ai/providers/gemini.js');
+  let calls = 0;
+  let failures = 2;
+  const server = http.createServer((req, res) => {
+    calls++;
+    req.resume();
+    if (failures-- > 0) {
+      res.writeHead(503, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify({ error: { message: 'This model is currently experiencing high demand.' } }));
+    }
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'OK' }] }, finishReason: 'STOP' }], usageMetadata: {} }));
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const provider = new GeminiProvider({ apiKey: 'k', baseUrl, model: 'gemini-test', retryDelays: [1, 1] });
+    assert.equal((await provider.generate('hi')).text, 'OK');
+    assert.equal(calls, 3, 'two 503 answers, then the answer');
+    failures = 10;
+    await assert.rejects(provider.generate('hi'), /high demand.*tried 3 times.*another model/);
+  } finally {
+    server.close();
+  }
+});
