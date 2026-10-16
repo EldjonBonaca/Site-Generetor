@@ -63,6 +63,8 @@ export class AIProvider {
     this.timeoutMs = cfg.timeoutMs ?? 180000;
     /** Waits before retrying a temporary provider error (5xx). */
     this.retryDelays = cfg.retryDelays ?? [4000, 10000, 25000];
+    /** Same, for the other models tried when the main one stays overloaded (registry.js). */
+    this.fallbackRetryDelays = cfg.fallbackRetryDelays ?? [5000];
   }
 
   /**

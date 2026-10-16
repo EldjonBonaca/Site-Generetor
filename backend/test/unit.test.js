@@ -125,3 +125,32 @@ test('a temporary provider error (503 overloaded) is retried, then explained', a
     server.close();
   }
 });
+
+test('an overloaded model hands over to the other models of the provider', async () => {
+  const http = await import('node:http');
+  const { createProvider } = await import('../src/ai/registry.js');
+  const seen = [];
+  const server = http.createServer((req, res) => {
+    req.resume();
+    const model = decodeURIComponent(req.url.match(/models\/([^:]+):/)[1]);
+    seen.push(model);
+    const send = (status, body) => {
+      res.writeHead(status, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(body));
+    };
+    if (model === 'busy-model') return send(503, { error: { message: 'high demand' } });
+    if (model === 'old-model') return send(404, { error: { message: 'not found' } });
+    send(200, { candidates: [{ content: { parts: [{ text: `OK from ${model}` }] }, finishReason: 'STOP' }], usageMetadata: {} });
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  try {
+    const provider = createProvider({ type: 'gemini', encrypted_api_key: '', base_url: `http://127.0.0.1:${server.address().port}`, model: 'busy-model', models_json: JSON.stringify(['busy-model', 'old-model', 'free-model']) });
+    provider.retryDelays = [1];
+    provider.fallbackRetryDelays = [1];
+    assert.equal((await provider.generate('hi')).text, 'OK from free-model');
+    assert.deepEqual(seen, ['busy-model', 'busy-model', 'old-model', 'free-model']);
+    assert.equal(provider.model, 'free-model', 'the next calls use the model that answers');
+  } finally {
+    server.close();
+  }
+});
