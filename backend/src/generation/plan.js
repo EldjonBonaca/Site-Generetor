@@ -252,7 +252,8 @@ export function checkReadiness(ctx, user = null) {
 
   const byRole = (r) => ctx.images.filter((i) => i.role === r);
   if (!byRole('hero_home').length) add('images', 'warning', 'Home hero image (hero_home) is missing.');
-  if (!byRole('subheader').length) add('images', 'warning', 'Subheader image is missing.');
+  // The "plain" page banner of a template has no photo
+  if (!byRole('subheader').length && ctx.template?.spec?.layout?.subheader !== 'plain') add('images', 'warning', 'Subheader image is missing.');
   if (!byRole('logo').length) add('images', 'warning', 'Logo is missing: header and footer show the site name instead.');
   for (const s of ctx.services) {
     if (!ctx.images.some((i) => i.role === 'service' && i.service_id === s.id)) add('images', 'warning', `Service "${s.name || '?'}" has no image.`);

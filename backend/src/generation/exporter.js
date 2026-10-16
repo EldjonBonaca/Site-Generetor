@@ -120,7 +120,7 @@ async function exportCrops(ctx, pages, exported, destDir) {
  * Slots whose image is missing get a photo of the archive; without any photo they are emptied.
  * Hero / subheader slots use the cropped version of their image (keys collected in `neededCrops`).
  */
-function imageAssignment(ctx, page, slots, slotRoles, exported, neededCrops = null) {
+export function imageAssignment(ctx, page, slots, slotRoles, exported, neededCrops = null) {
   const ex = (i, crop = null) => {
     if (crop) {
       neededCrops?.add(cropKey(i.id, crop));
@@ -149,6 +149,13 @@ function imageAssignment(ctx, page, slots, slotRoles, exported, neededCrops = nu
   for (const slot of slots) {
     const role = slotRoles[slot.id] || 'photo';
     if (slot.kind === 'gallery') {
+      if (role === 'slideshow') {
+        // Hero slideshow: the hero image, then up to 3 other photos, all cropped like the hero
+        const first = pick((i) => i.role === 'hero_home');
+        const list = [first, ...pool.filter((i) => i.id !== first?.id)].filter(Boolean).slice(0, 4);
+        assignment[slot.id] = list.map((i) => ex(i, 'hero')).filter(Boolean);
+        continue;
+      }
       // Gallery page: the full photos; Home carousel: the photos cropped to the same size
       assignment[slot.id] = pool.map((i) => ex(i, role === 'carousel' ? 'carousel' : null));
       continue;

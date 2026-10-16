@@ -33,6 +33,13 @@ const LOOK_LABELS = {
   images: 'image style',
   titleCase: 'title case',
   kicker: 'label above the titles',
+  fill: 'colored bands',
+  motion: 'entrance animation',
+  hover: 'card hover effect',
+  edges: 'shaped edges',
+  rhythm: 'section backgrounds',
+  highlight: 'highlighted last word of the titles',
+  decor: 'signature detail',
 };
 
 /** Design direction block: what the generator decided and what the AI must avoid. */

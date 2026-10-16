@@ -53,6 +53,8 @@ const LABELS = {
 };
 
 const PADDING = { compact: 64, normal: 96, airy: 128 };
+/** Height (px) of each shape divider at the bottom of the hero and the banners (others: 70). */
+const SHAPE_HEIGHT = { waves: 60, 'wave-brush': 50, triangle: 44, arrow: 30, zigzag: 26, mountains: 90, 'opacity-tilt': 90 };
 const SCALE = { normal: 1, large: 1.12, xl: 1.28 };
 
 const px = (size, unit = 'px') => ({ unit, size });
@@ -119,6 +121,7 @@ function createDoc(role, spec, site) {
   const mainButton = ink.dark ? 'secondary' : 'primary';
   const L = LABELS[site.lang] || LABELS.en;
   const marks = new Map();
+  const bands = new Set();
   let n = 0;
   const id = () => crypto.createHash('md5').update(`${role}:${n++}`).digest('hex').slice(0, 7);
   const mark = (el, path, info) => {
@@ -138,15 +141,37 @@ function createDoc(role, spec, site) {
     ...extra,
   });
   const widget = (widgetType, settings) => ({ id: id(), elType: 'widget', widgetType, settings, elements: [] });
-  /** Entrance animation (free Elementor motion effect), delayed to reveal cards one after the other. */
-  const animate = (settings, delay = 0) => Object.assign(settings, { animation: 'fadeInUp', ...(delay ? { animation_delay: delay } : {}) });
+  /**
+   * Entrance animation (free Elementor motion effect) per the motion style of the template, delayed
+   * to reveal cards one after the other: rising, slow fade, sliding in from the side, zoom, or none.
+   */
+  const animate = (settings, delay = 0) => {
+    if (st.motion === 'none') return settings;
+    const name = { fade: 'fadeIn', slide: 'fadeInLeft', zoom: 'zoomIn' }[st.motion] || 'fadeInUp';
+    return Object.assign(settings, { animation: name, ...(delay ? { animation_delay: delay } : {}), ...(st.motion === 'fade' ? { animation_duration: 'slow' } : {}) });
+  };
   const background = (o) => {
+    if (o.radial) {
+      const [from, to] = o.radial;
+      return { background_background: 'gradient', background_color: from, background_color_b: to, background_gradient_type: 'radial', background_gradient_position: 'center center' };
+    }
     if (o.gradient) {
       const [from, to, angle = 135] = o.gradient;
       return { background_background: 'gradient', background_color: from, background_color_b: to, background_gradient_type: 'linear', background_gradient_angle: px(angle, 'deg') };
     }
     return o.bg ? { background_background: 'classic', background_color: o.bg } : {};
   };
+  /**
+   * Background of the colored bands (key numbers, guarantees, review band, call to action, badge,
+   * footer), per the fill style of the template. Deep bands on dark pages take the tinted dark,
+   * which stays visible on the dark page color.
+   */
+  const fill = (angle = 135) =>
+    ({
+      flat: { bg: c.primaryText },
+      deep: { bg: ink.dark ? ink.tint : c.dark },
+      radial: { radial: [c.primaryText, c.dark] },
+    })[st.fill] || { gradient: [c.primaryText, c.dark, angle] };
   /**
    * Photo background + gradient overlay [from, to, angle]: an image slot (o.slot), or the featured
    * image of the post (o.dynamicBg, Elementor Pro dynamic tag; articleDoc() makes it static).
@@ -190,13 +215,42 @@ function createDoc(role, spec, site) {
     if (o.minHeight) settings.min_height = px(o.minHeight, 'vh');
     const el = { id: id(), elType: 'container', isInner: false, settings, elements };
     if (o.slot || o.dynamicBg) photo(settings, el, o);
-    if (o.css) settings.css_classes = o.css;
+    if (o.slideshow) {
+      // Background slideshow (free Elementor): the hero image then other photos (exporter.js), fading with a slow zoom
+      Object.assign(settings, {
+        background_background: 'slideshow',
+        background_color: c.dark,
+        background_slideshow_gallery: [image()],
+        background_slideshow_loop: 'yes',
+        background_slideshow_slide_duration: 6000,
+        background_slideshow_slide_transition: 'fade',
+        background_slideshow_transition_duration: 1500,
+        background_slideshow_background_size: 'cover',
+        background_slideshow_ken_burns: 'yes',
+        background_slideshow_ken_burns_zoom_direction: 'in',
+      });
+      const [from, to, angle = 180] = o.overlay;
+      Object.assign(settings, {
+        background_overlay_background: 'gradient',
+        background_overlay_color: from,
+        background_overlay_color_b: to,
+        background_overlay_gradient_type: 'linear',
+        background_overlay_gradient_angle: px(angle, 'deg'),
+        background_overlay_opacity: px(1),
+      });
+      mark(el, 'background_slideshow_gallery', { slot: 'slideshow' });
+    }
+    // "grid" decor: a fine grid on the tinted sections (CSS of the header)
+    const classes = [o.css, st.decor === 'grid' && o.bg === ink.alt && !o.slot && 'esg-grid'].filter(Boolean).join(' ');
+    if (classes) settings.css_classes = classes;
+    // Colored or photo band: may get shaped edges towards its neighbours (bandEdges)
+    if (o.band) bands.add(el);
     if (o.divider && o.divider.shape !== 'none') {
       Object.assign(settings, {
         shape_divider_bottom: o.divider.shape,
         shape_divider_bottom_color: o.divider.color,
         shape_divider_bottom_width: px(100, '%'),
-        shape_divider_bottom_height: px(o.divider.shape === 'waves' ? 60 : 70),
+        shape_divider_bottom_height: px(SHAPE_HEIGHT[o.divider.shape] || 70),
         shape_divider_bottom_height_mobile: px(28),
       });
     }
@@ -208,7 +262,8 @@ function createDoc(role, spec, site) {
   /**
    * Inner container (column / card / row). o: { width, tablet, mobile, maxWidth, row, align, justify, bg, gradient, card,
    * on ('base' | 'alt' | 'photo': what the card stands on), gap, pad, overflow, anim, slot, service, overlay, minHeightPx, radius,
-   * margin [t, r, b, l] (negative top: overlaps the element above), zIndex, lift (hover), zoom (photo zoom on hover), css }
+   * margin [t, r, b, l] (negative top: overlaps the element above), padding [t, r, b, l], border [t, r, b, l, color], zIndex,
+   * lift (hover), zoom (photo zoom on hover), css }
    */
   const box = (elements, o = {}) => {
     const settings = {
@@ -224,9 +279,10 @@ function createDoc(role, spec, site) {
     else if (o.maxWidth) Object.assign(settings, { width: px(o.maxWidth), width_tablet: px(100, '%'), width_mobile: px(100, '%') });
     else settings.width = px(100, '%');
     if (o.pad) Object.assign(settings, { padding: sides(o.pad, o.pad, o.pad, o.pad), padding_mobile: sides(Math.min(o.pad, 24), Math.min(o.pad, 22), Math.min(o.pad, 24), Math.min(o.pad, 22)) });
+    if (o.padding) Object.assign(settings, { padding: sides(...o.padding), padding_mobile: sides(...o.padding) });
     if (o.card) {
       const look = st.cards;
-      if (!o.gradient && !o.bg) {
+      if (!o.gradient && !o.radial && !o.bg) {
         const tinted = look === 'tinted' && o.on !== 'photo';
         // A tinted card on a tinted section would disappear: it stays white there
         const bg = tinted ? (o.on === 'alt' ? ink.card : ink.tint) : ink.card;
@@ -237,6 +293,10 @@ function createDoc(role, spec, site) {
       if (look === 'outline') Object.assign(settings, { border_border: 'solid', border_width: corners(1), border_color: ink.border });
       if (look === 'accent') Object.assign(settings, { border_border: 'solid', border_width: sides(4, 0, 0, 0), border_color: c.secondary, box_shadow_box_shadow_type: 'yes', box_shadow_box_shadow: boxShadow(6, 20, ink.dark ? 0.3 : 0.06) });
       Object.assign(settings, { box_shadow_hover_box_shadow_type: 'yes', box_shadow_hover_box_shadow: boxShadow(18, 44, ink.dark ? 0.45 : 0.16) });
+    }
+    if (o.border) {
+      const [t, r, bt, l, color] = o.border;
+      Object.assign(settings, { border_border: 'solid', border_width: sides(t, r, bt, l), border_color: color });
     }
     if (o.radius !== undefined) settings.border_radius = corners(o.radius);
     if (o.margin) Object.assign(settings, { margin: sides(...o.margin), margin_mobile: sides(Math.max(o.margin[0], -40), 0, o.margin[2], Math.min(o.margin[3], 16)) });
@@ -254,7 +314,11 @@ function createDoc(role, spec, site) {
   const columns = (count) => ({ 1: 100, 2: 48, 3: 31, 4: 22.5 })[Math.min(4, Math.max(1, count))];
 
   // --- widgets ----------------------------------------------------------------------------
-  /** o: { tag, size, align, color, weight, upper, url, bar, fixed | hint, max } */
+  /**
+   * o: { tag, size, align, color, weight, upper, url, bar, hl, fixed | hint, max }
+   * hl: hero / section title whose last word the highlight style of the template accentuates
+   * (wrapped at runtime: the AI only writes plain text in the titles).
+   */
   const heading = (text, o = {}) => {
     const tag = o.tag || 'h2';
     const title = tag === 'h1' || tag === 'h2';
@@ -277,6 +341,7 @@ function createDoc(role, spec, site) {
     });
     field(el, 'title', o);
     if (o.url) mark(el, 'link.url', { fixed: true });
+    if (o.hl && st.highlight && st.highlight !== 'none') el.settings._css_classes = o.color === '#FFFFFF' ? 'esg-hl esg-hl-light' : 'esg-hl';
     return el;
   };
   /**
@@ -309,6 +374,8 @@ function createDoc(role, spec, site) {
       ...typo('', fonts.body, o.size || 17, '400', { typography_line_height: px(1.75, 'em') }),
     });
     field(el, 'editor', o);
+    // "dropcap" decor: the first letter of the About texts large, in the title font
+    if (o.dropcap && st.decor === 'dropcap') el.settings._css_classes = 'esg-dropcap';
     return el;
   };
   /** variant: main | primary | secondary | outline | link */
@@ -342,7 +409,10 @@ function createDoc(role, spec, site) {
     if (!isContactLink(url)) mark(el, 'link.url', { fixed: true });
     return el;
   };
-  /** Image. o: { width (px), mobileWidth (px), height (px, cropped with object-fit), mobileHeight, align, size, round, frame, wide (no arch), url, service } */
+  /**
+   * Image. o: { width (px), mobileWidth (px), height (px, cropped with object-fit), mobileHeight, align, size, round, frame, wide (no arch), deco, url, service }
+   * frame / deco: a main photo, which gets the photo decor of the template (corner brackets, inset frame, blob behind).
+   */
   const picture = (slot, o = {}) => {
     const framed = o.frame && st.images === 'framed';
     const settings = {
@@ -358,6 +428,8 @@ function createDoc(role, spec, site) {
     else if (o.frame) Object.assign(settings, { image_box_shadow_box_shadow_type: 'yes', image_box_shadow_box_shadow: boxShadow(18, 40, 0.14) });
     if (o.height) Object.assign(settings, { height: px(o.height), height_tablet: px(Math.round(o.height * 0.8)), height_mobile: px(o.mobileHeight || 260), 'object-fit': 'cover' });
     if (o.url) Object.assign(settings, { link_to: 'custom', link: link(o.url) });
+    const deco = (o.frame || o.deco) && { grid: 'esg-brackets', frame: 'esg-frame', blob: 'esg-blob' }[st.decor];
+    if (deco) settings._css_classes = deco;
     const el = widget('image', settings);
     mark(el, 'image', { slot, ...(o.service !== undefined ? { service: o.service } : {}) });
     if (o.url) mark(el, 'link.url', { fixed: true });
@@ -388,7 +460,7 @@ function createDoc(role, spec, site) {
     });
     return el;
   };
-  /** Icon box. o: { position, align, titleSize, url, fixed | titleHint + textHint } */
+  /** Icon box. o: { position, align, titleSize, url, light (on a photo), fixed | titleHint + textHint } */
   const iconBox = (icon, title, desc, o = {}) => {
     const left = o.position === 'left';
     const el = widget('icon-box', {
@@ -412,6 +484,7 @@ function createDoc(role, spec, site) {
       ...typo('title_', fonts.heading, o.titleSize || 20, headingWeight),
       ...typo('description_', fonts.body, 15, '400', { description_typography_line_height: px(1.65, 'em') }),
     });
+    if (o.light) Object.assign(el.settings, { primary_color: c.secondary, secondary_color: c.onSecondary, title_color: '#FFFFFF', description_color: 'rgba(255,255,255,0.86)' });
     if (o.fixed) {
       mark(el, 'title_text', { fixed: true });
       mark(el, 'description_text', { fixed: true });
@@ -491,7 +564,7 @@ function createDoc(role, spec, site) {
   const shortcode = (code) => widget('shortcode', { shortcode: code });
   const html = (code) => widget('html', { html: code });
 
-  return { id, c, ink, L, st, fonts, pad, radius, imgRadius, marks, mark, section, box, columns, heading, kicker, line, text, button, picture, iconList, iconBox, serviceCard, review, shortcode, html, widget, typo };
+  return { id, c, ink, L, st, fonts, pad, radius, imgRadius, marks, mark, fill, bands, section, box, columns, heading, kicker, line, text, button, picture, iconList, iconBox, serviceCard, review, shortcode, html, widget, typo };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -509,7 +582,7 @@ function intro(b, parts, o = {}) {
   const light = o.light;
   const els = [];
   if (parts.kicker) els.push(b.kicker(parts.kicker.value, { ...parts.kicker, align, color: light ? b.c.secondary : undefined, onDark: light }));
-  els.push(b.heading(parts.title.value, { ...parts.title, align, bar, color: light ? '#FFFFFF' : undefined }));
+  els.push(b.heading(parts.title.value, { ...parts.title, align, bar, hl: true, color: light ? '#FFFFFF' : undefined }));
   if (b.st.titles === 'line') els.push(b.line(align));
   if (parts.text) els.push(b.text(parts.text.value, { ...parts.text, align, color: light ? 'rgba(255,255,255,0.86)' : undefined }));
   return align === 'center' ? b.box(els, { maxWidth: 760, gap: 12, align: 'center' }) : b.box(els, { maxWidth: 820, gap: 12, align: 'stretch' });
@@ -517,9 +590,123 @@ function intro(b, parts, o = {}) {
 
 const shape = (b, color) => ({ shape: b.spec.layout.divider, color });
 
+/**
+ * Class of the first section of a page when it is a photo (hero, banner, article hero) and the
+ * header is "transparent": the header then lies over it with white links (CSS of the header).
+ */
+const underHeader = (b) => (b.spec.layout.header === 'transparent' ? 'esg-under' : undefined);
+
+/**
+ * Surface of each Home section for its layout: page color ("bg"), tinted ("alt"), or a colored or
+ * photo band ("band", never changed by the rhythm).
+ */
+const NATURAL_SURFACE = {
+  about: () => 'bg',
+  features: (l) => (l.features === 'cards' ? 'band' : l.features === 'icons' ? 'alt' : 'bg'),
+  cta: (l) => (l.cta === 'split' ? 'bg' : 'band'),
+  services: (l) => (l.services === 'boxed' ? 'alt' : 'bg'),
+  gallery: () => 'bg',
+  reviews: (l) => (l.testimonials === 'band' ? 'band' : l.testimonials === 'cards' ? 'alt' : 'bg'),
+  stats: (l) => (l.stats === 'band' ? 'band' : l.stats === 'cards' ? 'alt' : 'bg'),
+  process: () => 'bg',
+  faq: () => 'alt',
+  highlights: () => 'band',
+};
+
+/**
+ * Backgrounds of the plain sections of a page, per the rhythm of the template (b.surfaces, read by
+ * the section builders): "fixed" keeps the surface of each layout; "alternate" switches a section
+ * to the other surface when the section before it has the same one; "lines" puts every plain
+ * section on the page color (sectionLines then draws a thin line between neighbours).
+ * entries: [{ id, natural }] in page order; before: surface of the hero / banner above them.
+ */
+function planSurfaces(b, entries, before) {
+  const out = {};
+  let prev = before;
+  for (const { id, natural } of entries) {
+    let s = natural;
+    if (natural !== 'band' && b.st.rhythm === 'lines') s = 'bg';
+    else if (natural !== 'band' && b.st.rhythm === 'alternate' && prev === natural) s = natural === 'bg' ? 'alt' : 'bg';
+    out[id] = s;
+    prev = s;
+  }
+  b.surfaces = out;
+}
+const surface = (b, id, natural) => b.surfaces?.[id] || natural;
+/** Background color of a plain section, and what its cards stand on. */
+const surfaceBg = (b, id, natural) => (surface(b, id, natural) === 'alt' ? b.ink.alt : b.ink.bg);
+const surfaceOn = (b, id, natural) => (surface(b, id, natural) === 'alt' ? 'alt' : 'base');
+
+/** "lines" rhythm: a thin line on top of each plain section that follows another plain section. ids: section id of each element of `out`. */
+function sectionLines(b, out, ids) {
+  if (b.st.rhythm !== 'lines') return;
+  const plain = (id) => ['bg', 'alt'].includes(b.surfaces?.[id]);
+  for (let i = 1; i < out.length; i++) {
+    if (plain(ids[i - 1]) && plain(ids[i])) Object.assign(out[i].settings, { border_border: 'solid', border_width: sides(1, 0, 0, 0), border_color: b.ink.border });
+  }
+}
+
+/**
+ * "edges: all": the colored and photo bands of a page (key numbers, review band, call to action
+ * banner, "why choose us" over a photo) get the divider shape of the template on their top and
+ * bottom edges, in the color of the plain section next to them. Lower than the hero edge, so it
+ * stays clear of the band content.
+ */
+function bandEdges(b, out) {
+  const shapeName = b.spec.layout.divider;
+  if (b.st.edges !== 'all' || shapeName === 'none') return;
+  const height = Math.min(48, Math.round((SHAPE_HEIGHT[shapeName] || 70) * 0.6));
+  const plain = (s) => (s && s.background_background === 'classic' && !s.background_image ? s.background_color : null);
+  out.forEach((el, i) => {
+    if (!b.bands.has(el)) return;
+    for (const [side, neighbour] of [['top', out[i - 1]], ['bottom', out[i + 1]]]) {
+      const color = plain(neighbour?.settings);
+      if (!color) continue;
+      Object.assign(el.settings, {
+        [`shape_divider_${side}`]: shapeName,
+        [`shape_divider_${side}_color`]: color,
+        [`shape_divider_${side}_width`]: px(100, '%'),
+        [`shape_divider_${side}_height`]: px(height),
+        [`shape_divider_${side}_height_mobile`]: px(Math.min(height, 24)),
+      });
+    }
+  });
+}
+
+/**
+ * Banner of the inner pages, per the subheader layout: the page title over a photo ("photo"), on a
+ * tinted band with a breadcrumb and no photo ("plain"), or beside a photo ("split").
+ */
 function subheader(b, site, role, nextBg = b.ink.bg) {
-  const center = b.st.align === 'center' && b.st.titles !== 'bar';
+  const variant = b.spec.layout.subheader;
+  const center = b.st.align === 'center' && b.st.titles !== 'bar' && variant !== 'split';
   const align = center ? 'center' : 'left';
+  if (variant === 'plain' || variant === 'split') {
+    const bar = b.st.titles === 'bar';
+    // Breadcrumb as a text (not a heading): the page title stays the first heading of the banner, as in the photo banner
+    const crumb = b.text(`${site.pages.home.title} / ${site.pages[role].title}`, { align, size: 13, color: b.ink.kicker, fixed: true });
+    Object.assign(crumb.settings, { typography_font_weight: '600', typography_text_transform: 'uppercase', typography_letter_spacing: px(1.5) });
+    const content = [
+      crumb,
+      b.heading(site.pages[role].title, { tag: 'h1', size: 56, align, bar, fixed: true }),
+      ...(b.st.titles === 'line' ? [b.line(align)] : []),
+      b.text(b.spec.copy.subheaderText, { align, size: 18, hint: `short sentence under the title "${site.pages[role].title}" in the page banner`, max: 140 }),
+    ];
+    // The band stands out from the section below it
+    const bg = nextBg === b.ink.alt ? b.ink.bg : b.ink.alt;
+    if (variant === 'plain') {
+      return b.section([b.box(content, { maxWidth: center ? 820 : 900, gap: 14, align: center ? 'center' : 'stretch', anim: 0 })], {
+        bg,
+        padY: Math.round(b.pad * 1.1),
+        align: center ? 'center' : 'flex-start',
+        borderBottom: b.ink.border,
+      });
+    }
+    return b.section(
+      [b.box(content, { width: 50, gap: 14, anim: 0 }), b.box([b.picture('subheader', { height: 380, mobileHeight: 220, frame: true })], { width: 44, anim: 150 })],
+      { row: true, bg, padY: Math.round(b.pad * 0.8) }
+    );
+  }
   return b.section(
     [
       b.heading(site.pages[role].title, { tag: 'h1', size: 52, color: '#FFFFFF', align, fixed: true }),
@@ -533,6 +720,7 @@ function subheader(b, site, role, nextBg = b.ink.bg) {
       gap: 14,
       align: center ? 'center' : 'flex-start',
       divider: shape(b, nextBg),
+      css: underHeader(b),
     }
   );
 }
@@ -546,20 +734,43 @@ function features(b) {
     title: { value: copy.featuresTitle, hint: '"Why choose us" section title', max: 60 },
     text: { value: copy.featuresText, hint: 'intro of the "why choose us" section (1 sentence)', max: 200 },
   };
+  // "bento": the first strength large over a photo, the other three as compact cards stacked beside it
+  if (layout.features === 'bento') {
+    const [first, ...rest] = copy.features;
+    const big = b.box([b.iconBox(icons[0], first.title, first.text, { light: true, align: 'left', titleSize: 26, ...featureHints(0) })], {
+      width: 48,
+      tablet: 100,
+      slot: 'photo',
+      overlay: [rgba(b.c.dark, 0.2), rgba(b.c.dark, 0.92), 180],
+      minHeightPx: 440,
+      justify: 'flex-end',
+      pad: 40,
+      radius: b.imgRadius,
+      anim: 0,
+    });
+    const small = rest.map((f, i) =>
+      b.box([b.iconBox(icons[i + 1], f.title, f.text, { position: 'left', ...featureHints(i + 1) })], { card: true, on: surfaceOn(b, 'features', 'bg'), pad: 26, anim: (i + 1) * 120, lift: true })
+    );
+    return b.section([intro(b, parts), b.box([big, b.box(small, { width: 48, tablet: 100, gap: 20, justify: 'space-between' })], { row: true, gap: 24, align: 'stretch', justify: 'space-between' })], {
+      bg: surfaceBg(b, 'features', 'bg'),
+      align: 'center',
+      gap: 44,
+    });
+  }
   // "list": title on the left, the 4 strengths in two columns (icon beside the text, no cards)
   if (layout.features === 'list') {
     const items = copy.features.map((f, i) => b.box([b.iconBox(icons[i], f.title, f.text, { position: 'left', ...featureHints(i) })], { width: 47, tablet: 100, anim: i * 100 }));
     return b.section([b.box([intro(b, parts, { align: 'left' })], { width: 36 }), b.box(items, { width: 58, row: true, gap: 32, align: 'flex-start', justify: 'space-between' })], {
       row: true,
-      bg: b.ink.bg,
+      bg: surfaceBg(b, 'features', 'bg'),
       align: 'flex-start',
     });
   }
   const onPhoto = layout.features === 'cards';
-  const items = copy.features.map((f, i) => b.box([b.iconBox(icons[i], f.title, f.text, featureHints(i))], { width: b.columns(4), card: true, on: onPhoto ? 'photo' : 'alt', pad: 30, anim: i * 120, lift: true }));
+  const items = copy.features.map((f, i) => b.box([b.iconBox(icons[i], f.title, f.text, featureHints(i))], { width: b.columns(4), card: true, on: onPhoto ? 'photo' : surfaceOn(b, 'features', 'alt'), pad: 30, anim: i * 120, lift: true }));
   return b.section(
     [intro(b, parts, { light: onPhoto }), b.box(items, { row: true, gap: 24, align: 'stretch', justify: 'space-between' })],
-    onPhoto ? { slot: 'photo', overlay: [rgba(b.c.dark, 0.9), rgba(b.c.dark, 0.78), 180], align: 'center', gap: 44 } : { bg: b.ink.alt, align: 'center', gap: 44 }
+    onPhoto ? { slot: 'photo', overlay: [rgba(b.c.dark, 0.9), rgba(b.c.dark, 0.78), 180], align: 'center', gap: 44, band: true } : { bg: surfaceBg(b, 'features', 'alt'), align: 'center', gap: 44 }
   );
 }
 
@@ -574,6 +785,7 @@ function cta(b, site) {
       slot: 'photo',
       overlay: [rgba(b.c.primary, 0.92), rgba(b.c.dark, 0.9), 135],
       align: 'center',
+      band: true,
     });
   }
   // A rounded colored band floating on the page
@@ -582,13 +794,13 @@ function cta(b, site) {
       b.box([b.box([title, body], { width: 64, gap: 12 }), b.box([btn], { width: 30, align: 'flex-end' })], {
         row: true,
         card: true,
-        gradient: [b.c.primaryText, b.c.dark, 135],
+        ...b.fill(),
         pad: 56,
         justify: 'space-between',
         anim: 0,
       }),
     ],
-    { bg: b.ink.bg, padY: Math.round(b.pad * 0.7) }
+    { bg: surfaceBg(b, 'cta', 'bg'), padY: Math.round(b.pad * 0.7) }
   );
 }
 
@@ -610,7 +822,7 @@ function reviews(b) {
           { row: true, gap: 32, align: 'stretch', justify: 'space-between', maxWidth: 1000, css: 'esg-quote-more' }
         ),
       ],
-      { bg: b.ink.bg, align: 'center', gap: 48 }
+      { bg: surfaceBg(b, 'reviews', 'bg'), align: 'center', gap: 48 }
     );
   }
   const band = layout.testimonials === 'band';
@@ -620,11 +832,11 @@ function reviews(b) {
     [
       intro(b, parts, { light: band }),
       b.box(
-        b.spec.copy.reviews.map((r, i) => b.box(b.review(r, i, { align, light: band }), { width: b.columns(3), card: cards, on: 'alt', pad: cards ? 34 : 10, gap: 12, tablet: 100, align: cards ? 'stretch' : 'center', anim: i * 120, lift: cards })),
+        b.spec.copy.reviews.map((r, i) => b.box(b.review(r, i, { align, light: band }), { width: b.columns(3), card: cards, on: surfaceOn(b, 'reviews', 'alt'), pad: cards ? 34 : 10, gap: 12, tablet: 100, align: cards ? 'stretch' : 'center', anim: i * 120, lift: cards })),
         { row: true, gap: 24, align: 'stretch', justify: 'space-between' }
       ),
     ],
-    band ? { gradient: [b.c.primaryText, b.c.dark, 135], align: 'center', gap: 44 } : { bg: cards ? b.ink.alt : b.ink.bg, align: 'center', gap: 44 }
+    band ? { ...b.fill(), align: 'center', gap: 44, band: true } : { bg: surfaceBg(b, 'reviews', cards ? 'alt' : 'bg'), align: 'center', gap: 44 }
   );
 }
 
@@ -640,10 +852,20 @@ function mediaRow(b, content, o = {}) {
       { bg: o.bg || b.ink.bg, align: 'center', gap: 48 }
     );
   }
+  // "collage": a large photo and a smaller one overlapping its bottom-right corner, cut out by a border of the section color
+  if (variant === 'collage') {
+    const bg = o.bg || b.ink.bg;
+    const inset = b.picture('photo', { height: 260, mobileHeight: 190 });
+    Object.assign(inset.settings, { image_border_border: 'solid', image_border_width: corners(10), image_border_color: bg });
+    const small = b.box([inset], { width: 52, tablet: 52, mobile: 72, margin: [-150, 0, 0, 0], zIndex: 2, anim: 200 });
+    small.settings._flex_align_self = 'flex-end';
+    const img = b.box([b.box([b.picture('photo', { height: o.height || 440, frame: true })], { width: 80, tablet: 80, mobile: 100 }), small], { width: 46, gap: 0, anim: 0 });
+    return b.section([img, b.box(content, { width: 48, gap: 16 })], { row: true, bg });
+  }
   // "badge": photo on the left with a small colored card (a key figure) overlapping its bottom-left corner
   const stat = b.spec.copy.stats[0];
   const badge = variant === 'badge'
-    ? [b.box([b.heading(stat.value, { tag: 'p', size: 44, color: '#FFFFFF', ...statHints(0).value }), b.text(stat.label, { size: 14, color: 'rgba(255,255,255,0.86)', ...statHints(0).label })], { maxWidth: 230, gradient: [b.c.primaryText, b.c.dark, 135], pad: 28, gap: 2, radius: b.st.buttons === 'square' ? 0 : Math.min(b.radius + 6, 24), margin: [-96, 0, 0, 28], zIndex: 2, anim: 200, css: 'esg-badge' })]
+    ? [b.box([b.heading(stat.value, { tag: 'p', size: 44, color: '#FFFFFF', ...statHints(0).value }), b.text(stat.label, { size: 14, color: 'rgba(255,255,255,0.86)', ...statHints(0).label })], { maxWidth: 230, ...b.fill(), pad: 28, gap: 2, radius: b.st.buttons === 'square' ? 0 : Math.min(b.radius + 6, 24), margin: [-96, 0, 0, 28], zIndex: 2, anim: 200, css: 'esg-badge' })]
     : [];
   const img = b.box([b.picture('photo', { height: o.height || 460, frame: !badge.length }), ...badge], { width: 46, anim: 0 });
   const txt = b.box(content, { width: 48, gap: 16 });
@@ -661,12 +883,13 @@ function hero(b, site) {
   const { copy, layout } = b.spec;
   const tel = `tel:${telHref(site.phone)}`;
   const variant = layout.hero;
-  const onImage = variant === 'center' || variant === 'left' || variant === 'bottom';
-  const align = variant === 'center' || variant === 'editorial' ? 'center' : 'left';
+  const onImage = variant === 'center' || variant === 'left' || variant === 'bottom' || variant === 'slideshow';
+  const align = variant === 'center' || variant === 'editorial' || variant === 'slideshow' ? 'center' : 'left';
+  const css = underHeader(b);
   const size = variant === 'bottom' ? 66 : variant === 'editorial' ? 64 : 58;
   const content = [
     b.kicker(copy.heroKicker, { align, color: onImage ? b.c.secondary : undefined, onDark: onImage, hint: 'short tagline above the main title', max: 50 }),
-    b.heading(copy.heroTitle, { tag: 'h1', size, align, color: onImage ? '#FFFFFF' : undefined, hint: 'main title of the site (H1): the promise of the business, with its activity and city', max: 80 }),
+    b.heading(copy.heroTitle, { tag: 'h1', size, align, hl: true, color: onImage ? '#FFFFFF' : undefined, hint: 'main title of the site (H1): the promise of the business, with its activity and city', max: 80 }),
     b.text(copy.heroText, { align, color: onImage ? 'rgba(255,255,255,0.9)' : undefined, size: 19, hint: 'hero subtitle (1–2 sentences)', max: 200 }),
     b.box(
       [
@@ -680,7 +903,7 @@ function hero(b, site) {
   if (variant === 'editorial') {
     // Magazine opening: big centered title on the page color, a wide photo below
     return b.section(
-      [b.box(content, { maxWidth: 900, gap: 22, align: 'center', anim: 0 }), b.box([b.picture('hero', { height: 560, mobileHeight: 280, wide: true })], { anim: 200, overflow: true, zoom: true, radius: b.imgRadius })],
+      [b.box(content, { maxWidth: 900, gap: 22, align: 'center', anim: 0 }), b.box([b.picture('hero', { height: 560, mobileHeight: 280, wide: true, deco: true })], { anim: 200, overflow: true, zoom: true, radius: b.imgRadius })],
       { bg: b.ink.alt, align: 'center', gap: 56, padY: Math.round(b.pad * 1.1) }
     );
   }
@@ -699,6 +922,7 @@ function hero(b, site) {
       minHeight: 86,
       align: 'flex-start',
       divider: edge,
+      css,
     });
   }
   if (variant === 'bottom') {
@@ -711,6 +935,18 @@ function hero(b, site) {
       justify: 'flex-end',
       padBottom: Math.round(b.pad * 1.1),
       divider: edge,
+      css,
+    });
+  }
+  if (variant === 'slideshow') {
+    // Centered text over a slideshow of photos (Elementor background slideshow: fade + slow Ken Burns zoom)
+    return b.section([b.box(content, { maxWidth: 860, gap: 20, align: 'center', anim: 0 })], {
+      slideshow: true,
+      overlay: [rgba(b.c.dark, 0.5), rgba(b.c.dark, 0.82), 180],
+      minHeight: 92,
+      align: 'center',
+      divider: edge,
+      css,
     });
   }
   return b.section([b.box(content, { maxWidth: variant === 'left' ? 680 : 860, gap: 20, align: variant === 'left' ? 'flex-start' : 'center', anim: 0 })], {
@@ -719,6 +955,7 @@ function hero(b, site) {
     minHeight: 88,
     align: variant === 'left' ? 'flex-start' : 'center',
     divider: edge,
+    css,
   });
 }
 
@@ -727,11 +964,11 @@ function aboutTeaser(b, site) {
   const { copy } = b.spec;
   return mediaRow(b, [
     b.kicker(copy.aboutKicker, { hint: 'small label of the "about us" section', max: 30 }),
-    b.heading(copy.aboutTitle, { bar: b.st.titles === 'bar', hint: '"About us" section title', max: 70 }),
+    b.heading(copy.aboutTitle, { bar: b.st.titles === 'bar', hl: true, hint: '"About us" section title', max: 70 }),
     ...titleLine(b),
-    b.text(copy.aboutText, { hint: 'short presentation of the business (2–4 sentences)', max: 600 }),
+    b.text(copy.aboutText, { dropcap: true, hint: 'short presentation of the business (2–4 sentences)', max: 600 }),
     b.button(copy.aboutButton, site.pages.about.url, { hint: 'button "Scopri di più" leading to the About page', max: 30 }),
-  ]);
+  ], { bg: surfaceBg(b, 'about', 'bg') });
 }
 
 /** Featured services (max 3) + "all services". */
@@ -739,7 +976,7 @@ function featuredServices(b, site) {
   const { copy, layout } = b.spec;
   if (!site.services.length) return null;
   const shown = site.services.slice(0, 3);
-  const boxed = layout.services === 'boxed';
+  const natural = layout.services === 'boxed' ? 'alt' : 'bg';
   const left = b.st.align === 'left' || b.st.titles === 'bar';
   return b.section(
     [
@@ -749,12 +986,12 @@ function featuredServices(b, site) {
         text: { value: copy.servicesText, hint: 'intro of the services section (1 sentence)', max: 200 },
       }),
       b.box(
-        shown.map((s, i) => b.serviceCard(s, i, copy.serviceText, { width: b.columns(shown.length), on: boxed ? 'alt' : 'base', anim: i * 120 })),
+        shown.map((s, i) => b.serviceCard(s, i, copy.serviceText, { width: b.columns(shown.length), on: surfaceOn(b, 'services', natural), anim: i * 120 })),
         { row: true, gap: 28, align: 'stretch', justify: shown.length < 3 ? 'center' : 'space-between' }
       ),
       b.button(copy.servicesButton, site.pages.services.url, { align: left ? 'left' : 'center', hint: 'button "Tutti i servizi" leading to the Services page', max: 30 }),
     ],
-    { bg: boxed ? b.ink.alt : b.ink.bg, align: 'center', gap: 44 }
+    { bg: surfaceBg(b, 'services', natural), align: 'center', gap: 44 }
   );
 }
 
@@ -796,7 +1033,7 @@ function homeGallery(b, site) {
       b.box([carousel], { anim: 0 }),
       b.button(copy.galleryButton, site.pages.gallery.url, { variant: 'outline', outlineColor: b.ink.heading, align: left ? 'left' : 'center', hint: 'button leading to the Gallery page', max: 30 }),
     ],
-    { bg: b.ink.bg, align: 'center', gap: 40 }
+    { bg: surfaceBg(b, 'gallery', 'bg'), align: 'center', gap: 40 }
   );
 }
 
@@ -806,8 +1043,37 @@ const statHints = (i) => ({
   label: { hint: `label of key figure ${i + 1} (2–4 words)`, max: 40, share: `stat${i + 1}.label` },
 });
 
-/** Key numbers: 4 figures on a colored band. */
+/**
+ * Key numbers, per the stats layout: 4 figures on a colored band ("band"), large figures in a row
+ * each under a thin line, on the page color ("inline"), or in cards on a tinted section ("cards").
+ */
 function stats(b) {
+  const variant = b.spec.layout.stats;
+  const row = (items) => b.box(items, { row: true, gap: 24, align: 'flex-start', justify: 'space-between' });
+  if (variant === 'inline') {
+    const items = b.spec.copy.stats.map((x, i) =>
+      b.box(
+        [
+          b.heading(x.value, { tag: 'p', size: 58, weight: b.st.headingWeight, ...statHints(i).value }),
+          b.text(x.label, { size: 15, ...statHints(i).label }),
+        ],
+        { width: b.columns(4), tablet: 48, gap: 4, padding: [22, 0, 0, 0], border: [1, 0, 0, 0, b.ink.border], anim: i * 100 }
+      )
+    );
+    return b.section([row(items)], { bg: surfaceBg(b, 'stats', 'bg'), padY: Math.round(b.pad * 0.75) });
+  }
+  if (variant === 'cards') {
+    const items = b.spec.copy.stats.map((x, i) =>
+      b.box(
+        [
+          b.heading(x.value, { tag: 'p', size: 46, align: 'center', color: b.ink.kicker, ...statHints(i).value }),
+          b.text(x.label, { align: 'center', size: 15, ...statHints(i).label }),
+        ],
+        { width: b.columns(4), tablet: 48, card: true, on: surfaceOn(b, 'stats', 'alt'), pad: 30, gap: 4, anim: i * 100, lift: true }
+      )
+    );
+    return b.section([row(items)], { bg: surfaceBg(b, 'stats', 'alt'), padY: Math.round(b.pad * 0.75) });
+  }
   const items = b.spec.copy.stats.map((x, i) =>
     b.box(
       [
@@ -817,12 +1083,68 @@ function stats(b) {
       { width: b.columns(4), tablet: 48, gap: 4, anim: i * 100 }
     )
   );
-  return b.section([b.box(items, { row: true, gap: 24, align: 'flex-start', justify: 'space-between' })], { gradient: [b.c.primaryText, b.c.dark, 135], padY: Math.round(b.pad * 0.75) });
+  return b.section([row(items)], { ...b.fill(), padY: Math.round(b.pad * 0.75), band: true });
 }
 
-/** How we work: 4 numbered steps. */
+/**
+ * Number of a timeline step: a 56px disc in the secondary color (square with square buttons),
+ * pulled by `margin` onto the line of the timeline.
+ */
+function stepDisc(b, i, margin) {
+  const el = b.heading(String(i + 1).padStart(2, '0'), { tag: 'p', size: 18, weight: '700', align: 'center', color: b.c.onSecondary, fixed: true });
+  Object.assign(el.settings, {
+    typography_line_height: { unit: 'px', size: 28 },
+    _background_background: 'classic',
+    _background_color: b.c.secondary,
+    _border_radius: corners(b.st.buttons === 'square' ? 0 : 50),
+    _padding: sides(14, 0, 14, 0),
+    _element_width: 'initial',
+    _element_custom_width: px(56),
+    _flex_align_self: 'flex-start',
+    _margin: sides(...margin),
+    _z_index: 1,
+  });
+  return el;
+}
+
+/**
+ * How we work: 4 numbered steps, per the process layout: cards ("cards"), a horizontal timeline
+ * with the numbers on a line above each step ("timeline"), or a vertical timeline beside the title
+ * ("vertical").
+ */
 function processSteps(b) {
   const { copy } = b.spec;
+  const variant = b.spec.layout.process;
+  const stepTitle = (x, i) => b.heading(x.title, { tag: 'h3', size: 20, hint: `step ${i + 1} of 4 of the way the business works with its customers (short title)`, max: 50 });
+  const stepText = (x, i) => b.text(x.text, { size: 15, hint: `explanation of step ${i + 1} (1–2 sentences)`, max: 160 });
+  const parts = {
+    kicker: { value: copy.processKicker, hint: 'small label of the "how we work" section', max: 30 },
+    title: { value: copy.processTitle, hint: 'title of the "how we work" section', max: 60 },
+    text: { value: copy.processText, hint: 'intro of the "how we work" section (1 sentence)', max: 200 },
+  };
+  if (variant === 'timeline') {
+    // Each step under a 2px line; its disc (56px) is pulled up to sit on the line
+    const steps = copy.steps.map((x, i) =>
+      b.box([stepDisc(b, i, [-29, 0, 6, 0]), stepTitle(x, i), stepText(x, i)], { width: b.columns(4), gap: 8, border: [2, 0, 0, 0, b.ink.border], anim: i * 120 })
+    );
+    return b.section([intro(b, parts), b.box(steps, { row: true, gap: 40, align: 'stretch', justify: 'space-between' })], { bg: surfaceBg(b, 'process', 'bg'), align: 'center', gap: 64 });
+  }
+  if (variant === 'vertical') {
+    // Steps along a 2px line on their left; the disc sits on the line, the title beside it
+    const steps = copy.steps.map((x, i) =>
+      b.box([stepDisc(b, i, [0, 0, -50, -69]), stepTitle(x, i), stepText(x, i)], {
+        gap: 8,
+        padding: [0, 0, i === copy.steps.length - 1 ? 0 : 40, 40],
+        border: [0, 0, 0, 2, b.ink.border],
+        anim: i * 120,
+      })
+    );
+    return b.section([b.box([intro(b, parts, { align: 'left' })], { width: 36 }), b.box(steps, { width: 56, tablet: 100, padding: [0, 0, 0, 28] })], {
+      row: true,
+      bg: surfaceBg(b, 'process', 'bg'),
+      align: 'flex-start',
+    });
+  }
   const steps = copy.steps.map((x, i) =>
     b.box(
       [
@@ -830,7 +1152,7 @@ function processSteps(b) {
         b.heading(x.title, { tag: 'h3', size: 20, hint: `step ${i + 1} of 4 of the way the business works with its customers (short title)`, max: 50 }),
         b.text(x.text, { size: 15, hint: `explanation of step ${i + 1} (1–2 sentences)`, max: 160 }),
       ],
-      { width: b.columns(4), card: true, on: 'base', pad: 28, gap: 8, anim: i * 120, lift: true }
+      { width: b.columns(4), card: true, on: surfaceOn(b, 'process', 'bg'), pad: 28, gap: 8, anim: i * 120, lift: true }
     )
   );
   return b.section(
@@ -842,7 +1164,7 @@ function processSteps(b) {
       }),
       b.box(steps, { row: true, gap: 24, align: 'stretch', justify: 'space-between' }),
     ],
-    { bg: b.ink.bg, align: 'center', gap: 44 }
+    { bg: surfaceBg(b, 'process', 'bg'), align: 'center', gap: 44 }
   );
 }
 
@@ -877,15 +1199,25 @@ function faq(b) {
     title: { value: copy.faqTitle, hint: 'title of the frequently asked questions section', max: 60 },
   };
   const left = b.st.align === 'left' || b.st.titles === 'bar';
-  if (left) return b.section([b.box([intro(b, parts, { align: 'left' })], { width: 34 }), b.box([accordion], { width: 60, anim: 0 })], { row: true, bg: b.ink.alt, align: 'flex-start' });
-  return b.section([intro(b, parts), b.box([accordion], { maxWidth: 860, anim: 0 })], { bg: b.ink.alt, align: 'center', gap: 40 });
+  const bg = surfaceBg(b, 'faq', 'alt');
+  if (left) return b.section([b.box([intro(b, parts, { align: 'left' })], { width: 34 }), b.box([accordion], { width: 60, anim: 0 })], { row: true, bg, align: 'flex-start' });
+  return b.section([intro(b, parts), b.box([accordion], { maxWidth: 860, anim: 0 })], { bg, align: 'center', gap: 40 });
 }
 
-/** Strip of 4 short guarantees. */
+/**
+ * Strip of 4 short guarantees: centered on one line ("strip"), or larger and scrolling endlessly
+ * across the whole width ("marquee": the header script repeats the items, CSS moves them; without
+ * the script it stays a plain strip).
+ */
 function highlights(b) {
   const items = b.spec.copy.highlights.map((x, i) => ({ text: x, icon: 'fas fa-check-circle', hint: `short guarantee ${i + 1} of 4 of the business (2–4 words, e.g. free estimate)`, max: 40 }));
+  if (b.spec.layout.highlights === 'marquee') {
+    const list = b.iconList(items, { inline: true, align: 'center', color: '#FFFFFF', iconColor: b.c.secondary, hover: '#FFFFFF', size: 19, weight: '700', css: 'esg-marquee' });
+    list.settings.space_between = px(56);
+    return b.section([list], { ...b.fill(90), padY: 30, width: 2560, align: 'stretch' });
+  }
   return b.section([b.iconList(items, { inline: true, align: 'center', color: '#FFFFFF', iconColor: b.c.secondary, hover: '#FFFFFF', size: 16, weight: '600' })], {
-    gradient: [b.c.primaryText, b.c.dark, 90],
+    ...b.fill(90),
     padY: 26,
     align: 'center',
   });
@@ -894,20 +1226,26 @@ function highlights(b) {
 const HOME_SECTIONS = { about: aboutTeaser, features, cta, services: featuredServices, gallery: homeGallery, reviews, stats, process: processSteps, faq, highlights };
 
 function home(b, site) {
-  const out = [hero(b, site)];
-  for (const id of b.spec.sections || DEFAULT_SECTIONS) {
-    const el = HOME_SECTIONS[id]?.(b, site);
-    if (el) out.push(el);
-  }
+  const layout = b.spec.layout;
+  // Sections shown (no featured services without services), their backgrounds per the rhythm
+  const ids = (b.spec.sections || DEFAULT_SECTIONS).filter((id) => HOME_SECTIONS[id] && (id !== 'services' || site.services.length));
+  planSurfaces(b, ids.map((id) => ({ id, natural: NATURAL_SURFACE[id](layout) })), ['split', 'editorial'].includes(layout.hero) ? 'alt' : 'band');
+  const out = [hero(b, site), ...ids.map((id) => HOME_SECTIONS[id](b, site))];
   // The shaped bottom edge of the hero takes the color of the next section
   const next = out[1]?.settings;
   if (next && out[0].settings.shape_divider_bottom) out[0].settings.shape_divider_bottom_color = next.background_color || b.ink.bg;
+  sectionLines(b, out, ['hero', ...ids]);
+  bandEdges(b, out);
   return out;
 }
 
 function about(b, site) {
-  const { copy } = b.spec;
+  const { copy, layout } = b.spec;
   const sections = b.spec.sections || DEFAULT_SECTIONS;
+  // The two "Chi siamo" rows ("story", "values"), then the sections shared with the Home page
+  const ids = ['story', 'values', ...(sections.includes('stats') ? ['stats'] : []), 'features', ...(sections.includes('cta') ? ['cta'] : []), 'reviews'];
+  const natural = { story: () => 'bg', values: () => 'alt', ...NATURAL_SURFACE };
+  planSurfaces(b, ids.map((id) => ({ id, natural: natural[id](layout) })), layout.subheader === 'photo' ? 'band' : 'alt');
   // "Chi siamo" in two rows: text | image, then image | text (no "Our story" / "Our mission" titles)
   const out = [
     subheader(b, site, 'about'),
@@ -917,12 +1255,13 @@ function about(b, site) {
         b.heading(b.L.about, { bar: b.st.titles === 'bar', fixed: true }),
         ...titleLine(b),
         b.text(copy.aboutPageText, {
+          dropcap: true,
           hint: 'first part of the presentation of the business on the About page: who we are, history and experience (2 paragraphs), WITHOUT sub-titles',
           max: 1200,
           min: 300,
         }),
       ],
-      { imageFirst: false, height: 500 }
+      { imageFirst: false, height: 500, bg: surfaceBg(b, 'story', 'bg') }
     ),
     mediaRow(
       b,
@@ -933,13 +1272,15 @@ function about(b, site) {
           min: 250,
         }),
       ],
-      { imageFirst: true, height: 500, bg: b.ink.alt }
+      { imageFirst: true, height: 500, bg: surfaceBg(b, 'values', 'alt') }
     ),
   ];
   if (sections.includes('stats')) out.push(stats(b));
   out.push(features(b));
   if (sections.includes('cta')) out.push(cta(b, site));
   out.push(reviews(b));
+  sectionLines(b, out, ['subheader', ...ids]);
+  bandEdges(b, out);
   return out;
 }
 
@@ -1095,6 +1436,7 @@ function singlePost(b, site) {
       gap: 14,
       align: center ? 'center' : 'flex-start',
       divider: shape(b, b.ink.bg),
+      css: underHeader(b),
     }
   );
   const main = b.box(
@@ -1106,7 +1448,7 @@ function singlePost(b, site) {
           b.text(copy.postCtaText, { color: 'rgba(255,255,255,0.9)', hint: 'call to action text at the end of the articles (1 sentence)', max: 200 }),
           b.button(copy.postCtaButton, site.pages.contact.url, { variant: 'secondary', hint: 'button leading to the contact page', max: 30 }),
         ],
-        { card: true, gradient: [b.c.primaryText, b.c.dark, 135], pad: 40, gap: 14 }
+        { card: true, ...b.fill(), pad: 40, gap: 14 }
       ),
     ],
     { width: 64, gap: 40 }
@@ -1201,13 +1543,26 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 function finishCss(b) {
   const { c, ink } = b;
   const ease = 'cubic-bezier(.2,.7,.3,1)';
+  /**
+   * Hover of the cards and buttons, per the hover style of the template: cards rising ("lift"), a
+   * ring of the secondary color ("glow"), a bar of the secondary color along the bottom
+   * ("underline"), or still cards ("still"). The rules replace the hover shadow set in Elementor.
+   */
+  const hover = {
+    glow: `.elementor-button:hover{box-shadow:0 8px 24px ${rgba(c.secondary, 0.35)}}
+.esg-card{transition:box-shadow .4s ${ease}}
+.esg-card:hover{box-shadow:0 0 0 2px ${c.secondary},0 18px 44px ${rgba(c.secondary, 0.2)}!important}`,
+    underline: `.esg-card{transition:box-shadow .3s ${ease}}
+.esg-card:hover{box-shadow:inset 0 -4px 0 ${c.secondary}!important}`,
+    still: `.esg-card{transition:box-shadow .4s ${ease}}`,
+  }[b.st.hover] || `.elementor-button:hover{transform:translateY(-2px)}
+.esg-card{transition:transform .4s ${ease},box-shadow .4s ${ease}}
+.esg-card:hover{transform:translateY(-6px)}`;
   return `html{scroll-behavior:smooth}
 body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
 ::selection{background:${c.primary};color:${c.onPrimary}}
 .elementor-button{transition:background-color .3s,color .3s,border-color .3s,transform .3s ${ease},box-shadow .3s}
-.elementor-button:hover{transform:translateY(-2px)}
-.esg-card{transition:transform .4s ${ease},box-shadow .4s ${ease}}
-.esg-card:hover{transform:translateY(-6px)}
+${hover}
 .esg-zoom{overflow:hidden}
 .esg-zoom img{transition:transform .9s ${ease}}
 .esg-zoom:hover img{transform:scale(1.06)}
@@ -1220,7 +1575,88 @@ body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-r
 .elementor-widget-image-carousel .swiper-slide{overflow:hidden;border-radius:${b.imgRadius}px}
 .elementor-widget-image-carousel .swiper-slide img{transition:transform .9s ${ease}}
 .elementor-widget-image-carousel .swiper-slide:hover img{transform:scale(1.04)}
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.esg-card,.esg-zoom img,.elementor-button{transition:none}.esg-card:hover,.esg-zoom:hover img,.elementor-button:hover{transform:none}}`;
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.esg-card,.esg-zoom img,.elementor-button{transition:none}.esg-card:hover,.esg-zoom:hover img,.elementor-button:hover{transform:none}}${signatureCss(b)}`;
+}
+
+/** Highlighted last word of the titles, per the highlight style (accent color on the page, secondary color on photos and bands). */
+function highlightCss(b) {
+  const { c, ink } = b;
+  const marker = rgba(c.secondary, 0.42);
+  return {
+    italic: `.esg-hl .esg-hl-w{font-style:italic;font-weight:400;color:${ink.kicker}}
+.esg-hl-light .esg-hl-w{color:${c.secondary}}`,
+    color: `.esg-hl .esg-hl-w{color:${ink.kicker}}
+.esg-hl-light .esg-hl-w{color:${c.secondary}}`,
+    marker: `.esg-hl .esg-hl-w{background:linear-gradient(transparent 58%,${marker} 58%,${marker} 92%,transparent 92%);padding:0 .06em;-webkit-box-decoration-break:clone;box-decoration-break:clone}`,
+    outline: `.esg-hl .esg-hl-w{color:transparent;-webkit-text-stroke:.035em ${ink.heading}}
+.esg-hl-light .esg-hl-w{-webkit-text-stroke-color:#FFFFFF}`,
+  }[b.st.highlight] || '';
+}
+
+/**
+ * Signature details of the template (highlight, decor, marquee strip), added after the finishing
+ * touches only when the template uses them.
+ */
+function signatureCss(b) {
+  const { c, ink, fonts } = b;
+  const decor = {
+    grid: `.esg-grid{background-image:linear-gradient(${ink.dark ? 'rgba(255,255,255,.05)' : rgba(c.heading, 0.06)} 1px,transparent 1px),linear-gradient(90deg,${ink.dark ? 'rgba(255,255,255,.05)' : rgba(c.heading, 0.06)} 1px,transparent 1px);background-size:32px 32px}
+.esg-brackets{position:relative}
+.esg-brackets::before,.esg-brackets::after{content:"";position:absolute;z-index:2;width:46px;height:46px;border:3px solid ${c.secondary};pointer-events:none}
+.esg-brackets::before{top:-10px;left:-10px;border-right:0;border-bottom:0}
+.esg-brackets::after{right:-10px;bottom:-10px;border-left:0;border-top:0}`,
+    frame: `.esg-frame img{outline:1px solid rgba(255,255,255,.72);outline-offset:-16px}`,
+    blob: `.esg-blob{position:relative;z-index:0}
+.esg-blob::before{content:"";position:absolute;z-index:-1;top:-7%;right:-5%;width:72%;height:80%;background:${ink.dark ? rgba(c.secondary, 0.18) : tint(c.secondary, 0.7)};border-radius:62% 38% 54% 46%/49% 58% 42% 51%}
+@media (max-width:767px){.esg-blob::before{top:-4%;right:0}}`,
+    dropcap: `.esg-dropcap p:first-of-type::first-letter{float:left;margin:.06em .12em 0 0;font-family:"${fonts.heading}",serif;font-size:4.2em;line-height:.82;color:${ink.kicker}}`,
+    wordmark: `.esg-wordmark .elementor-heading-title{font-size:clamp(56px,14vw,240px)!important;line-height:.82!important;letter-spacing:-.04em!important;white-space:nowrap;text-transform:none!important}`,
+  }[b.st.decor];
+  const marquee = b.spec.layout.highlights === 'marquee' && (b.spec.sections || []).includes('highlights')
+    ? `.esg-marquee{overflow:hidden}
+.esg-marquee.is-ready .elementor-icon-list-items{flex-wrap:nowrap!important;width:max-content;animation:esg-marquee 36s linear infinite}
+.esg-marquee.is-ready .elementor-icon-list-item{flex-shrink:0}
+.esg-marquee:hover .elementor-icon-list-items{animation-play-state:paused}
+.esg-marquee .elementor-icon-list-text{text-transform:uppercase;letter-spacing:.06em}
+@keyframes esg-marquee{to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){.esg-marquee.is-ready .elementor-icon-list-items{animation:none}}`
+    : '';
+  // "transparent" header: on the pages that open with a photo (marked "esg-under"), the header lies over it,
+  // with white links and logo (pure CSS, so nothing moves once the page is shown)
+  const over = b.spec.layout.header === 'transparent'
+    ? `body:has(.esg-under) .esg-header{position:absolute!important;top:0;left:0;right:0;width:100%;background:transparent!important;box-shadow:none!important;border:0!important}
+body:has(.esg-under) .esg-nav{--esg-color:#FFFFFF;--esg-hover:${c.secondary};--esg-line:rgba(255,255,255,.4)}
+body:has(.esg-under) .esg-hd-brand .elementor-heading-title{color:#FFFFFF!important}
+body:has(.esg-under) .esg-hd-brand img{filter:brightness(0) invert(1)}`
+    : '';
+  return [highlightCss(b), decor, marquee, over].filter(Boolean).map((css) => `\n${css}`).join('');
+}
+
+/**
+ * Scripts of the signature details (registered once per page): wrap the last word of the marked
+ * titles ("esg-hl") so the highlight style can reach it; repeat the items of a marquee strip until
+ * they fill twice its width, then start the scroll. Without them the page stays plain and readable.
+ */
+const HIGHLIGHT_SCRIPT = `(function(){if(window.esgHl)return;window.esgHl=1;
+function hl(){document.querySelectorAll('.esg-hl .elementor-heading-title').forEach(function(h){if(h.children.length)return;var w=h.textContent.trim().split(/\\s+/);if(w.length<3)return;
+var k=w.length>3&&w[w.length-1].length<4?2:1;var s=document.createElement('span');s.className='esg-hl-w';s.textContent=w.slice(-k).join(' ');h.textContent=w.slice(0,-k).join(' ')+' ';h.appendChild(s);});}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',hl);else hl();})();`;
+const MARQUEE_SCRIPT = `(function(){if(window.esgMq)return;window.esgMq=1;
+function mq(){document.querySelectorAll('.esg-marquee').forEach(function(m){var u=m.querySelector('.elementor-icon-list-items');if(!u||m.classList.contains('is-ready'))return;m.classList.add('is-ready');
+var items=[].slice.call(u.children),box=m.offsetWidth||1200,n=0;
+function add(list){list.forEach(function(li){var c=li.cloneNode(true);c.setAttribute('aria-hidden','true');u.appendChild(c);});}
+while(u.scrollWidth<box&&n++<12)add(items);add([].slice.call(u.children));});}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mq);else mq();})();`;
+
+/** Scripts the header carries for the template: the menu, then the signature details it uses. */
+function headerScripts(b) {
+  return [
+    NAV_SCRIPT,
+    b.st.highlight && b.st.highlight !== 'none' && HIGHLIGHT_SCRIPT,
+    b.spec.layout.highlights === 'marquee' && (b.spec.sections || []).includes('highlights') && MARQUEE_SCRIPT,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 /**
@@ -1289,7 +1725,7 @@ function navMenu(b, site, o) {
     `<nav class="esg-nav" style="${style}" aria-label="${escapeAttr(b.L.menu)}">` +
     `<button type="button" class="esg-nav-toggle" aria-expanded="false" aria-controls="esg-nav-list" aria-label="${escapeAttr(b.L.menu)}"><span class="esg-nav-bars" aria-hidden="true"><span></span><span></span><span></span></span></button>` +
     `<ul id="esg-nav-list" class="esg-nav-list">${items}<li class="esg-nav-cta"><a href="${escapeAttr(o.button.url)}">${escapeHtml(o.button.text)}</a></li></ul>` +
-    `</nav>\n<style>\n${css}\n${finishCss(b)}\n</style>\n<script>\n${NAV_SCRIPT}\n</script>`;
+    `</nav>\n<style>\n${css}\n${finishCss(b)}\n</style>\n<script>\n${headerScripts(b)}\n</script>`;
   const el = b.html(html);
   b.mark(el, 'html', { fixed: true });
   return el;
@@ -1341,7 +1777,7 @@ function footer(b, site) {
   const variant = b.spec.layout.footer;
   const light = variant === 'light';
   const deep = b.ink.dark ? mix(b.c.dark, '#000000', 0.4) : b.c.dark;
-  const style = light ? { bg: b.ink.alt } : variant === 'brand' ? { gradient: [b.c.primaryText, b.c.dark, 135] } : { bg: deep };
+  const style = light ? { bg: b.ink.alt } : variant === 'brand' ? b.fill() : { bg: deep };
   const color = light ? b.ink.text : 'rgba(255,255,255,0.78)';
   const titleColor = light ? b.ink.heading : '#FFFFFF';
   const hover = light ? b.ink.kicker : b.c.secondary;
@@ -1353,8 +1789,18 @@ function footer(b, site) {
   ];
   if (site.services.length) cols.push(b.box([...colTitle(b.L.services), list(site.services.map((s) => ({ text: s.name, url: s.url })))], { width: 22, gap: 12 }));
   cols.push(b.box([...colTitle(b.L.contacts), list(contactItems(site))], { width: 22, gap: 12 }));
+  // "wordmark" decor: the business name huge and faint across the bottom of the footer, cropped at the edges
+  const wordmark = [];
+  if (b.st.decor === 'wordmark') {
+    const name = b.heading(site.siteName, { tag: 'p', size: 40, color: light ? rgba(b.c.heading, 0.08) : 'rgba(255,255,255,0.08)', fixed: true });
+    name.settings._css_classes = 'esg-wordmark';
+    const el = b.section([name], { ...style, padY: 0, padBottom: 12, gap: 0, width: 2560 });
+    el.settings.overflow = 'hidden';
+    wordmark.push(el);
+  }
   return [
     b.section(cols, { row: true, ...style, align: 'flex-start', padY: Math.round(b.pad * 0.8) }),
+    ...wordmark,
     b.section([b.text(`<p>${escapeHtml(site.copyright)}${LEGAL_LINKS}</p>`, { align: 'center', size: 14, color, fixed: true })], {
       ...(variant === 'brand' ? { bg: b.c.dark } : style),
       padY: 20,

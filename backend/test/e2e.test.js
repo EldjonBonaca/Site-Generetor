@@ -147,7 +147,7 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
 
   const cat = await api('POST', '/template-categories', { name: 'Idraulici' });
   const draft = await api('POST', `/template-categories/${cat.id}/templates/generate`, { providerId: provider.id, language: 'en' });
-  const spec = { ...draft.spec, sections: ['about', 'features', 'cta', 'services', 'gallery', 'reviews'], layout: { ...draft.spec.layout, hero: 'center', cta: 'banner', contact: 'split', header: 'classic' } };
+  const spec = { ...draft.spec, sections: ['about', 'features', 'cta', 'services', 'gallery', 'reviews'], layout: { ...draft.spec.layout, hero: 'center', cta: 'banner', contact: 'split', header: 'classic', subheader: 'photo' } };
   const tpl = await api('POST', `/template-categories/${cat.id}/templates`, { name: 'Plumber blue', spec });
   await assert.rejects(api('PUT', `/projects/${pid}/template`, { template_id: 9999 }), /404/);
   await api('PUT', `/projects/${pid}/template`, { template_id: tpl.id });

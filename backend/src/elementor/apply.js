@@ -49,7 +49,8 @@ export function applyImages(doc, slots, assignment) {
       if (settings && typeof settings === 'object') {
         if (slot.widget === 'image-gallery') Object.assign(settings, { gallery_link: 'file', open_lightbox: 'yes' });
         else if (slot.widget === 'image-carousel') Object.assign(settings, { link_to: 'file', open_lightbox: 'yes' });
-        else Object.assign(settings, { link_to: 'file', open_lightbox: 'yes' });
+        // Other gallery widgets; a container's background slideshow has no lightbox
+        else if (slot.widget) Object.assign(settings, { link_to: 'file', open_lightbox: 'yes' });
       }
       continue;
     }

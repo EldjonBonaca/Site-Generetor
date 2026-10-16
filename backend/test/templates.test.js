@@ -11,7 +11,7 @@ process.env.STORAGE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'esg-tpl-'));
 process.env.ENCRYPTION_KEY ||= 'd'.repeat(64);
 
 const { analyzeDocument } = await import('../src/elementor/analyze.js');
-const { sanitizeSpec, DEFAULT_SPEC, FONTS } = await import('../src/templates/spec.js');
+const { sanitizeSpec, DEFAULT_SPEC, FONTS, tint } = await import('../src/templates/spec.js');
 const { buildSite, DOC_ROLES, TEMPLATE_IMAGE } = await import('../src/templates/builder.js');
 const { buildTemplatePrompt, generateTemplateSpec } = await import('../src/templates/generate.js');
 const { default: MockProvider } = await import('../src/ai/providers/mock.js');
@@ -72,6 +72,24 @@ test('buildSite: every variant builds valid documents whose marks match the anal
     // Elegant variants: editorial hero, photo badge, numbered service rows, big quote, arched photos, labels
     { style: { images: 'arch', kicker: 'dash', titles: 'plain' }, layout: { hero: 'editorial', about: 'badge', services: 'list', testimonials: 'quote' }, sections: ['about', 'stats', 'features', 'services', 'gallery', 'reviews'] },
     { style: { theme: 'dark', images: 'arch', kicker: 'pill', align: 'left' }, layout: { hero: 'split', about: 'badge', services: 'list', testimonials: 'quote' } },
+    // Page banners, key numbers, how we work and colored bands
+    { style: { fill: 'flat', kicker: 'dash' }, layout: { subheader: 'plain', stats: 'inline', process: 'timeline', footer: 'brand' }, sections: ['highlights', 'about', 'stats', 'features', 'services', 'process', 'gallery', 'reviews'] },
+    { style: { theme: 'dark', fill: 'deep', titles: 'bar', buttons: 'square' }, layout: { subheader: 'split', stats: 'cards', process: 'vertical', about: 'badge', testimonials: 'band' }, sections: ['about', 'stats', 'features', 'cta', 'services', 'process', 'gallery', 'reviews'] },
+    { style: { fill: 'radial', align: 'center', kicker: 'pill' }, layout: { subheader: 'plain', stats: 'band', process: 'vertical', cta: 'split' }, sections: ['highlights', 'about', 'stats', 'features', 'cta', 'services', 'process', 'gallery', 'reviews', 'faq'] },
+    // Entrance animations, card hover, edge shapes on the hero and on the colored bands
+    { style: { motion: 'none', hover: 'glow', edges: 'all' }, layout: { divider: 'mountains', features: 'cards', testimonials: 'band', stats: 'band' }, sections: ['about', 'stats', 'features', 'cta', 'services', 'gallery', 'reviews'] },
+    { style: { motion: 'slide', hover: 'underline', edges: 'all', theme: 'dark' }, layout: { divider: 'zigzag', cta: 'banner' }, sections: ['stats', 'about', 'features', 'cta', 'services', 'gallery', 'reviews'] },
+    { style: { motion: 'fade', hover: 'still' }, layout: { divider: 'wave-brush', subheader: 'photo' } },
+    // Highlighted words, signature details, scrolling strip
+    { style: { highlight: 'outline', decor: 'grid', theme: 'dark' }, layout: { highlights: 'marquee', hero: 'editorial', subheader: 'split' }, sections: ['highlights', 'about', 'features', 'services', 'gallery', 'reviews'] },
+    { style: { highlight: 'marker', decor: 'blob', rhythm: 'alternate' }, layout: { hero: 'split', about: 'image-right' } },
+    { style: { highlight: 'color', decor: 'wordmark', rhythm: 'lines' }, layout: { footer: 'light' } },
+    { style: { highlight: 'italic', decor: 'dropcap' }, layout: { footer: 'brand' } },
+    { style: { decor: 'frame', theme: 'dark' }, layout: { about: 'wide', footer: 'brand' } },
+    // Larger layouts: transparent header, slideshow hero, collage, bento
+    { layout: { header: 'transparent', hero: 'slideshow', about: 'collage', features: 'bento' }, sections: ['about', 'stats', 'features', 'cta', 'services', 'gallery', 'reviews'] },
+    { style: { theme: 'dark', rhythm: 'alternate', decor: 'blob', edges: 'all' }, layout: { header: 'transparent', hero: 'split', about: 'collage', features: 'bento', subheader: 'photo', divider: 'waves' } },
+    { style: { decor: 'grid', cards: 'tinted' }, layout: { header: 'transparent', hero: 'card', subheader: 'plain', features: 'bento' } },
   ];
   for (const v of variants) {
     const spec = sanitizeSpec(v);
@@ -101,6 +119,197 @@ test('buildSite: every variant builds valid documents whose marks match the anal
   }
   // Same input -> same element ids (field and slot ids are stable between generation and export)
   assert.deepEqual(buildSite(sanitizeSpec({}), sampleSite()), buildSite(sanitizeSpec({}), sampleSite()));
+});
+
+test('page banners, key numbers, how we work and colored bands follow the template', () => {
+  const sections = ['about', 'stats', 'features', 'services', 'process', 'gallery', 'reviews'];
+  const build = (style, layout) => buildSite(sanitizeSpec({ style, layout, sections }), sampleSite()).docs;
+  const slots = (docs, role) => [...docs[role].marks.values()].filter((m) => m.slot === 'subheader').length;
+  const json = (docs, role) => JSON.stringify(docs[role].doc);
+
+  const photo = build({}, {});
+  assert.equal(slots(photo, 'about'), 1, 'photo banner: one subheader image');
+  assert.match(json(photo, 'home'), /"background_gradient_type":"linear"/, 'default colored bands: linear gradient');
+
+  const plain = build({ fill: 'radial' }, { subheader: 'plain', stats: 'inline', process: 'timeline', footer: 'brand' });
+  for (const role of ['about', 'services', 'gallery', 'contact']) {
+    assert.equal(slots(plain, role), 0, `plain banner of ${role}: no photo`);
+    assert.match(json(plain, role), /"header_size":"h1"/, `plain banner of ${role}: still the page title`);
+  }
+  assert.match(json(plain, 'about'), /Home \/ Chi Siamo/, 'plain banner: breadcrumb');
+  assert.match(json(plain, 'footer'), /"background_gradient_type":"radial"/, 'radial fill');
+  assert.equal(count(json(plain, 'home'), /"_element_custom_width":\{"unit":"px","size":56\}/g), 4, 'timeline: 4 numbered discs');
+
+  const split = build({ fill: 'flat' }, { subheader: 'split', stats: 'cards', process: 'vertical' });
+  const subheaderImages = [...split.about.marks.entries()].filter(([k, m]) => m.slot === 'subheader' && k.endsWith(':image'));
+  assert.equal(subheaderImages.length, 1, 'split banner: the subheader photo is an image beside the title');
+  assert.doesNotMatch(json(split, 'home'), /"background_background":"gradient"/, 'flat fill: no gradients');
+});
+
+const count = (s, re) => (s.match(re) || []).length;
+
+test('signature details: highlighted words, decor, scrolling strip', () => {
+  const sections = ['highlights', 'about', 'stats', 'features', 'services', 'gallery', 'reviews'];
+  const build = (style, layout = {}) => buildSite(sanitizeSpec({ style, layout: { hero: 'center', about: 'image-left', features: 'icons', ...layout }, sections }), sampleSite()).docs;
+  const find = (docs, role, pred) => {
+    const out = [];
+    const walk = (el) => (pred(el) && out.push(el), el.elements.forEach(walk));
+    docs[role].doc.content.forEach(walk);
+    return out;
+  };
+  const classes = (docs, role, cls) => find(docs, role, (el) => [el.settings._css_classes, el.settings.css_classes].some((v) => String(v || '').split(' ').includes(cls)));
+  const header = (docs) => JSON.stringify(docs.header.doc);
+
+  const plain = build({});
+  for (const cls of ['esg-hl', 'esg-grid', 'esg-brackets', 'esg-frame', 'esg-blob', 'esg-dropcap', 'esg-marquee']) assert.equal(classes(plain, 'home', cls).length, 0, `no ${cls} by default`);
+  assert.doesNotMatch(header(plain), /esgHl|esgMq/, 'no signature scripts by default');
+
+  const italic = build({ highlight: 'italic' });
+  const [h1] = find(italic, 'home', (el) => el.settings.header_size === 'h1');
+  assert.equal(h1.settings._css_classes, 'esg-hl esg-hl-light', 'hero title over a photo: highlighted in the light variant');
+  assert.ok(classes(italic, 'home', 'esg-hl').length >= 5, 'section titles highlighted too');
+  assert.match(header(italic), /window\.esgHl/, 'the header wraps the last word at runtime');
+  assert.match(header(italic), /\.esg-hl \.esg-hl-w\{font-style:italic/);
+
+  const grid = build({ decor: 'grid' });
+  assert.ok(classes(grid, 'home', 'esg-grid').length >= 1, 'grid on the tinted sections');
+  assert.equal(classes(grid, 'home', 'esg-brackets').length, 1, 'corner brackets on the about photo');
+  assert.equal(classes(build({ decor: 'frame' }), 'about', 'esg-frame').length, 2, 'inset frame on the photos of the About rows');
+  assert.equal(classes(build({ decor: 'blob' }), 'home', 'esg-blob').length, 1);
+  const dropcap = build({ decor: 'dropcap' });
+  assert.equal(classes(dropcap, 'home', 'esg-dropcap').length, 1, 'drop cap on the about text of Home');
+  assert.equal(classes(dropcap, 'about', 'esg-dropcap').length, 1, 'and on the first About text');
+
+  const wordmark = build({ decor: 'wordmark' });
+  const [name] = classes(wordmark, 'footer', 'esg-wordmark');
+  assert.equal(name.settings.title, 'Edil Test', 'the business name across the footer');
+  assert.equal(wordmark.footer.doc.content.length, 3);
+
+  const marquee = build({}, { highlights: 'marquee' });
+  assert.equal(classes(marquee, 'home', 'esg-marquee').length, 1);
+  assert.match(header(marquee), /window\.esgMq/, 'the header repeats and scrolls the strip');
+  assert.doesNotMatch(header(marquee), /window\.esgHl/, 'no highlight script without a highlight style');
+});
+
+test('larger layouts: slideshow hero, transparent header, bento, collage', async () => {
+  const { imageAssignment } = await import('../src/generation/exporter.js');
+  const sections = ['about', 'features', 'services', 'gallery', 'reviews'];
+  const build = (layout) => buildSite(sanitizeSpec({ layout, sections }), sampleSite()).docs;
+  const roles = (docs, role) => [...docs[role].marks.values()].map((m) => m.slot).filter(Boolean);
+  const json = (docs, role) => JSON.stringify(docs[role].doc);
+
+  // Slideshow: a gallery slot on the hero background, filled with the hero image then 3 other photos, cropped like the hero
+  const slideshow = build({ hero: 'slideshow' });
+  const heroEl = slideshow.home.doc.content[0];
+  assert.equal(heroEl.settings.background_background, 'slideshow');
+  assert.equal(heroEl.settings.background_slideshow_ken_burns, 'yes');
+  const slot = analyzeDocument(slideshow.home.doc, { prefix: 'home' }).slots.find((s) => s.key === 'background_slideshow_gallery');
+  assert.equal(slot.kind, 'gallery');
+  assert.equal(slideshow.home.marks.get(slot.id).slot, 'slideshow');
+  const images = [{ id: 1, role: 'hero_home' }, ...[2, 3, 4, 5, 6].map((id) => ({ id, role: '' })), { id: 7, role: 'logo' }].map((i) => ({ ...i, mime: 'image/jpeg' }));
+  const exported = new Map(images.map((i) => [i.id, { name: `p${i.id}.webp`, url: `u${i.id}`, alt: '' }]));
+  const needed = new Set();
+  const assigned = imageAssignment({ images, services: [], settings: {} }, { key: 'home' }, [slot], { [slot.id]: 'slideshow' }, exported, needed);
+  assert.deepEqual(assigned[slot.id].map((i) => i.url), ['u1', 'u2', 'u3', 'u4'], 'hero image first, 4 photos at most');
+  assert.equal(needed.size, 4, 'all of them cropped to the hero size');
+
+  // Transparent header: the first photo section of each page is marked, the header CSS lies over it
+  const plain = build({});
+  assert.doesNotMatch(Object.keys(plain).map((r) => json(plain, r)).join(), /esg-under/, 'no mark with the other headers');
+  const transparent = build({ header: 'transparent', hero: 'center', subheader: 'photo' });
+  for (const role of ['home', 'about', 'services', 'gallery', 'contact', 'single_post']) assert.equal(transparent[role].doc.content[0].settings.css_classes, 'esg-under', `${role}: first section under the header`);
+  assert.match(json(transparent, 'header'), /body:has\(\.esg-under\) \.esg-header\{position:absolute!important/);
+  assert.doesNotMatch(json(build({ header: 'transparent', subheader: 'plain' }), 'about'), /esg-under/, 'no photo on top: a normal header');
+
+  // Bento: one large tile on a photo + three compact cards
+  const bento = build({ features: 'bento' });
+  const features = bento.home.doc.content[2];
+  assert.equal((JSON.stringify(features).match(/"background_image":\{"url":"https:\/\/template\.invalid/g) || []).length, 1, 'one photo tile');
+  assert.ok(roles(bento, 'home').includes('photo'));
+  assert.equal((JSON.stringify(features).match(/"widgetType":"icon-box"/g) || []).length, 4);
+  assert.equal((JSON.stringify(features).match(/"css_classes":"esg-card"/g) || []).length, 3, 'three cards');
+
+  // Collage: two photos, the smaller one cut out by a border of the section color
+  const collage = build({ about: 'collage' });
+  const about = collage.home.doc.content[1];
+  const photos = JSON.stringify(about).match(/"widgetType":"image"/g) || [];
+  assert.equal(photos.length, 2);
+  assert.match(JSON.stringify(about), new RegExp(`"image_border_color":"${about.settings.background_color}"`));
+});
+
+test('templates of a category vary the order of the Home sections', async () => {
+  const { DIRECTIONS, designPlan } = await import('../src/templates/directions.js');
+  const direction = DIRECTIONS.find((d) => d.id === 'corporate');
+  const saved = [];
+  for (let i = 0; i < 3; i++) {
+    const plan = designPlan(direction, saved);
+    saved.push({ style: { ...plan.style, fonts: plan.fonts }, layout: plan.layout, sections: plan.sections });
+  }
+  const required = (s) => s.sections.filter((x) => ['about', 'features', 'services', 'gallery', 'reviews'].includes(x)).join();
+  assert.equal(required(saved[0]), 'about,features,services,gallery,reviews', 'the first template follows the recommended order');
+  assert.equal(new Set(saved.map(required)).size, 3, 'the next ones change it');
+});
+
+test('section backgrounds follow the rhythm of the template', async () => {
+  const { DECISION_WEIGHTS } = await import('../src/templates/directions.js');
+  const { STYLE_OPTIONS, LAYOUTS } = await import('../src/templates/spec.js');
+  for (const k of Object.keys(STYLE_OPTIONS)) assert.ok(DECISION_WEIGHTS.style[k] > 0, `style.${k} has a weight in the distance between templates`);
+  for (const k of Object.keys(LAYOUTS)) assert.ok(DECISION_WEIGHTS.layout[k] > 0, `layout.${k} has a weight in the distance between templates`);
+
+  // Natural backgrounds: about (page), services (page), why us (tinted), gallery, process, reviews (page)
+  const sections = ['about', 'services', 'features', 'gallery', 'process', 'reviews'];
+  const layout = { hero: 'center', features: 'icons', services: 'cards', testimonials: 'minimal', process: 'timeline' };
+  const build = (style) => buildSite(sanitizeSpec({ style: { cards: 'tinted', ...style }, layout, sections }), sampleSite());
+  const backgrounds = (docs, role = 'home') => docs[role].doc.content.slice(1).map((el) => el.settings.background_color);
+  const { background, primary } = sanitizeSpec({}).style.colors;
+  const W = '#FFFFFF';
+
+  assert.deepEqual(backgrounds(build({}).docs), [W, W, background, W, W, W], 'fixed: the background of each layout');
+
+  const alternate = build({ rhythm: 'alternate' }).docs;
+  assert.deepEqual(backgrounds(alternate), [W, background, W, background, W, background], 'alternate: never twice the same');
+  const about = backgrounds(alternate, 'about').slice(1);
+  for (let i = 1; i < about.length; i++) assert.notEqual(about[i], about[i - 1], `about: sections ${i} and ${i + 1} on different backgrounds`);
+  // The services cards (tinted look) now stand on a tinted section: they turn white instead of disappearing
+  const services = JSON.stringify(alternate.home.doc.content[2]);
+  assert.match(services, /"css_classes":"esg-card esg-zoom"/);
+  assert.doesNotMatch(services, new RegExp(`"background_color":"${tint(primary, 0.93)}"`), 'no tinted card on the tinted section');
+
+  const lines = build({ rhythm: 'lines' }).docs;
+  const content = lines.home.doc.content.slice(1);
+  assert.ok(content.every((el) => el.settings.background_color === '#FFFFFF'), 'lines: every plain section on the page color');
+  assert.equal(content.filter((el) => el.settings.border_width?.top === '1').length, content.length - 1, 'a thin line between each pair of neighbours');
+});
+
+test('entrance animations, card hover and shaped band edges follow the template', () => {
+  const sections = ['about', 'stats', 'features', 'services', 'gallery', 'reviews'];
+  const build = (style, layout = {}) => buildSite(sanitizeSpec({ style, layout: { features: 'icons', testimonials: 'cards', ...layout }, sections }), sampleSite()).docs;
+  const home = (docs) => JSON.stringify(docs.home.doc);
+  const css = (docs) => JSON.stringify(docs.header.doc);
+
+  const base = build({});
+  assert.match(home(base), /"animation":"fadeInUp"/, 'default: rising cards');
+  assert.match(css(base), /\.esg-card:hover\{transform:translateY\(-6px\)\}/, 'default: cards rise on hover');
+  assert.doesNotMatch(home(base), /shape_divider_top/, 'default: only the hero has a shaped edge');
+
+  assert.doesNotMatch(home(build({ motion: 'none' })), /"animation"/, 'no entrance animation');
+  assert.match(home(build({ motion: 'zoom' })), /"animation":"zoomIn"/);
+  const fade = home(build({ motion: 'fade' }));
+  assert.match(fade, /"animation":"fadeIn","animation_delay":\d+,"animation_duration":"slow"/, 'slow fade, still staggered');
+
+  const glow = css(build({ hover: 'glow' }));
+  assert.match(glow, /\.esg-card:hover\{box-shadow:0 0 0 2px #F2A541/, 'ring of the secondary color');
+  assert.doesNotMatch(glow, /translateY\(-6px\)/);
+  assert.doesNotMatch(css(build({ hover: 'still' })), /\.esg-card:hover\{/, 'still cards');
+
+  // The stats band sits between the "about" row and the "why choose us" cards (both plain sections)
+  const edged = build({ edges: 'all' }, { divider: 'waves', stats: 'band' }).home.doc.content;
+  const statsBand = edged.find((el) => el.settings.background_gradient_type === 'linear');
+  assert.equal(statsBand.settings.shape_divider_top, 'waves');
+  assert.equal(statsBand.settings.shape_divider_top_color, '#FFFFFF', 'top edge in the color of the section above');
+  assert.equal(statsBand.settings.shape_divider_bottom_color, sanitizeSpec({}).style.colors.background, 'bottom edge in the color of the section below');
+  assert.ok(statsBand.settings.shape_divider_top_height.size <= 48, 'band edges stay low');
+  assert.doesNotMatch(home(build({ edges: 'all' }, { divider: 'none', stats: 'band' })), /shape_divider_top/, 'straight edges: none on the bands');
 });
 
 test('buildSite: structure required by the prompt', () => {

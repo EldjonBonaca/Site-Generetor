@@ -26,17 +26,30 @@ export const ICONS = [
 
 /** Layout variants of each section (the first value is the default). */
 export const LAYOUTS = {
-  header: ['classic', 'centered', 'topbar', 'bold'],
-  hero: ['center', 'left', 'split', 'card', 'bottom', 'editorial'],
-  about: ['image-left', 'image-right', 'wide', 'badge'],
-  features: ['icons', 'cards', 'list'],
+  // "transparent": over the hero / banner photos, with white links (a normal header on the pages without a photo on top)
+  header: ['classic', 'centered', 'topbar', 'bold', 'transparent'],
+  // "slideshow": centered text over a slideshow of the hero image and other photos
+  hero: ['center', 'left', 'split', 'card', 'bottom', 'editorial', 'slideshow'],
+  // "collage": a large photo with a smaller one overlapping its corner
+  about: ['image-left', 'image-right', 'wide', 'badge', 'collage'],
+  // "bento": the first strength large over a photo, the other three as compact cards beside it
+  features: ['icons', 'cards', 'list', 'bento'],
   cta: ['banner', 'split'],
   services: ['cards', 'boxed', 'overlay', 'list'],
   testimonials: ['cards', 'minimal', 'band', 'quote'],
   contact: ['split', 'stacked'],
   footer: ['dark', 'light', 'brand'],
   gallery: ['3', '4'],
-  divider: ['curve', 'tilt', 'waves', 'none'],
+  // Bottom edge of the hero and the banners (Elementor shape dividers; "none": straight)
+  divider: ['curve', 'tilt', 'waves', 'none', 'curve-asymmetrical', 'opacity-tilt', 'wave-brush', 'mountains', 'triangle', 'arrow', 'zigzag'],
+  // Banner of the inner pages: title over a photo, title on a tinted band (no photo), or title beside a photo
+  subheader: ['photo', 'plain', 'split'],
+  // Key numbers: on a colored band, in a row under thin lines, or in cards
+  stats: ['band', 'inline', 'cards'],
+  // How we work: numbered cards, a horizontal timeline, or a vertical timeline beside the title
+  process: ['cards', 'timeline', 'vertical'],
+  // Strip of guarantees: centered on one line, or scrolling endlessly (marquee)
+  highlights: ['strip', 'marquee'],
 };
 
 /**
@@ -79,6 +92,19 @@ export function sanitizeSections(value, fallback = DEFAULT_SECTIONS) {
  *   images     rounded, square, framed (offset colored block behind the photo), or arch (rounded top)
  *   titleCase  normal or uppercase titles
  *   kicker     small label above the titles: plain text, a tinted pill, or with a thin line beside it
+ *   fill       colored bands (key numbers, guarantees, review band, call to action, badge, footer):
+ *              primary -> dark gradient, flat primary, deep dark, or a radial glow
+ *   motion     entrance animation of cards and blocks: rising, slow fade, sliding from the side, zoom, or none
+ *   hover      cards under the mouse: rising, a colored ring, a colored bar along the bottom, or still
+ *   edges      shaped edges (the divider of the hero) only on the hero and banners, or also on the colored bands
+ *   rhythm     backgrounds of the plain sections of Home and About: the one of each section layout ("fixed"),
+ *              light and tinted alternating so that two neighbours never share one ("alternate"), or all
+ *              on the page color with a thin line between neighbours ("lines")
+ *   highlight  last word of the hero and section titles: plain, italic, in the accent color, under a
+ *              marker stroke, or outlined (wrapped at runtime by a script of the header)
+ *   decor      signature details of the direction: a fine grid on the tinted sections + corner brackets
+ *              on the photos, a thin inset frame on the photos, a soft blob behind the photos, a drop
+ *              cap on the About text, or the business name huge at the bottom of the footer
  */
 export const STYLE_OPTIONS = {
   theme: ['light', 'dark'],
@@ -90,6 +116,13 @@ export const STYLE_OPTIONS = {
   images: ['rounded', 'square', 'framed', 'arch'],
   titleCase: ['normal', 'upper'],
   kicker: ['plain', 'pill', 'dash'],
+  fill: ['gradient', 'flat', 'deep', 'radial'],
+  motion: ['rise', 'fade', 'slide', 'zoom', 'none'],
+  hover: ['lift', 'glow', 'underline', 'still'],
+  edges: ['hero', 'all'],
+  rhythm: ['fixed', 'alternate', 'lines'],
+  highlight: ['none', 'italic', 'color', 'marker', 'outline'],
+  decor: ['none', 'grid', 'frame', 'blob', 'dropcap', 'wordmark'],
 };
 
 export const SPACINGS = ['normal', 'compact', 'airy'];
@@ -285,13 +318,15 @@ export function describeSpec(spec) {
     scale: { normal: 'titoli di dimensione normale', large: 'titoli grandi', xl: 'titoli molto grandi' },
     images: { rounded: 'immagini con angoli arrotondati', square: 'immagini squadrate', framed: 'immagini con cornice colorata sfalsata', arch: 'immagini ad arco (bordo superiore arrotondato)' },
     kicker: { plain: 'etichette semplici sopra i titoli', pill: 'etichette a pillola sopra i titoli', dash: 'etichette con una linea sottile sopra i titoli' },
+    fill: { gradient: 'fasce colorate sfumate', flat: 'fasce colorate in tinta unita', deep: 'fasce scure', radial: 'fasce colorate con sfumatura radiale' },
   };
+  const optional = [spec.sections.includes('stats') && `numeri chiave ${l.stats}`, spec.sections.includes('process') && `come lavoriamo ${l.process}`].filter(Boolean);
   return [
     spec.description,
-    `Aspetto: ${['theme', 'buttons', 'cards', 'titles', 'scale', 'images', 'kicker'].map((k) => LOOK[k][st[k]]).join(', ')}, titoli allineati ${st.align === 'left' ? 'a sinistra' : 'al centro'}${st.titleCase === 'upper' ? ' e in maiuscolo' : ''}.`,
+    `Aspetto: ${['theme', 'buttons', 'cards', 'titles', 'scale', 'images', 'kicker', 'fill'].map((k) => LOOK[k][st[k]]).join(', ')}, titoli allineati ${st.align === 'left' ? 'a sinistra' : 'al centro'}${st.titleCase === 'upper' ? ' e in maiuscolo' : ''}.`,
     `Colori: primario ${colors.primary}, secondario ${colors.secondary}, accento ${colors.accent}, titoli ${colors.heading}, testo ${colors.text}.`,
     `Font: ${fonts.heading} (titoli), ${fonts.body} (testi).`,
-    `Layout: header ${l.header}, hero ${l.hero} (bordo inferiore ${l.divider}), chi siamo ${l.about}, perché sceglierci ${l.features}, call to action ${l.cta}, servizi ${l.services}, recensioni ${l.testimonials} (senza foto dei clienti), contatti ${l.contact}, footer ${l.footer}.`,
+    `Layout: header ${l.header}, hero ${l.hero} (bordo inferiore ${l.divider}), banner delle pagine ${l.subheader}, chi siamo ${l.about}, perché sceglierci ${l.features}, call to action ${l.cta}, servizi ${l.services}, recensioni ${l.testimonials} (senza foto dei clienti), ${optional.map((x) => `${x}, `).join('')}contatti ${l.contact}, footer ${l.footer}.`,
     `Sezioni della Home dopo l'hero: ${describeSections(spec.sections)}.`,
     `Tono di voce: ${spec.tone}.`,
   ]
