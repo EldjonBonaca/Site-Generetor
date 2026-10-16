@@ -242,7 +242,7 @@ function ProviderForm({ types, provider, onClose, onSaved }) {
             {(id) => (
               <div className="relative">
                 <KeyRound className="pointer-events-none absolute top-2.5 left-3 size-4 text-slate-400" />
-                <Input id={id} type="password" autoComplete="off" value={form.api_key} onChange={set('api_key')} placeholder={meta.keyPlaceholder} className="pl-9 font-mono" />
+                <Input id={id} type="password" autoComplete="new-password" data-1p-ignore data-lpignore="true" value={form.api_key} onChange={set('api_key')} placeholder={meta.keyPlaceholder} className="pl-9 font-mono" />
               </div>
             )}
           </Field>
