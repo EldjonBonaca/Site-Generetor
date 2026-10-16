@@ -97,6 +97,7 @@ const VARIANT_LABELS = {
   'hero.split': 'Text beside a photo',
   'hero.card': 'Text in a card over a photo',
   'hero.bottom': 'Big title at the bottom of a photo',
+  'hero.editorial': 'Big centered title above a wide photo',
   'divider.curve': 'Curve',
   'divider.tilt': 'Slant',
   'divider.waves': 'Waves',
@@ -104,6 +105,7 @@ const VARIANT_LABELS = {
   'about.image-left': 'Image on the left',
   'about.image-right': 'Image on the right',
   'about.wide': 'Text above a wide photo',
+  'about.badge': 'Photo with a key figure badge',
   'features.icons': 'Cards on a light background',
   'features.cards': 'Cards over a photo',
   'features.list': 'List in two columns beside the title',
@@ -112,9 +114,11 @@ const VARIANT_LABELS = {
   'services.cards': 'Outlined cards',
   'services.boxed': 'Boxed cards on a tinted background',
   'services.overlay': 'Text over the photos',
+  'services.list': 'Numbered rows with photo',
   'testimonials.cards': 'Cards',
   'testimonials.minimal': 'Minimal',
   'testimonials.band': 'Colored band',
+  'testimonials.quote': 'One big quote + two small',
   'contact.split': 'Details beside the form',
   'contact.stacked': 'Details above the form',
   'footer.dark': 'Dark',
@@ -125,7 +129,7 @@ const VARIANT_LABELS = {
 };
 
 /** Look of the whole site (spec.style options). */
-export const STYLE_LABELS = { theme: 'Theme', buttons: 'Buttons', cards: 'Cards', titles: 'Section titles', align: 'Title alignment', scale: 'Title size', images: 'Images', titleCase: 'Title case' };
+export const STYLE_LABELS = { theme: 'Theme', buttons: 'Buttons', cards: 'Cards', titles: 'Section titles', align: 'Title alignment', scale: 'Title size', images: 'Images', titleCase: 'Title case', kicker: 'Labels above titles' };
 const STYLE_VALUE_LABELS = {
   'theme.light': 'Light pages',
   'theme.dark': 'Dark pages',
@@ -147,8 +151,12 @@ const STYLE_VALUE_LABELS = {
   'images.rounded': 'Rounded corners',
   'images.square': 'Square corners',
   'images.framed': 'Offset color frame',
+  'images.arch': 'Arch (rounded top)',
   'titleCase.normal': 'Normal',
   'titleCase.upper': 'Uppercase',
+  'kicker.plain': 'Plain text',
+  'kicker.pill': 'Pill',
+  'kicker.dash': 'With a thin line',
 };
 export const styleLabel = (t, key, value) => t(STYLE_VALUE_LABELS[`${key}.${value}`] || value);
 

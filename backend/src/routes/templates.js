@@ -164,6 +164,8 @@ router.post('/template-categories/:cid/templates/generate', async (req, res) => 
     let analysisTokens = 0;
     if (!profile) ({ profile, tokens: analysisTokens } = await analyzeAndSave(provider, row, cat));
     const existing = all('SELECT name, spec_json FROM site_templates WHERE category_id = ? ORDER BY id', cat.id).map((t) => ({ name: t.name, ...sanitizeSpec(parseJson(t.spec_json, {})) }));
+    // Templates of the other categories (latest 80): the new one also differs from the rest of the library
+    const library = all('SELECT spec_json FROM site_templates WHERE category_id != ? ORDER BY id DESC LIMIT 80', cat.id).map((t) => sanitizeSpec(parseJson(t.spec_json, {})));
     const list = (v, max) => (Array.isArray(v) ? v.map(String).slice(0, max) : []);
     const { spec, tokens, direction } = await generateTemplateSpec(provider, {
       category: cat,
@@ -174,6 +176,7 @@ router.post('/template-categories/:cid/templates/generate', async (req, res) => 
       exclude: list(req.body?.exclude, 20),
       avoidColors: list(req.body?.avoidColors, 20).filter((c) => /^#[0-9a-f]{6}$/i.test(c)),
       profile,
+      library,
     });
     res.json({
       spec,

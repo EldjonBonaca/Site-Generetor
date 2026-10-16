@@ -69,6 +69,9 @@ test('buildSite: every variant builds valid documents whose marks match the anal
     { style: { theme: 'dark', buttons: 'square', cards: 'accent', titles: 'bar', align: 'left', scale: 'xl', images: 'square', titleCase: 'upper' }, layout: { header: 'bold', hero: 'bottom', about: 'wide', features: 'list', services: 'overlay', testimonials: 'band', footer: 'brand', divider: 'tilt' } },
     { style: { theme: 'light', buttons: 'pill', cards: 'tinted', titles: 'plain', scale: 'large', images: 'framed' }, layout: { hero: 'card', about: 'image-right', features: 'cards', services: 'cards', testimonials: 'cards', footer: 'light', divider: 'waves' } },
     { style: { theme: 'dark', cards: 'outline', titles: 'line', images: 'framed' }, layout: { header: 'topbar', hero: 'split', features: 'icons', services: 'boxed', contact: 'stacked', footer: 'dark', divider: 'none' } },
+    // Elegant variants: editorial hero, photo badge, numbered service rows, big quote, arched photos, labels
+    { style: { images: 'arch', kicker: 'dash', titles: 'plain' }, layout: { hero: 'editorial', about: 'badge', services: 'list', testimonials: 'quote' }, sections: ['about', 'stats', 'features', 'services', 'gallery', 'reviews'] },
+    { style: { theme: 'dark', images: 'arch', kicker: 'pill', align: 'left' }, layout: { hero: 'split', about: 'badge', services: 'list', testimonials: 'quote' } },
   ];
   for (const v of variants) {
     const spec = sanitizeSpec(v);
@@ -236,6 +239,26 @@ test('templates of the same category get really different designs', async () => 
   // The builder really renders the differences
   const docs = saved.map((spec) => JSON.stringify(buildSite(spec, sampleSite()).docs.home.doc));
   assert.equal(new Set(docs).size, 5);
+});
+
+test('the first templates of different categories do not look the same', async () => {
+  const provider = new MockProvider({});
+  const { sanitizeProfile } = await import('../src/templates/industry.js');
+  const profile = sanitizeProfile({ business: 'Artigiani', directions: ['corporate', 'technical', 'industrial', 'minimal', 'natural'] });
+  const library = [];
+  for (const name of ['Idraulici', 'Elettricisti', 'Imprese edili', 'Serramenti']) {
+    const { spec } = await generateTemplateSpec(provider, { category: { name }, existing: [], profile, library });
+    library.push(spec);
+  }
+  assert.equal(new Set(library.map((s) => s.direction)).size, 4, 'four categories, four directions');
+  assert.equal(new Set(library.map((s) => s.style.fonts.heading)).size, 4, 'and four title fonts');
+
+  // The badge shows the first key figure, shared with the key figures band
+  const spec = sanitizeSpec({ layout: { about: 'badge' }, sections: ['about', 'stats', 'features', 'services', 'gallery', 'reviews'] });
+  const { marks } = buildSite(spec, sampleSite()).docs.home;
+  assert.equal([...marks.values()].filter((m) => m.share === 'stat1.value').length, 2);
+  // Site-wide finishing CSS travels with the header
+  assert.match(JSON.stringify(buildSite(spec, sampleSite()).docs.header.doc), /esg-card:hover/);
 });
 
 test('industry analysis of a category drives directions and sections of its templates', async () => {

@@ -2,10 +2,11 @@
  * Visual sketch of a template (its Home page) drawn from the spec: colors, fonts, the look of the
  * site (theme, buttons, cards, titles, images), the layout of every section and the Home sections
  * in the order of the template, like the site
- * builder (backend/src/templates/builder.js). Fonts are only named (no request to Google Fonts)
- * and photos are drawn as gradients: the real site uses the project images.
+ * builder (backend/src/templates/builder.js). The fonts of the template are loaded from Google
+ * Fonts (like Elementor does on the site); photos are drawn as gradients: the real site uses the
+ * project images.
  */
-import { Fragment } from 'react';
+import { Fragment, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, ImageIcon, Plus, Quote, Star } from 'lucide-react';
 import { cx } from './ui.jsx';
 
@@ -44,7 +45,27 @@ const Edge = ({ shape, color }) => {
   );
 };
 
+/** Load a Google Font once (one <link> per family). */
+const loadedFonts = new Set();
+const SINGLE_WEIGHT = new Set(['Marcellus', 'Bebas Neue', 'Prata', 'Tenor Sans', 'DM Serif Display']);
+function loadFont(family) {
+  if (!family || loadedFonts.has(family) || typeof document === 'undefined') return;
+  loadedFonts.add(family);
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  // Google Fonts refuses a weight a family does not have: these ones only have the regular weight
+  const weights = SINGLE_WEIGHT.has(family) ? '' : ':wght@400;700';
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family).replace(/%20/g, '+')}${weights}&display=swap`;
+  document.head.appendChild(link);
+}
+
 export function TemplatePreview({ spec, compact = false, className }) {
+  const heading = spec?.style?.fonts?.heading;
+  const bodyFont = spec?.style?.fonts?.body;
+  useEffect(() => {
+    loadFont(heading);
+    loadFont(bodyFont);
+  }, [heading, bodyFont]);
   if (!spec) return null;
   const st = spec.style;
   const { colors: c, fonts, radius, headingWeight } = st;
@@ -56,7 +77,8 @@ export function TemplatePreview({ spec, compact = false, className }) {
     : { bg: '#fff', alt: c.background, card: '#fff', tint: mix(c.primary, '#ffffff', 0.93), heading: c.heading, text: c.text, kicker: c.primary, border: mix(c.heading, '#ffffff', 0.86) };
   const r = Math.min(radius, 10);
   const btnR = st.buttons === 'pill' ? 999 : st.buttons === 'square' ? 0 : r;
-  const imgR = st.images === 'rounded' ? Math.max(r, 4) : 0;
+  const imgR = st.images === 'rounded' ? Math.max(r, 4) : st.images === 'arch' ? Math.max(r, 4) : 0;
+  const arch = st.images === 'arch' ? '999px 999px 0 0' : null;
   const scale = { normal: 1, large: 1.12, xl: 1.28 }[st.scale] || 1;
   const upper = st.titleCase === 'upper' ? 'uppercase' : 'none';
   const left = st.align === 'left' || st.titles === 'bar';
@@ -73,10 +95,10 @@ export function TemplatePreview({ spec, compact = false, className }) {
       {label}
     </span>
   );
-  const Photo = ({ className: cls, style, frame }) => (
+  const Photo = ({ className: cls, style, frame, wide }) => (
     <div
       className={cx('flex shrink-0 items-center justify-center', cls)}
-      style={{ background: `linear-gradient(135deg, ${c.dark}, ${c.primary})`, borderRadius: imgR, boxShadow: frame && st.images === 'framed' ? `5px 5px 0 ${c.secondary}` : undefined, ...style }}
+      style={{ background: `linear-gradient(135deg, ${c.dark}, ${c.primary})`, borderRadius: frame && arch && !wide ? arch : imgR, boxShadow: frame && st.images === 'framed' ? `5px 5px 0 ${c.secondary}` : undefined, ...style }}
     >
       <ImageIcon className="size-4 text-white/40" />
     </div>
@@ -96,8 +118,13 @@ export function TemplatePreview({ spec, compact = false, className }) {
   const title = (kicker, text, { light = false, center = !left } = {}) => (
     <div className={cx('flex flex-col gap-0.5', center ? 'items-center text-center' : 'items-start')}>
       {kicker && (
-        <p className="text-[6px] font-bold tracking-wider uppercase" style={{ color: light ? c.secondary : ink.kicker }}>
+        <p
+          className={cx('flex items-center gap-1 text-[6px] font-bold tracking-wider uppercase', st.kicker === 'pill' && 'rounded-full px-1.5 py-px')}
+          style={{ color: light ? c.secondary : ink.kicker, background: st.kicker === 'pill' ? (light ? '#ffffff24' : dark ? `${c.secondary}29` : mix(c.primary, '#ffffff', 0.88)) : undefined }}
+        >
+          {st.kicker === 'dash' && <span className="h-px w-2.5" style={{ background: 'currentColor' }} />}
           {kicker}
+          {st.kicker === 'dash' && center && <span className="h-px w-2.5" style={{ background: 'currentColor' }} />}
         </p>
       )}
       <p
@@ -136,7 +163,21 @@ export function TemplatePreview({ spec, compact = false, className }) {
   );
   const photoBg = (overlay) => ({ background: `${overlay}, linear-gradient(135deg, ${c.primary}, ${c.dark})` });
   let hero;
-  if (l.hero === 'split') {
+  if (l.hero === 'editorial') {
+    hero = (
+      <div className="flex flex-col items-center gap-3 px-4 py-6 text-center" style={{ background: ink.alt }}>
+        <div className="w-4/5 space-y-1">
+          <div className="flex justify-center">{heroKicker(ink.kicker)}</div>
+          {heroTitle(ink.heading, 15)}
+          <div className="flex justify-center gap-1.5 pt-1">
+            {btn(mainBg, copy.heroButton)}
+            {btn(ink.heading, copy.heroButton2, true)}
+          </div>
+        </div>
+        <Photo className="h-20 w-full" wide />
+      </div>
+    );
+  } else if (l.hero === 'split') {
     hero = (
       <div className="flex items-center gap-3 px-4 py-6" style={{ background: ink.alt }}>
         <div className="flex-1 space-y-1">
@@ -199,7 +240,19 @@ export function TemplatePreview({ spec, compact = false, className }) {
       </div>
     ) : (
       <div className={cx('flex items-center gap-3 px-4', pad, l.about === 'image-right' && 'flex-row-reverse')} style={{ background: ink.bg }}>
-        <Photo className="h-16 w-2/5" frame />
+        {l.about === 'badge' ? (
+          <div className="relative w-2/5 shrink-0 pb-3">
+            <Photo className="h-16 w-full" frame />
+            <div className="absolute bottom-0 left-2 px-2 py-1 shadow-md" style={{ background: `linear-gradient(135deg, ${c.primary}, ${c.dark})`, borderRadius: Math.min(r, 6) }}>
+              <p className="text-[9px] leading-none text-white" style={head}>
+                {copy.stats[0].value}
+              </p>
+              <p className="text-[5px] text-white/80">{copy.stats[0].label}</p>
+            </div>
+          </div>
+        ) : (
+          <Photo className="h-16 w-2/5" frame />
+        )}
         {aboutText}
       </div>
     );
@@ -265,6 +318,22 @@ export function TemplatePreview({ spec, compact = false, className }) {
   const services = (
     <div className={cx('px-4', pad)} style={{ background: boxed ? ink.alt : ink.bg }}>
       {title(copy.servicesKicker, copy.servicesTitle)}
+      {l.services === 'list' ? (
+        <div className="mt-2 space-y-2">
+          {[0, 1].map((i) => (
+            <div key={i} className={cx('flex items-center gap-2 border-b pb-2', i % 2 && 'flex-row-reverse')} style={{ borderColor: ink.border }}>
+              <Photo className="h-10 w-2/5" style={{ borderRadius: imgR }} />
+              <div className="flex-1 space-y-0.5">
+                <p className="text-[6px] font-bold" style={{ color: ink.kicker }}>
+                  0{i + 1}
+                </p>
+                <div className="h-1.5 w-2/3 rounded-full" style={{ background: ink.heading }} />
+                <Lines n={2} color={ink.text} />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div className="mt-2 grid grid-cols-3 gap-2">
         {[0, 1, 2].map((i) =>
           l.services === 'overlay' ? (
@@ -288,6 +357,7 @@ export function TemplatePreview({ spec, compact = false, className }) {
           )
         )}
       </div>
+      )}
     </div>
   );
 
@@ -296,9 +366,20 @@ export function TemplatePreview({ spec, compact = false, className }) {
   const cards = l.testimonials === 'cards';
   const reviews = (
     <div className={cx('px-4', pad)} style={band ? { background: `linear-gradient(135deg, ${c.primary}, ${c.dark})` } : { background: cards ? ink.alt : ink.bg }}>
-      {title(copy.reviewsKicker, copy.reviewsTitle, { light: band })}
-      <div className="mt-2 grid grid-cols-3 gap-2">
-        {copy.reviews.map((rv, i) => (
+      {title(copy.reviewsKicker, copy.reviewsTitle, { light: band, center: l.testimonials === 'quote' || !left })}
+      {l.testimonials === 'quote' && (
+        <div className="mx-auto mt-2 flex w-4/5 flex-col items-center gap-1 text-center">
+          <Quote className="size-3.5" style={{ color: c.secondary }} fill={c.secondary} stroke="none" />
+          <p className="text-[8px] leading-snug italic" style={{ ...head, fontWeight: 400 }}>
+            {copy.reviews[0].text}
+          </p>
+          <span className="text-[6px] font-semibold" style={{ ...head }}>
+            {copy.reviews[0].name}
+          </span>
+        </div>
+      )}
+      <div className={cx('mt-2 grid gap-2', l.testimonials === 'quote' ? 'grid-cols-2 border-t pt-2' : 'grid-cols-3')} style={l.testimonials === 'quote' ? { borderColor: ink.border } : undefined}>
+        {(l.testimonials === 'quote' ? copy.reviews.slice(1) : copy.reviews).map((rv, i) => (
           <div key={i} className={cx('flex flex-col gap-1 p-1.5', cards ? 'items-start' : 'items-center')} style={cards ? card('alt') : undefined}>
             <Quote className="size-2.5" style={{ color: c.secondary }} fill={c.secondary} stroke="none" />
             <span className="flex gap-px">

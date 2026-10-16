@@ -32,10 +32,11 @@ const LOOK_LABELS = {
   scale: 'title size',
   images: 'image style',
   titleCase: 'title case',
+  kicker: 'label above the titles',
 };
 
 /** Design direction block: what the generator decided and what the AI must avoid. */
-function directionInstructions(category, direction, plan, existing, avoidColors, profile) {
+function directionInstructions(category, direction, plan, existing, avoidColors, profile, library = []) {
   const st = plan.style;
   const look = Object.entries(LOOK_LABELS)
     .map(([k, label]) => `${label} "${st[k]}"`)
@@ -52,6 +53,9 @@ function directionInstructions(category, direction, plan, existing, avoidColors,
   const colors = taken.length
     ? `\nPrimary colors already taken in this category: ${taken.join(', ')}. Choose a "primary" of a clearly different color family (hue at least 40° away, or a neutral if they are all colorful), and a "secondary" that is different too — while staying credible for "${category.name}".`
     : '';
+  // Palettes of the other categories: a soft hint, so the library does not look all the same
+  const elsewhere = [...new Set(library.map((s) => s.style?.colors?.primary).filter(Boolean))].slice(0, 12);
+  const libraryColors = elsewhere.length ? `\nPrimary colors of templates of other categories (prefer a different one when it is credible for "${category.name}"): ${elsewhere.join(', ')}.` : '';
   const industry = profile
     ? `
 
@@ -69,7 +73,7 @@ Sections of the Home page after the hero, in this order: ${sections}.${
     st.theme === 'dark'
       ? '\nTheme "dark": the pages have a dark background ("dark" color, keep it very deep) with white texts; "heading" and "text" are only used on white elements (contact form), keep them dark.'
       : ''
-  }${others}${colors}
+  }${others}${colors}${libraryColors}
 Write the "description" of the concept and the "tone" so that they match this direction.`;
 }
 
@@ -124,7 +128,7 @@ const LABELS = { it: '(nessuna)', en: '(none)' };
  * Final prompt for a category template.
  * @param {object} p  { category, instructions, language, direction, plan, existing: spec[], avoidColors: string[] }
  */
-export function buildTemplatePrompt({ category, instructions = '', language = 'it', direction = null, plan = null, existing = [], avoidColors = [], profile = null }) {
+export function buildTemplatePrompt({ category, instructions = '', language = 'it', direction = null, plan = null, existing = [], avoidColors = [], profile = null, library = [] }) {
   const none = LABELS[language] || LABELS.en;
   const languageLabel = languageName(language);
   const vars = {
@@ -134,7 +138,7 @@ export function buildTemplatePrompt({ category, instructions = '', language = 'i
     LINGUA: languageLabel,
   };
   const body = TEMPLATE_PROMPT.content.replace(/\{\{\s*([A-Z_]+)\s*\}\}/g, (m, name) => (name in vars ? vars[name] : m));
-  const design = direction && plan ? directionInstructions(category, direction, plan, existing, avoidColors, profile) : '';
+  const design = direction && plan ? directionInstructions(category, direction, plan, existing, avoidColors, profile, library) : '';
   return { prompt: body + design + technicalInstructions(languageLabel, plan?.sections), system: TEMPLATE_SYSTEM_PROMPT };
 }
 
@@ -149,13 +153,14 @@ export function buildTemplatePrompt({ category, instructions = '', language = 'i
  *   - exclude         directions to avoid (e.g. the drafts just generated and discarded)
  *   - avoidColors     primary colors to avoid (same reason)
  *   - profile         industry analysis of the category (industry.js), if any
+ *   - library         specs of the templates of the other categories (variety across the library)
  *   - rng             random source (tests)
  * @returns {Promise<{ spec, tokens, direction }>}
  */
-export async function generateTemplateSpec(provider, { category, instructions = '', language = 'it', existing = [], direction: requested = '', exclude = [], avoidColors = [], profile = null, rng = Math.random }) {
-  const direction = pickDirection(existing, { requested, exclude, suitable: profile?.directions, rng });
-  const plan = designPlan(direction, existing, rng, profile);
-  const { prompt, system } = buildTemplatePrompt({ category, instructions, language, direction, plan, existing, avoidColors, profile });
+export async function generateTemplateSpec(provider, { category, instructions = '', language = 'it', existing = [], direction: requested = '', exclude = [], avoidColors = [], profile = null, library = [], rng = Math.random }) {
+  const direction = pickDirection(existing, { requested, exclude, suitable: profile?.directions, library, rng });
+  const plan = designPlan(direction, existing, rng, profile, library);
+  const { prompt, system } = buildTemplatePrompt({ category, instructions, language, direction, plan, existing, avoidColors, profile, library });
   const taken = [...existing.map((s) => s.style.colors.primary), ...avoidColors];
   let tokens = 0;
   let note = '';

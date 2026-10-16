@@ -38,7 +38,7 @@ export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
  * Version of the generated structure. Field ids depend on it: a generation made with another
  * version cannot be exported (exporter.js), it has to be generated again.
  */
-export const BUILDER_VERSION = 7;
+export const BUILDER_VERSION = 8;
 
 export const DOC_ROLES = ['home', 'about', 'services', 'gallery', 'contact', 'single_post', 'header', 'footer'];
 
@@ -111,7 +111,9 @@ function createDoc(role, spec, site) {
   const pad = PADDING[st.spacing] || PADDING.normal;
   const scale = SCALE[st.scale] || 1;
   const btnRadius = st.buttons === 'pill' ? 50 : st.buttons === 'square' ? 0 : radius;
-  const imgRadius = st.images === 'rounded' ? Math.max(radius, 6) : 0;
+  // "arch": photos with a rounded top (portrait-like photos only); small rounded corners elsewhere
+  const imgRadius = st.images === 'rounded' ? Math.max(radius, 6) : st.images === 'arch' ? Math.max(radius, 10) : 0;
+  const archCorners = { unit: 'px', top: '1000', right: '1000', bottom: '0', left: '0', isLinked: false };
   const cardRadius = st.buttons === 'square' && st.images !== 'rounded' ? Math.min(radius, 2) : radius;
   // Main buttons: primary color on light pages, the brighter secondary color on dark pages
   const mainButton = ink.dark ? 'secondary' : 'primary';
@@ -205,7 +207,8 @@ function createDoc(role, spec, site) {
   };
   /**
    * Inner container (column / card / row). o: { width, tablet, mobile, maxWidth, row, align, justify, bg, gradient, card,
-   * on ('base' | 'alt' | 'photo': what the card stands on), gap, pad, overflow, anim, slot, service, overlay, minHeightPx, radius }
+   * on ('base' | 'alt' | 'photo': what the card stands on), gap, pad, overflow, anim, slot, service, overlay, minHeightPx, radius,
+   * margin [t, r, b, l] (negative top: overlaps the element above), zIndex, lift (hover), zoom (photo zoom on hover), css }
    */
   const box = (elements, o = {}) => {
     const settings = {
@@ -236,12 +239,16 @@ function createDoc(role, spec, site) {
       Object.assign(settings, { box_shadow_hover_box_shadow_type: 'yes', box_shadow_hover_box_shadow: boxShadow(18, 44, ink.dark ? 0.45 : 0.16) });
     }
     if (o.radius !== undefined) settings.border_radius = corners(o.radius);
+    if (o.margin) Object.assign(settings, { margin: sides(...o.margin), margin_mobile: sides(Math.max(o.margin[0], -40), 0, o.margin[2], Math.min(o.margin[3], 16)) });
+    if (o.zIndex) settings.z_index = o.zIndex;
     if (o.minHeightPx) Object.assign(settings, { min_height: px(o.minHeightPx), min_height_mobile: px(Math.round(o.minHeightPx * 0.8)) });
     if (o.overflow) settings.overflow = 'hidden';
     if (o.anim !== undefined && o.anim !== false) animate(settings, o.anim);
     const el = { id: id(), elType: 'container', isInner: true, settings, elements };
     if (o.slot) photo(settings, el, o);
-    if (o.css) settings.css_classes = o.css;
+    // Cards of a grid rise a little on hover (esg-card), their photo zooms (esg-zoom): CSS of the header
+    const classes = [o.css, o.lift && 'esg-card', o.zoom && 'esg-zoom'].filter(Boolean).join(' ');
+    if (classes) settings.css_classes = classes;
     return el;
   };
   const columns = (count) => ({ 1: 100, 2: 48, 3: 31, 4: 22.5 })[Math.min(4, Math.max(1, count))];
@@ -272,8 +279,26 @@ function createDoc(role, spec, site) {
     if (o.url) mark(el, 'link.url', { fixed: true });
     return el;
   };
-  /** Small label above a title. */
-  const kicker = (text, o = {}) => heading(text, { tag: 'p', size: 13, weight: '700', upper: true, ...o, color: o.color || ink.kicker });
+  /**
+   * Small label above a title, per the template label style: plain, a tinted pill, or with a thin
+   * line beside it ("dash", CSS of the header). o.onDark: on a photo or a dark band.
+   */
+  const kicker = (text, o = {}) => {
+    const el = heading(text, { tag: 'p', size: st.kicker === 'pill' ? 12 : 13, weight: '700', upper: true, ...o, color: o.color || ink.kicker });
+    const align = o.align || 'left';
+    if (st.kicker === 'pill') {
+      Object.assign(el.settings, {
+        _background_background: 'classic',
+        _background_color: o.onDark ? 'rgba(255,255,255,0.14)' : ink.dark ? rgba(c.secondary, 0.16) : tint(c.primary, 0.88),
+        _padding: sides(7, 16, 7, 16),
+        _border_radius: corners(50),
+        _element_width: 'auto',
+        _flex_align_self: align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start',
+      });
+    }
+    if (st.kicker === 'dash') el.settings._css_classes = align === 'center' ? 'esg-kicker-dash esg-kicker-c' : 'esg-kicker-dash';
+    return el;
+  };
   /** Short accent line under a title. */
   const line = (align = 'left', color = c.secondary) => widget('divider', { style: 'solid', weight: px(3), color, width: px(56), align, gap: px(4) });
   const text = (html, o = {}) => {
@@ -317,7 +342,7 @@ function createDoc(role, spec, site) {
     if (!isContactLink(url)) mark(el, 'link.url', { fixed: true });
     return el;
   };
-  /** Image. o: { width (px), mobileWidth (px), height (px, cropped with object-fit), mobileHeight, align, size, round, frame, url, service } */
+  /** Image. o: { width (px), mobileWidth (px), height (px, cropped with object-fit), mobileHeight, align, size, round, frame, wide (no arch), url, service } */
   const picture = (slot, o = {}) => {
     const framed = o.frame && st.images === 'framed';
     const settings = {
@@ -326,7 +351,7 @@ function createDoc(role, spec, site) {
       align: o.align || 'center',
       width: o.width ? px(o.width) : px(100, '%'),
       ...(o.width ? (o.mobileWidth ? { width_mobile: px(o.mobileWidth) } : {}) : { width_mobile: px(100, '%') }),
-      ...(o.round !== false && imgRadius ? { image_border_radius: corners(imgRadius) } : {}),
+      ...(o.round !== false && st.images === 'arch' && !o.wide ? { image_border_radius: archCorners } : o.round !== false && imgRadius ? { image_border_radius: corners(imgRadius) } : {}),
     };
     // "framed": an offset block of the secondary color behind the photo; otherwise a soft shadow
     if (framed) Object.assign(settings, { image_box_shadow_box_shadow_type: 'yes', image_box_shadow_box_shadow: { horizontal: 18, vertical: 18, blur: 0, spread: 0, color: c.secondary } });
@@ -399,6 +424,20 @@ function createDoc(role, spec, site) {
   /** Card of a service: image (same height for every card) + linked title + short text + "read more", or text over the photo ("overlay"). */
   const serviceCard = (service, index, desc, o = {}) => {
     const hint = o.hint || `short description of the service "${service.name}" for its card (1–2 sentences)`;
+    if (spec.layout.services === 'list') {
+      // Numbered row: photo on one side, number + title + text on the other (alternating), thin line below
+      const img = box([picture('service_list', { service: index, height: 300, mobileHeight: 230, url: service.url, size: 'medium_large', wide: true })], { width: 42, tablet: 100, overflow: true, zoom: true, radius: imgRadius });
+      const txt = box(
+        [
+          heading(String(index + 1).padStart(2, '0'), { tag: 'p', size: 15, weight: '700', color: ink.kicker, fixed: true }),
+          heading(service.name, { tag: 'h3', size: 30, url: service.url, fixed: true }),
+          text(desc, { size: 16, hint, max: 170 }),
+          button(`${L.readMore} →`, service.url, { variant: 'link', fixed: true }),
+        ],
+        { width: 52, tablet: 100, gap: 12 }
+      );
+      return box(index % 2 ? [txt, img] : [img, txt], { row: true, justify: 'space-between', gap: 32, anim: o.anim, css: 'esg-svc-row' });
+    }
     if (spec.layout.services === 'overlay') {
       return box(
         [
@@ -421,13 +460,13 @@ function createDoc(role, spec, site) {
           { gap: 10, pad: 26 }
         ),
       ],
-      { width: o.width, card: true, on: o.on, pad: 0, overflow: true, gap: 0, anim: o.anim }
+      { width: o.width, card: true, on: o.on, pad: 0, overflow: true, gap: 0, anim: o.anim, lift: true, zoom: true }
     );
   };
-  /** One review, without photo of the customer: quote mark, 5 stars, text, name and role. o: { align, light } */
+  /** One review, without photo of the customer: quote mark, 5 stars, text, name and role. o: { align, light, big (large serif quote) } */
   const review = (r, i, o = {}) => {
     const align = o.align || 'center';
-    const quote = widget('icon', { selected_icon: { value: 'fas fa-quote-left', library: 'fa-solid' }, view: 'default', primary_color: o.light ? c.secondary : tint(c.secondary, 0.25), size: px(30), align });
+    const quote = widget('icon', { selected_icon: { value: 'fas fa-quote-left', library: 'fa-solid' }, view: 'default', primary_color: o.light ? c.secondary : tint(c.secondary, 0.25), size: px(o.big ? 44 : 30), align });
     const stars = widget('star-rating', { rating_scale: '5', rating: '5', star_style: 'star_fontawesome', stars_color: c.secondary, icon_size: px(16), align });
     const el = widget('testimonial', {
       testimonial_content: r.text,
@@ -438,7 +477,9 @@ function createDoc(role, spec, site) {
       content_content_color: o.light ? 'rgba(255,255,255,0.88)' : ink.text,
       name_text_color: o.light ? '#FFFFFF' : ink.heading,
       job_text_color: o.light ? c.secondary : ink.kicker,
-      ...typo('content_', fonts.body, 16, '400', { content_typography_font_style: 'italic', content_typography_line_height: px(1.7, 'em') }),
+      ...(o.big
+        ? typo('content_', fonts.heading, 27, '400', { content_typography_font_style: 'italic', content_typography_line_height: px(1.45, 'em'), content_typography_font_size_mobile: px(20) })
+        : typo('content_', fonts.body, 16, '400', { content_typography_font_style: 'italic', content_typography_line_height: px(1.7, 'em') })),
       ...typo('name_', fonts.heading, 17, headingWeight),
       ...typo('job_', fonts.body, 14, '400'),
     });
@@ -467,7 +508,7 @@ function intro(b, parts, o = {}) {
   const align = bar ? 'left' : o.align || b.st.align;
   const light = o.light;
   const els = [];
-  if (parts.kicker) els.push(b.kicker(parts.kicker.value, { ...parts.kicker, align, color: light ? b.c.secondary : undefined }));
+  if (parts.kicker) els.push(b.kicker(parts.kicker.value, { ...parts.kicker, align, color: light ? b.c.secondary : undefined, onDark: light }));
   els.push(b.heading(parts.title.value, { ...parts.title, align, bar, color: light ? '#FFFFFF' : undefined }));
   if (b.st.titles === 'line') els.push(b.line(align));
   if (parts.text) els.push(b.text(parts.text.value, { ...parts.text, align, color: light ? 'rgba(255,255,255,0.86)' : undefined }));
@@ -515,7 +556,7 @@ function features(b) {
     });
   }
   const onPhoto = layout.features === 'cards';
-  const items = copy.features.map((f, i) => b.box([b.iconBox(icons[i], f.title, f.text, featureHints(i))], { width: b.columns(4), card: true, on: onPhoto ? 'photo' : 'alt', pad: 30, anim: i * 120 }));
+  const items = copy.features.map((f, i) => b.box([b.iconBox(icons[i], f.title, f.text, featureHints(i))], { width: b.columns(4), card: true, on: onPhoto ? 'photo' : 'alt', pad: 30, anim: i * 120, lift: true }));
   return b.section(
     [intro(b, parts, { light: onPhoto }), b.box(items, { row: true, gap: 24, align: 'stretch', justify: 'space-between' })],
     onPhoto ? { slot: 'photo', overlay: [rgba(b.c.dark, 0.9), rgba(b.c.dark, 0.78), 180], align: 'center', gap: 44 } : { bg: b.ink.alt, align: 'center', gap: 44 }
@@ -557,6 +598,21 @@ function reviews(b) {
     kicker: { value: copy.reviewsKicker, hint: 'small label above the reviews title', max: 40 },
     title: { value: copy.reviewsTitle, hint: 'title of the customer reviews section', max: 60 },
   };
+  // "quote": the first review large in the title font, the other two smaller below a thin line
+  if (layout.testimonials === 'quote') {
+    const [first, ...others] = copy.reviews;
+    return b.section(
+      [
+        intro(b, parts, { align: 'center' }),
+        b.box(b.review(first, 0, { big: true }), { maxWidth: 900, gap: 16, align: 'center', anim: 0 }),
+        b.box(
+          others.map((r, i) => b.box(b.review(r, i + 1), { width: 47, tablet: 100, gap: 10, align: 'center', anim: (i + 1) * 120 })),
+          { row: true, gap: 32, align: 'stretch', justify: 'space-between', maxWidth: 1000, css: 'esg-quote-more' }
+        ),
+      ],
+      { bg: b.ink.bg, align: 'center', gap: 48 }
+    );
+  }
   const band = layout.testimonials === 'band';
   const cards = layout.testimonials === 'cards';
   const align = cards ? 'left' : 'center';
@@ -564,7 +620,7 @@ function reviews(b) {
     [
       intro(b, parts, { light: band }),
       b.box(
-        b.spec.copy.reviews.map((r, i) => b.box(b.review(r, i, { align, light: band }), { width: b.columns(3), card: cards, on: 'alt', pad: cards ? 34 : 10, gap: 12, tablet: 100, align: cards ? 'stretch' : 'center', anim: i * 120 })),
+        b.spec.copy.reviews.map((r, i) => b.box(b.review(r, i, { align, light: band }), { width: b.columns(3), card: cards, on: 'alt', pad: cards ? 34 : 10, gap: 12, tablet: 100, align: cards ? 'stretch' : 'center', anim: i * 120, lift: cards })),
         { row: true, gap: 24, align: 'stretch', justify: 'space-between' }
       ),
     ],
@@ -580,13 +636,18 @@ function mediaRow(b, content, o = {}) {
   const variant = o.imageFirst === undefined ? b.spec.layout.about : o.imageFirst ? 'image-left' : 'image-right';
   if (variant === 'wide') {
     return b.section(
-      [b.box(content, { maxWidth: 860, gap: 16, align: 'stretch' }), b.box([b.picture('photo', { height: o.wideHeight || 460, frame: true })], { anim: 0 })],
+      [b.box(content, { maxWidth: 860, gap: 16, align: 'stretch' }), b.box([b.picture('photo', { height: o.wideHeight || 460, frame: true, wide: true })], { anim: 0 })],
       { bg: o.bg || b.ink.bg, align: 'center', gap: 48 }
     );
   }
-  const img = b.box([b.picture('photo', { height: o.height || 460, frame: true })], { width: 46, anim: 0 });
+  // "badge": photo on the left with a small colored card (a key figure) overlapping its bottom-left corner
+  const stat = b.spec.copy.stats[0];
+  const badge = variant === 'badge'
+    ? [b.box([b.heading(stat.value, { tag: 'p', size: 44, color: '#FFFFFF', ...statHints(0).value }), b.text(stat.label, { size: 14, color: 'rgba(255,255,255,0.86)', ...statHints(0).label })], { maxWidth: 230, gradient: [b.c.primaryText, b.c.dark, 135], pad: 28, gap: 2, radius: b.st.buttons === 'square' ? 0 : Math.min(b.radius + 6, 24), margin: [-96, 0, 0, 28], zIndex: 2, anim: 200, css: 'esg-badge' })]
+    : [];
+  const img = b.box([b.picture('photo', { height: o.height || 460, frame: !badge.length }), ...badge], { width: 46, anim: 0 });
   const txt = b.box(content, { width: 48, gap: 16 });
-  return b.section(variant === 'image-left' ? [img, txt] : [txt, img], { row: true, bg: o.bg || b.ink.bg });
+  return b.section(variant === 'image-right' ? [txt, img] : [img, txt], { row: true, bg: o.bg || b.ink.bg });
 }
 
 /** Accent line under a left-aligned title (only for the "line" title style). */
@@ -601,10 +662,10 @@ function hero(b, site) {
   const tel = `tel:${telHref(site.phone)}`;
   const variant = layout.hero;
   const onImage = variant === 'center' || variant === 'left' || variant === 'bottom';
-  const align = variant === 'center' ? 'center' : 'left';
-  const size = variant === 'bottom' ? 66 : 58;
+  const align = variant === 'center' || variant === 'editorial' ? 'center' : 'left';
+  const size = variant === 'bottom' ? 66 : variant === 'editorial' ? 64 : 58;
   const content = [
-    b.kicker(copy.heroKicker, { align, color: onImage ? b.c.secondary : undefined, hint: 'short tagline above the main title', max: 50 }),
+    b.kicker(copy.heroKicker, { align, color: onImage ? b.c.secondary : undefined, onDark: onImage, hint: 'short tagline above the main title', max: 50 }),
     b.heading(copy.heroTitle, { tag: 'h1', size, align, color: onImage ? '#FFFFFF' : undefined, hint: 'main title of the site (H1): the promise of the business, with its activity and city', max: 80 }),
     b.text(copy.heroText, { align, color: onImage ? 'rgba(255,255,255,0.9)' : undefined, size: 19, hint: 'hero subtitle (1–2 sentences)', max: 200 }),
     b.box(
@@ -616,6 +677,13 @@ function hero(b, site) {
     ),
   ];
   const edge = shape(b, b.ink.bg);
+  if (variant === 'editorial') {
+    // Magazine opening: big centered title on the page color, a wide photo below
+    return b.section(
+      [b.box(content, { maxWidth: 900, gap: 22, align: 'center', anim: 0 }), b.box([b.picture('hero', { height: 560, mobileHeight: 280, wide: true })], { anim: 200, overflow: true, zoom: true, radius: b.imgRadius })],
+      { bg: b.ink.alt, align: 'center', gap: 56, padY: Math.round(b.pad * 1.1) }
+    );
+  }
   if (variant === 'split') {
     return b.section([b.box(content, { width: 50, gap: 20 }), b.box([b.picture('hero', { height: 540, mobileHeight: 300, frame: true })], { width: 46, anim: 0 })], {
       row: true,
@@ -732,13 +800,19 @@ function homeGallery(b, site) {
   );
 }
 
+/** AI hints of key figure i (shared: the same figure on the Home and About pages and in the photo badge). */
+const statHints = (i) => ({
+  value: { hint: `key figure ${i + 1} of 4 of the business (e.g. "20+" years, "24h" response time): short, realistic for this business — the client will check it`, max: 12, share: `stat${i + 1}.value` },
+  label: { hint: `label of key figure ${i + 1} (2–4 words)`, max: 40, share: `stat${i + 1}.label` },
+});
+
 /** Key numbers: 4 figures on a colored band. */
 function stats(b) {
   const items = b.spec.copy.stats.map((x, i) =>
     b.box(
       [
-        b.heading(x.value, { tag: 'p', size: 46, align: 'center', color: b.c.secondary, hint: `key figure ${i + 1} of 4 of the business (e.g. "20+" years, "24h" response time): short, realistic for this business — the client will check it`, max: 12 }),
-        b.text(x.label, { align: 'center', color: 'rgba(255,255,255,0.85)', size: 15, hint: `label of key figure ${i + 1} (2–4 words)`, max: 40 }),
+        b.heading(x.value, { tag: 'p', size: 46, align: 'center', color: b.c.secondary, ...statHints(i).value }),
+        b.text(x.label, { align: 'center', color: 'rgba(255,255,255,0.85)', size: 15, ...statHints(i).label }),
       ],
       { width: b.columns(4), tablet: 48, gap: 4, anim: i * 100 }
     )
@@ -756,7 +830,7 @@ function processSteps(b) {
         b.heading(x.title, { tag: 'h3', size: 20, hint: `step ${i + 1} of 4 of the way the business works with its customers (short title)`, max: 50 }),
         b.text(x.text, { size: 15, hint: `explanation of step ${i + 1} (1–2 sentences)`, max: 160 }),
       ],
-      { width: b.columns(4), card: true, on: 'base', pad: 28, gap: 8, anim: i * 120 }
+      { width: b.columns(4), card: true, on: 'base', pad: 28, gap: 8, anim: i * 120, lift: true }
     )
   );
   return b.section(
@@ -963,7 +1037,7 @@ function contact(b, site) {
         [
           intro(b, parts),
           b.box(
-            items.map((it, i) => b.box([infoBox(it)], { width: b.columns(items.length), card: true, on: 'alt', pad: 28, anim: i * 120 })),
+            items.map((it, i) => b.box([infoBox(it)], { width: b.columns(items.length), card: true, on: 'alt', pad: 28, anim: i * 120, lift: true })),
             { row: true, gap: 24, align: 'stretch', justify: 'center' }
           ),
           form,
@@ -1001,7 +1075,7 @@ function singlePost(b, site) {
   const align = center ? 'center' : 'left';
   const hero = b.section(
     [
-      b.kicker(b.L.services, { align, color: b.c.secondary, fixed: true }),
+      b.kicker(b.L.services, { align, color: b.c.secondary, onDark: true, fixed: true }),
       b.widget('theme-post-title', {
         header_size: 'h1',
         align,
@@ -1120,6 +1194,36 @@ document.querySelectorAll('.esg-nav-cta a').forEach(function(a){if(src&&src.text
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();})();`;
 
 /**
+ * Finishing touches of the whole site, in the header (shown on every page, also by UAE): smooth
+ * text, selection color, cards rising on hover, photos zooming in their card, buttons, the thin
+ * line of the "dash" labels, the service rows and the photo badge. Only classes set by this builder.
+ */
+function finishCss(b) {
+  const { c, ink } = b;
+  const ease = 'cubic-bezier(.2,.7,.3,1)';
+  return `html{scroll-behavior:smooth}
+body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+::selection{background:${c.primary};color:${c.onPrimary}}
+.elementor-button{transition:background-color .3s,color .3s,border-color .3s,transform .3s ${ease},box-shadow .3s}
+.elementor-button:hover{transform:translateY(-2px)}
+.esg-card{transition:transform .4s ${ease},box-shadow .4s ${ease}}
+.esg-card:hover{transform:translateY(-6px)}
+.esg-zoom{overflow:hidden}
+.esg-zoom img{transition:transform .9s ${ease}}
+.esg-zoom:hover img{transform:scale(1.06)}
+.esg-kicker-dash .elementor-heading-title{display:inline-flex;align-items:center;gap:14px}
+.esg-kicker-dash .elementor-heading-title::before,.esg-kicker-c .elementor-heading-title::after{content:"";flex:0 0 36px;height:1px;background:currentColor;opacity:.75}
+.esg-svc-row{padding-bottom:40px;border-bottom:1px solid ${ink.border}}
+.esg-svc-row:last-child{border-bottom:0;padding-bottom:0}
+.esg-quote-more{padding-top:36px;border-top:1px solid ${ink.border}}
+.esg-badge{box-shadow:0 24px 50px rgba(15,27,45,.25)}
+.elementor-widget-image-carousel .swiper-slide{overflow:hidden;border-radius:${b.imgRadius}px}
+.elementor-widget-image-carousel .swiper-slide img{transition:transform .9s ${ease}}
+.elementor-widget-image-carousel .swiper-slide:hover img{transform:scale(1.04)}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.esg-card,.esg-zoom img,.elementor-button{transition:none}.esg-card:hover,.esg-zoom:hover img,.elementor-button:hover{transform:none}}`;
+}
+
+/**
  * Navigation of the header (Elementor HTML widget, no Pro or addon needed): the 5 pages in a row on
  * desktop; below 1025px a hamburger button opening a dropdown panel (with the call to action on
  * phones, where the header button is hidden). The style also keeps the header on one line:
@@ -1185,7 +1289,7 @@ function navMenu(b, site, o) {
     `<nav class="esg-nav" style="${style}" aria-label="${escapeAttr(b.L.menu)}">` +
     `<button type="button" class="esg-nav-toggle" aria-expanded="false" aria-controls="esg-nav-list" aria-label="${escapeAttr(b.L.menu)}"><span class="esg-nav-bars" aria-hidden="true"><span></span><span></span><span></span></span></button>` +
     `<ul id="esg-nav-list" class="esg-nav-list">${items}<li class="esg-nav-cta"><a href="${escapeAttr(o.button.url)}">${escapeHtml(o.button.text)}</a></li></ul>` +
-    `</nav>\n<style>\n${css}\n</style>\n<script>\n${NAV_SCRIPT}\n</script>`;
+    `</nav>\n<style>\n${css}\n${finishCss(b)}\n</style>\n<script>\n${NAV_SCRIPT}\n</script>`;
   const el = b.html(html);
   b.mark(el, 'html', { fixed: true });
   return el;

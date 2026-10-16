@@ -9,7 +9,8 @@ export const FONTS = [
   'Poppins', 'Montserrat', 'Inter', 'Roboto', 'Open Sans', 'Lato', 'Raleway', 'Nunito', 'Work Sans', 'DM Sans',
   'Rubik', 'Manrope', 'Barlow', 'Josefin Sans', 'Oswald', 'Source Sans 3', 'Playfair Display', 'Merriweather',
   'Libre Baskerville', 'Cormorant Garamond', 'Lora', 'Bebas Neue', 'Archivo', 'Roboto Slab', 'Bitter', 'Quicksand', 'Barlow Condensed',
-  'DM Serif Display', 'Space Grotesk', 'Plus Jakarta Sans', 'Fraunces',
+  'DM Serif Display', 'Space Grotesk', 'Plus Jakarta Sans', 'Fraunces', 'Jost', 'Marcellus', 'Cinzel', 'Prata', 'Tenor Sans',
+  'EB Garamond', 'Outfit', 'Syne',
 ];
 
 /** Font Awesome 5 free solid icons (Elementor "fa-solid" library) for the "why choose us" boxes. */
@@ -26,12 +27,12 @@ export const ICONS = [
 /** Layout variants of each section (the first value is the default). */
 export const LAYOUTS = {
   header: ['classic', 'centered', 'topbar', 'bold'],
-  hero: ['center', 'left', 'split', 'card', 'bottom'],
-  about: ['image-left', 'image-right', 'wide'],
+  hero: ['center', 'left', 'split', 'card', 'bottom', 'editorial'],
+  about: ['image-left', 'image-right', 'wide', 'badge'],
   features: ['icons', 'cards', 'list'],
   cta: ['banner', 'split'],
-  services: ['cards', 'boxed', 'overlay'],
-  testimonials: ['cards', 'minimal', 'band'],
+  services: ['cards', 'boxed', 'overlay', 'list'],
+  testimonials: ['cards', 'minimal', 'band', 'quote'],
   contact: ['split', 'stacked'],
   footer: ['dark', 'light', 'brand'],
   gallery: ['3', '4'],
@@ -75,8 +76,9 @@ export function sanitizeSections(value, fallback = DEFAULT_SECTIONS) {
  *   titles     section titles with an accent line below, with a colored bar on the left, or plain
  *   align      alignment of the section titles
  *   scale      size of the titles
- *   images     rounded, square, or framed (offset colored block behind the photo)
+ *   images     rounded, square, framed (offset colored block behind the photo), or arch (rounded top)
  *   titleCase  normal or uppercase titles
+ *   kicker     small label above the titles: plain text, a tinted pill, or with a thin line beside it
  */
 export const STYLE_OPTIONS = {
   theme: ['light', 'dark'],
@@ -85,8 +87,9 @@ export const STYLE_OPTIONS = {
   titles: ['line', 'bar', 'plain'],
   align: ['center', 'left'],
   scale: ['normal', 'large', 'xl'],
-  images: ['rounded', 'square', 'framed'],
+  images: ['rounded', 'square', 'framed', 'arch'],
   titleCase: ['normal', 'upper'],
+  kicker: ['plain', 'pill', 'dash'],
 };
 
 export const SPACINGS = ['normal', 'compact', 'airy'];
@@ -280,11 +283,12 @@ export function describeSpec(spec) {
     cards: { shadow: 'card con ombra', outline: 'card con bordo sottile', tinted: 'card su fondo colorato', accent: 'card con bordo superiore colorato' },
     titles: { line: 'titoli con linea colorata sotto', bar: 'titoli con barra colorata a sinistra', plain: 'titoli semplici' },
     scale: { normal: 'titoli di dimensione normale', large: 'titoli grandi', xl: 'titoli molto grandi' },
-    images: { rounded: 'immagini con angoli arrotondati', square: 'immagini squadrate', framed: 'immagini con cornice colorata sfalsata' },
+    images: { rounded: 'immagini con angoli arrotondati', square: 'immagini squadrate', framed: 'immagini con cornice colorata sfalsata', arch: 'immagini ad arco (bordo superiore arrotondato)' },
+    kicker: { plain: 'etichette semplici sopra i titoli', pill: 'etichette a pillola sopra i titoli', dash: 'etichette con una linea sottile sopra i titoli' },
   };
   return [
     spec.description,
-    `Aspetto: ${['theme', 'buttons', 'cards', 'titles', 'scale', 'images'].map((k) => LOOK[k][st[k]]).join(', ')}, titoli allineati ${st.align === 'left' ? 'a sinistra' : 'al centro'}${st.titleCase === 'upper' ? ' e in maiuscolo' : ''}.`,
+    `Aspetto: ${['theme', 'buttons', 'cards', 'titles', 'scale', 'images', 'kicker'].map((k) => LOOK[k][st[k]]).join(', ')}, titoli allineati ${st.align === 'left' ? 'a sinistra' : 'al centro'}${st.titleCase === 'upper' ? ' e in maiuscolo' : ''}.`,
     `Colori: primario ${colors.primary}, secondario ${colors.secondary}, accento ${colors.accent}, titoli ${colors.heading}, testo ${colors.text}.`,
     `Font: ${fonts.heading} (titoli), ${fonts.body} (testi).`,
     `Layout: header ${l.header}, hero ${l.hero} (bordo inferiore ${l.divider}), chi siamo ${l.about}, perché sceglierci ${l.features}, call to action ${l.cta}, servizi ${l.services}, recensioni ${l.testimonials} (senza foto dei clienti), contatti ${l.contact}, footer ${l.footer}.`,
