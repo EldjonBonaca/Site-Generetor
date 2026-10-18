@@ -114,7 +114,7 @@ export function TemplatePreview({ spec, compact = false, className }) {
   const NATURAL = {
     about: 'bg',
     features: l.features === 'cards' ? 'band' : l.features === 'icons' || l.features === 'center' ? 'alt' : 'bg',
-    cta: l.cta === 'split' ? 'bg' : 'band',
+    cta: l.cta === 'split' || l.cta === 'photo-split' ? 'bg' : 'band',
     services: l.services === 'boxed' ? 'alt' : 'bg',
     gallery: 'bg',
     reviews: l.testimonials === 'band' ? 'band' : l.testimonials === 'cards' ? 'alt' : 'bg',
@@ -131,12 +131,19 @@ export function TemplatePreview({ spec, compact = false, className }) {
     return s;
   }, ['split', 'editorial'].includes(l.hero) ? 'alt' : 'band');
   const plainBg = (id) => (surfaces[id] === 'alt' ? ink.alt : surfaces[id] === 'bg' ? ink.bg : null);
-  // "grid" decor: a fine grid on the tinted sections
+  // "grid", "dots" and "lines" decor: a fine grid or a light texture on the tinted sections
   const gridLine = dark ? '#ffffff0d' : `${c.heading}10`;
+  const textures = {
+    grid: `linear-gradient(${gridLine} 1px, transparent 1px) 0 0/8px 8px, linear-gradient(90deg, ${gridLine} 1px, transparent 1px) 0 0/8px 8px`,
+    dots: `radial-gradient(${dark ? '#ffffff1a' : `${c.heading}22`} 0.6px, transparent 0.9px) 0 0/6px 6px`,
+    lines: `repeating-linear-gradient(135deg, ${dark ? '#ffffff12' : `${c.heading}14`} 0 1px, transparent 1px 5px)`,
+  };
   const sbg = (id) => {
     const bg = plainBg(id) || ink.bg;
-    return st.decor === 'grid' && surfaces[id] === 'alt' ? `linear-gradient(${gridLine} 1px, transparent 1px) 0 0/8px 8px, linear-gradient(90deg, ${gridLine} 1px, transparent 1px) 0 0/8px 8px, ${bg}` : bg;
+    return textures[st.decor] && surfaces[id] === 'alt' ? `${textures[st.decor]}, ${bg}` : bg;
   };
+  // Photo treatment (the photos are sketched as gradients of the brand colors, already close to a duotone)
+  const photoFilter = { mono: 'grayscale(1)', faded: 'saturate(.55) brightness(1.12)' }[st.photoTone];
   const son = (id) => (surfaces[id] === 'alt' ? 'alt' : 'base');
   // Highlighted last word of the titles (the site wraps it at runtime with the same rule)
   const hlStyle = (light) =>
@@ -177,6 +184,8 @@ export function TemplatePreview({ spec, compact = false, className }) {
           borderRadius: frame && arch && !wide ? arch : imgR,
           boxShadow: frame && st.images === 'framed' ? `5px 5px 0 ${c.secondary}` : undefined,
           ...(d === 'frame' ? { outline: '1px solid #ffffffb8', outlineOffset: -4 } : {}),
+          filter: photoFilter,
+          transform: frame && st.signature === 'tilted' ? 'rotate(-2deg)' : undefined,
           ...style,
         }}
       >
@@ -210,18 +219,23 @@ export function TemplatePreview({ spec, compact = false, className }) {
     };
   };
   /** Section title: small label, title + accent line / side bar / nothing. */
-  const title = (kicker, text, { light = false, center = !left } = {}) => (
-    <div className={cx('flex flex-col gap-0.5', center ? 'items-center text-center' : 'items-start')}>
-      {kicker && (
+  const title = (kicker, text, { light = false, center = !left } = {}) => {
+    // Signature details: the label written vertically beside a left-aligned title, the number of the section above it
+    const vertical = st.signature === 'vertical' && !center && kicker;
+    const label = kicker && (
         <p
           className={cx('flex items-center gap-1 text-[6px] font-bold tracking-wider uppercase', st.kicker === 'pill' && 'rounded-full px-1.5 py-px')}
-          style={{ color: light ? c.secondary : ink.kicker, background: st.kicker === 'pill' ? (light ? '#ffffff24' : dark ? `${c.secondary}29` : mix(c.primary, '#ffffff', 0.88)) : undefined }}
+          style={{ color: light ? c.secondary : ink.kicker, background: st.kicker === 'pill' ? (light ? '#ffffff24' : dark ? `${c.secondary}29` : mix(c.primary, '#ffffff', 0.88)) : undefined, ...(vertical ? { writingMode: 'vertical-rl', transform: 'rotate(180deg)' } : {}) }}
         >
           {st.kicker === 'dash' && <span className="h-px w-2.5" style={{ background: 'currentColor' }} />}
           {kicker}
           {st.kicker === 'dash' && center && <span className="h-px w-2.5" style={{ background: 'currentColor' }} />}
         </p>
-      )}
+    );
+    const block = (
+    <div className={cx('flex flex-col gap-0.5', center ? 'items-center text-center' : 'items-start')}>
+      {st.signature === 'numbers' && <span className="esg-pv-num text-[16px] leading-none font-bold" style={{ ...head, color: 'transparent', WebkitTextStroke: `0.6px ${c.secondary}` }} />}
+      {!vertical && label}
       <p
         className="leading-tight"
         style={{ ...head, fontSize: 10 * scale, color: light ? '#fff' : ink.heading, textTransform: upper, ...(st.titles === 'bar' ? { borderLeft: `2px solid ${c.secondary}`, paddingLeft: 4 } : {}) }}
@@ -230,10 +244,19 @@ export function TemplatePreview({ spec, compact = false, className }) {
       </p>
       {st.titles === 'line' && <span className="mt-0.5 h-0.5 w-4 rounded-full" style={{ background: c.secondary }} />}
     </div>
-  );
-  const menu = (color) => (
+    );
+    return vertical ? (
+      <div className="flex items-start gap-1.5">
+        {label}
+        {block}
+      </div>
+    ) : (
+      block
+    );
+  };
+  const menu = (color, items = ['Home', 'Chi Siamo', 'Servizi', 'Galleria', 'Contatti']) => (
     <div className="flex gap-2 text-[7px] font-semibold" style={{ ...body, color }}>
-      {['Home', 'Chi Siamo', 'Servizi', 'Galleria', 'Contatti'].map((m) => (
+      {items.map((m) => (
         <span key={m}>{m}</span>
       ))}
     </div>
@@ -242,7 +265,7 @@ export function TemplatePreview({ spec, compact = false, className }) {
   // --- Header ---
   const bold = l.header === 'bold';
   // "transparent": over the heroes on a photo, with white links and logo
-  const over = l.header === 'transparent' && ['center', 'left', 'bottom', 'card', 'slideshow'].includes(l.hero);
+  const over = l.header === 'transparent' && ['center', 'left', 'bottom', 'card', 'slideshow', 'color'].includes(l.hero);
   const headerBg = over ? 'transparent' : bold ? c.primary : ink.bg;
   const menuColor = over ? '#fff' : bold ? onColor(c.primary, c.dark) : ink.heading;
   const logo = <div className="h-3 w-12" style={{ background: over ? '#fff' : bold ? menuColor : c.primary, borderRadius: Math.min(btnR, 3) }} />;
@@ -289,11 +312,27 @@ export function TemplatePreview({ spec, compact = false, className }) {
   // Height: the whole screen (with an arrow to the next section) or lower; the editorial hero keeps its height
   const full = l.heroHeight === 'full' && l.hero !== 'editorial';
   const compactHero = l.heroHeight === 'compact';
-  const cue = (color) => full && l.hero !== 'bottom' && <ChevronDown className="absolute bottom-4 left-1/2 size-3 -translate-x-1/2" style={{ color }} />;
+  const cue = (color) => (
+    <>
+      {full && l.hero !== 'bottom' && <ChevronDown className="absolute bottom-4 left-1/2 size-3 -translate-x-1/2" style={{ color }} />}
+      {/* "stamp" signature: a round stamp with the business name, turning in the corner of the hero */}
+      {st.signature === 'stamp' && (
+        <svg viewBox="0 0 120 120" className="absolute right-3 bottom-4 size-10 motion-safe:animate-[spin_26s_linear_infinite]">
+          <path id="esg-pv-stamp" d="M60,60 m-45,0 a45,45 0 1,1 90,0 a45,45 0 1,1 -90,0" fill="none" />
+          <text fontSize="11" fontWeight="700" fill={color}>
+            <textPath href="#esg-pv-stamp" textLength="280" lengthAdjust="spacingAndGlyphs">
+              NOME ATTIVITÀ • NOME ATTIVITÀ •
+            </textPath>
+          </text>
+          <circle cx="60" cy="60" r="7" fill={c.secondary} />
+        </svg>
+      )}
+    </>
+  );
   let hero;
   if (l.hero === 'editorial') {
     hero = (
-      <div className="flex flex-col items-center gap-3 px-4 py-6 text-center" style={{ background: ink.alt }}>
+      <div className="relative flex flex-col items-center gap-3 px-4 py-6 text-center" style={{ background: ink.alt }}>
         <div className="w-4/5 space-y-1">
           <div className="flex justify-center">{heroKicker(ink.kicker)}</div>
           {heroTitle(ink.heading, 15)}
@@ -301,6 +340,22 @@ export function TemplatePreview({ spec, compact = false, className }) {
           {heroButtons(mainBg, ink.heading, true)}
         </div>
         <Photo className="h-20 w-full" wide deco />
+        {cue(ink.heading)}
+      </div>
+    );
+  } else if (l.hero === 'color') {
+    // The text on the brand color, the hero photo framed beside it
+    hero = (
+      <div className={cx('relative flex items-center gap-3 px-4', full ? 'min-h-48' : compactHero ? 'pt-4 pb-6' : 'pt-6 pb-8')} style={{ background: fill() }}>
+        <div className="flex-1 space-y-1">
+          {heroKicker(c.secondary)}
+          {heroTitle('#fff')}
+          {phrases(c.secondary)}
+          {heroButtons(c.secondary, '#fff')}
+        </div>
+        <Photo className={cx('w-2/5', compactHero ? 'h-20' : 'h-24')} frame />
+        {cue('#fff')}
+        <Edge shape={l.divider} color={ink.bg} />
       </div>
     );
   } else if (l.hero === 'split') {
@@ -542,7 +597,32 @@ export function TemplatePreview({ spec, compact = false, className }) {
     </p>
   );
   const cta =
-    l.cta !== 'split' ? (
+    l.cta === 'phone' ? (
+      // Colored band: the invitation on the left, the phone number in large type and the button on the right
+      <div className="flex items-center justify-between gap-3 px-4 py-4" style={{ background: fill() }}>
+        <div className="flex-1">{ctaTitle}</div>
+        <div className="flex flex-col items-start gap-1">
+          <p className="flex items-center gap-1 text-[10px] text-white" style={{ ...head, color: '#fff' }}>
+            <span className="flex size-3.5 items-center justify-center text-[6px]" style={{ background: c.secondary, color: onColor(c.secondary, c.dark), borderRadius: st.buttons === 'square' ? 0 : 999 }}>
+              ☎
+            </span>
+            000 000 000
+          </p>
+          {btn(c.secondary, copy.ctaButton)}
+        </div>
+      </div>
+    ) : l.cta === 'photo-split' ? (
+      // A photo beside a colored panel
+      <div className="px-4 py-2" style={{ background: sbg('cta') }}>
+        <div className="flex overflow-hidden" style={{ borderRadius: st.buttons === 'square' ? 0 : Math.min(r + 3, 12) }}>
+          <Photo className="h-16 w-1/2" style={{ borderRadius: 0 }} />
+          <div className="flex flex-1 flex-col justify-center gap-1.5 p-3" style={{ background: fill() }}>
+            {ctaTitle}
+            <div>{btn(c.secondary, copy.ctaButton)}</div>
+          </div>
+        </div>
+      </div>
+    ) : l.cta !== 'split' ? (
       <div className="flex flex-col items-center gap-1.5 px-4 py-4 text-center" style={photoBg(`linear-gradient(135deg, ${c.primary}ee, ${c.dark}e6)`)}>
         {ctaTitle}
         {btn(c.secondary, copy.ctaButton)}
@@ -606,7 +686,34 @@ export function TemplatePreview({ spec, compact = false, className }) {
   // --- Reviews (no photos of the customers) ---
   const band = l.testimonials === 'band';
   const cards = l.testimonials === 'cards';
-  const reviews = (
+  const stars = (size) => (
+    <span className="flex gap-px">
+      {[0, 1, 2, 3, 4].map((s) => (
+        <Star key={s} className={size} fill={c.secondary} stroke="none" />
+      ))}
+    </span>
+  );
+  const reviews =
+    l.testimonials === 'side' ? (
+      // The title and large stars on the left, the reviews one under the other on the right
+      <div className={cx('flex items-start gap-3 px-4', pad)} style={{ background: sbg('reviews') }}>
+        <div className="w-1/3 space-y-1.5">
+          {title(copy.reviewsKicker, copy.reviewsTitle, { center: false })}
+          {stars('size-2.5')}
+        </div>
+        <div className="flex-1 divide-y" style={{ borderColor: ink.border }}>
+          {copy.reviews.map((rv, i) => (
+            <div key={i} className="space-y-0.5 py-1.5" style={{ borderColor: ink.border }}>
+              {stars('size-1.5')}
+              <Lines n={2} color={ink.text} />
+              <span className="text-[6px] font-semibold" style={{ ...head }}>
+                {rv.name}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    ) : (
     <div className={cx('px-4', pad)} style={{ background: band ? fill() : sbg('reviews') }}>
       {title(copy.reviewsKicker, copy.reviewsTitle, { light: band, center: l.testimonials === 'quote' || !left })}
       {l.testimonials === 'quote' && (
@@ -637,12 +744,44 @@ export function TemplatePreview({ spec, compact = false, className }) {
         ))}
       </div>
     </div>
-  );
+    );
 
-  // --- Photo carousel ---
+  // --- Photos of the Home page ---
+  const galleryPhotos =
+    l.homeGallery === 'mosaic' ? (
+      // One large photo, four small ones beside it
+      <div className="mt-2 flex gap-1.5">
+        <Photo className="h-20 w-1/2" />
+        <div className="grid flex-1 grid-cols-2 gap-1.5">
+          {[0, 1, 2, 3].map((i) => (
+            <Photo key={i} className="h-[37px] w-full" />
+          ))}
+        </div>
+      </div>
+    ) : l.homeGallery === 'masonry' ? (
+      // Three columns of photos of staggered heights
+      <div className="mt-2 grid grid-cols-3 items-start gap-1.5">
+        {[['h-12', 'h-8'], ['h-8', 'h-12'], ['h-12', 'h-8']].map((col, i) => (
+          <div key={i} className="space-y-1.5">
+            {col.map((h, j) => (
+              <Photo key={j} className={cx(h, 'w-full')} />
+            ))}
+          </div>
+        ))}
+      </div>
+    ) : l.homeGallery === 'strip' ? (
+      // Four photos edge to edge across the whole width
+      <div className="-mx-4 mt-2 grid grid-cols-4 gap-0.5">
+        {[0, 1, 2, 3].map((i) => (
+          <Photo key={i} className="h-12 w-full" style={{ borderRadius: 0 }} />
+        ))}
+      </div>
+    ) : null;
   const gallery = (
     <div className={cx('px-4', pad)} style={{ background: sbg('gallery') }}>
       {title(copy.galleryKicker, copy.galleryTitle)}
+      {galleryPhotos || (
+      <>
       <div className="mt-2 flex items-center gap-1">
         <ChevronLeft className="size-3 shrink-0" style={{ color: ink.heading }} />
         <div className="grid flex-1 grid-cols-3 gap-1.5">
@@ -657,6 +796,8 @@ export function TemplatePreview({ spec, compact = false, className }) {
           <span key={i} className="size-1 rounded-full" style={{ background: i === 0 ? c.secondary : (dark ? '#ffffff' : c.heading) + '40' }} />
         ))}
       </div>
+      </>
+      )}
     </div>
   );
 
@@ -791,7 +932,7 @@ export function TemplatePreview({ spec, compact = false, className }) {
     );
   const SECTIONS = { about, features: why, cta, services, gallery, reviews, stats, process: processSteps, faq: faqList, highlights: highlightsStrip };
   // "edges: all": the colored and photo bands get the hero edge shape towards the plain sections next to them
-  const bands = new Set([l.features === 'cards' && 'features', l.cta !== 'split' && 'cta', band && 'reviews', l.stats === 'band' && 'stats'].filter(Boolean));
+  const bands = new Set([l.features === 'cards' && 'features', (l.cta === 'banner' || l.cta === 'phone') && 'cta', band && 'reviews', l.stats === 'band' && 'stats'].filter(Boolean));
   const bandEdges = st.edges === 'all' && l.divider !== 'none';
 
   // --- Footer ---
@@ -800,12 +941,27 @@ export function TemplatePreview({ spec, compact = false, className }) {
   const footerText = lightFooter ? ink.heading : '#fff';
 
   return (
-    <div className={cx('relative overflow-hidden rounded-lg border border-slate-200 text-left select-none', compact && 'pointer-events-none h-72', className)} style={{ background: ink.bg }} aria-hidden="true">
+    <div className={cx('esg-pv relative overflow-hidden rounded-lg border border-slate-200 text-left select-none', compact && 'pointer-events-none h-72', className)} style={{ background: ink.bg }} aria-hidden="true">
+      {st.signature === 'numbers' && <style>{'.esg-pv{counter-reset:esg-pv}.esg-pv-num{counter-increment:esg-pv}.esg-pv-num::before{content:counter(esg-pv,decimal-leading-zero)}'}</style>}
       {l.header === 'topbar' && <div className="flex justify-end gap-3 px-3 py-0.5 text-[6px] text-white/80" style={{ background: dark ? '#000' : c.dark }}>☎ 000 000 000 · ✉ info@…</div>}
       <div className={cx('z-10 flex items-center gap-3 px-3 py-2', over ? 'absolute inset-x-0 top-0' : 'relative shadow-sm')} style={{ background: headerBg }}>
-        <div className="shrink-0">{logo}</div>
-        <div className={cx('flex min-w-0 flex-1', l.header === 'centered' ? 'justify-center' : 'justify-end')}>{menu(menuColor)}</div>
-        <div className="shrink-0">{btn(bold ? c.secondary : mainBg, copy.headerButton)}</div>
+        {l.header === 'split' ? (
+          // The logo in the middle, the first pages on its left, the others and the button on its right
+          <>
+            <div className="flex min-w-0 flex-1 justify-end">{menu(menuColor, ['Home', 'Chi Siamo', 'Servizi'])}</div>
+            <div className="shrink-0">{logo}</div>
+            <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+              {menu(menuColor, ['Galleria', 'Contatti'])}
+              {btn(mainBg, copy.headerButton)}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="shrink-0">{logo}</div>
+            <div className={cx('flex min-w-0 flex-1', l.header === 'centered' ? 'justify-center' : 'justify-end')}>{menu(menuColor)}</div>
+            <div className="shrink-0">{btn(bold ? c.secondary : mainBg, copy.headerButton)}</div>
+          </>
+        )}
       </div>
       {hero}
       {order.map((id, i) =>
@@ -825,6 +981,20 @@ export function TemplatePreview({ spec, compact = false, className }) {
         )
       )}
       <div style={{ background: footerBg }}>
+        {l.footerCta === 'large' && (
+          // A large invitation to get in touch, the phone number and a button
+          <div className="flex items-center justify-between gap-3 border-b px-4 py-3" style={{ borderColor: lightFooter ? '#0000001a' : '#ffffff1f' }}>
+            <p className="w-3/5 text-[12px] leading-tight" style={{ ...head, color: footerText, fontSize: 12 * scale, textTransform: upper }}>
+              {hl(copy.footerTitle || 'Hai un progetto in mente? Parliamone.', !lightFooter)}
+            </p>
+            <div className="flex flex-col items-start gap-1">
+              <p className="text-[8px]" style={{ ...head, color: footerText }}>
+                000 000 000
+              </p>
+              {btn(c.secondary, copy.footerButton || 'Contattaci')}
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-4 gap-2 px-4 py-3">
           <div className="h-3 w-10 rounded-sm" style={{ background: lightFooter ? c.primary : '#fff', opacity: 0.85 }} />
           {['Link', 'Servizi', 'Contatti'].map((t) => (

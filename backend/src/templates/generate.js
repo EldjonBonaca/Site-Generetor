@@ -40,6 +40,8 @@ const LOOK_LABELS = {
   rhythm: 'section backgrounds',
   highlight: 'highlighted last word of the titles',
   decor: 'signature detail',
+  photoTone: 'photo treatment',
+  photoRatio: 'proportion of the main photos',
 };
 
 /** Design direction block: what the generator decided and what the AI must avoid. */
@@ -81,7 +83,25 @@ Sections of the Home page after the hero, in this order: ${sections}.${
       ? '\nTheme "dark": the pages have a dark background ("dark" color, keep it very deep) with white texts; "heading" and "text" are only used on white elements (contact form), keep them dark.'
       : ''
   }${others}${colors}${libraryColors}
-Write the "description" of the concept and the "tone" so that they match this direction.`;
+Write the "description" of the concept and the "tone" so that they match this direction.${signatureInstructions(plan.signatures)}`;
+}
+
+/** What each signature detail looks like on the site (the AI chooses one to express its concept). */
+const SIGNATURE_LABELS = {
+  none: 'no signature detail: the design speaks through its layouts and colors alone',
+  numbers: 'large outlined numbers (01, 02, 03…) above the titles of the sections, like the chapters of a magazine',
+  tilted: 'the main photos slightly tilted, as if laid on the page, straightening under the mouse',
+  vertical: 'the small labels of the section titles written vertically beside them',
+  stamp: 'a round stamp with the business name, slowly turning in a corner of the hero',
+};
+
+/** Signature details offered by the generator: the AI chooses the one that best expresses its concept. */
+function signatureInstructions(options = []) {
+  if (!options.length) return '';
+  return `
+Signature detail, repeated on every page: choose ONE of these, the one that best expresses your concept, and put its id in "style"."signature":
+${options.map((id) => `- "${id}": ${SIGNATURE_LABELS[id]}`).join('\n')}
+Mention it in the "description".`;
 }
 
 /** Copy keys of optional sections: only asked when the template has the section. */
@@ -93,7 +113,7 @@ const SECTION_LISTS = {
   highlights: '"highlights": [4 short guarantees typical of the category, max 40 chars each]',
 };
 
-function technicalInstructions(languageLabel, sections = null) {
+function technicalInstructions(languageLabel, sections = null, signatures = null) {
   const optionalKeys = Object.values(SECTION_COPY).flat();
   const copyShape = Object.entries(COPY_KEYS)
     .filter(([k]) => !optionalKeys.includes(k) || Object.entries(SECTION_COPY).some(([sec, keys]) => keys.includes(k) && (!sections || sections.includes(sec))))
@@ -111,7 +131,7 @@ The generator builds the Elementor templates itself from the design decisions ab
   "description": "concept of the design, 2–3 sentences",
   "tone": "tone of voice of the texts",
   "style": {
-    "colors": { ${COLOR_KEYS.map((k) => `"${k}": "#RRGGBB"`).join(', ')} }
+    "colors": { ${COLOR_KEYS.map((k) => `"${k}": "#RRGGBB"`).join(', ')} }${signatures?.length ? `,\n    "signature": "${signatures.join('" | "')}"` : ''}
   },
   "icons": ["${MAX_FEATURES} icons, one for each strength of \\"why choose us\\", in the same order"],
   "copy": {
@@ -150,7 +170,7 @@ export function buildTemplatePrompt({ category, instructions = '', language = 'i
   };
   const body = TEMPLATE_PROMPT.content.replace(/\{\{\s*([A-Z_]+)\s*\}\}/g, (m, name) => (name in vars ? vars[name] : m));
   const design = direction && plan ? directionInstructions(category, direction, plan, existing, avoidColors, profile, library) : '';
-  return { prompt: body + design + technicalInstructions(languageLabel, plan?.sections), system: TEMPLATE_SYSTEM_PROMPT };
+  return { prompt: body + design + technicalInstructions(languageLabel, plan?.sections, plan?.signatures), system: TEMPLATE_SYSTEM_PROMPT };
 }
 
 /**

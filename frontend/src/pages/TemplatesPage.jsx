@@ -3,13 +3,14 @@
  * Saved templates are reused by every project of the category (Template step of the wizard).
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Copy, FileText, FolderPlus, LayoutTemplate, Lock, Pencil, Sparkles, Trash2, Users } from 'lucide-react';
+import { Columns3, Copy, FileText, FolderPlus, LayoutTemplate, Lock, Pencil, Sparkles, Trash2, Users } from 'lucide-react';
 import { api } from '../api.js';
 import { useT } from '../i18n/index.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { Badge, Button, Card, EmptyState, Field, IconButton, Input, Modal, PageHeader, Spinner, Textarea, cx } from '../components/ui.jsx';
 import { TemplatePreview, TemplateSwatches } from '../components/TemplatePreview.jsx';
 import { TemplateEditor, TemplateGenerator } from '../components/TemplateDialogs.jsx';
+import { TemplateCompare } from '../components/TemplateCompare.jsx';
 import { IndustryProfile } from '../components/IndustryProfile.jsx';
 import { formatDate } from './ProjectsPage.jsx';
 
@@ -24,6 +25,8 @@ export default function TemplatesPage() {
   const [catToDelete, setCatToDelete] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [diversifyOnOpen, setDiversifyOnOpen] = useState(false); // open the editor with a "more different" design
+  const [comparing, setComparing] = useState(false);
   const [toDelete, setToDelete] = useState(null);
   const [prompt, setPrompt] = useState(null);
 
@@ -78,6 +81,11 @@ export default function TemplatesPage() {
     } catch (e) {
       toast(e.message, 'error');
     }
+  };
+
+  const edit = (tpl, diversify = false) => {
+    setDiversifyOnOpen(diversify);
+    setEditing(tpl);
   };
 
   const toggleShared = async (tpl) => {
@@ -174,6 +182,11 @@ export default function TemplatesPage() {
                 <Button size="sm" icon={Pencil} onClick={() => setEditingCategory({ id: selected.id, name: selected.name, description: selected.description })}>
                   {t('Edit category')}
                 </Button>
+                {templates?.length > 1 && (
+                  <Button size="sm" icon={Columns3} onClick={() => setComparing(true)}>
+                    {t('Compare')}
+                  </Button>
+                )}
                 <Button size="sm" variant="primary" icon={Sparkles} onClick={() => setGenerating(true)}>
                   {t('Generate template')}
                 </Button>
@@ -220,7 +233,7 @@ export default function TemplatesPage() {
                           {tpl.can_edit && tpl.owner && (
                             <IconButton icon={tpl.shared ? Lock : Users} label={tpl.shared ? t('Stop sharing') : t('Share with everyone')} onClick={() => toggleShared(tpl)} />
                           )}
-                          {tpl.can_edit && <IconButton icon={Pencil} label={t('Edit')} onClick={() => setEditing(tpl)} />}
+                          {tpl.can_edit && <IconButton icon={Pencil} label={t('Edit')} onClick={() => edit(tpl)} />}
                           <IconButton icon={Copy} label={t('Duplicate')} onClick={() => duplicate(tpl)} />
                           {tpl.can_edit && <IconButton icon={Trash2} label={t('Delete')} onClick={() => setToDelete(tpl)} className="hover:text-red-600" />}
                         </div>
@@ -236,7 +249,8 @@ export default function TemplatesPage() {
       </div>
 
       <TemplateGenerator open={generating} onClose={() => setGenerating(false)} category={selected} onSaved={refresh} onAnalyzed={loadCategories} />
-      <TemplateEditor template={editing} onClose={() => setEditing(null)} onSaved={refresh} />
+      <TemplateCompare open={comparing} onClose={() => setComparing(false)} category={selected} templates={templates} onDiversify={(tpl) => edit(tpl, true)} />
+      <TemplateEditor template={editing} onClose={() => setEditing(null)} onSaved={refresh} diversifyOnOpen={diversifyOnOpen} />
 
       <Modal
         open={!!editingCategory}

@@ -11,7 +11,7 @@ process.env.STORAGE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'esg-tpl-'));
 process.env.ENCRYPTION_KEY ||= 'd'.repeat(64);
 
 const { analyzeDocument } = await import('../src/elementor/analyze.js');
-const { sanitizeSpec, DEFAULT_SPEC, FONTS, tint } = await import('../src/templates/spec.js');
+const { sanitizeSpec, DEFAULT_SPEC, FONTS, tint, siteColors: siteColorsOf } = await import('../src/templates/spec.js');
 const { buildSite, DOC_ROLES, TEMPLATE_IMAGE } = await import('../src/templates/builder.js');
 const { buildTemplatePrompt, generateTemplateSpec } = await import('../src/templates/generate.js');
 const { default: MockProvider } = await import('../src/ai/providers/mock.js');
@@ -102,6 +102,22 @@ test('buildSite: every variant builds valid documents whose marks match the anal
     // Rotating phrases under the hero title, about: text | photo | text
     { layout: { hero: 'slideshow', heroPhrases: 'rotating', about: 'sandwich' } },
     { style: { theme: 'dark', titles: 'bar' }, layout: { hero: 'split', heroPhrases: 'rotating', about: 'sandwich' } },
+    // Home gallery, call to action and reviews
+    { layout: { homeGallery: 'mosaic', cta: 'phone', testimonials: 'side' }, sections: ['about', 'features', 'cta', 'services', 'gallery', 'reviews'] },
+    { style: { theme: 'dark', edges: 'all', images: 'arch' }, layout: { homeGallery: 'masonry', cta: 'photo-split', divider: 'waves' }, sections: ['about', 'features', 'cta', 'services', 'gallery', 'reviews'] },
+    { style: { rhythm: 'lines' }, layout: { homeGallery: 'strip', testimonials: 'side' } },
+    // Logo in the middle of the menu, footer opening with an invitation
+    { layout: { header: 'split', footerCta: 'large', footer: 'light' } },
+    { style: { theme: 'dark', decor: 'wordmark' }, layout: { header: 'split', footerCta: 'large', footer: 'brand' } },
+    // Photo treatment and ratio, textures, hero on the brand color
+    { style: { photoTone: 'duotone', photoRatio: 'tall', decor: 'dots', images: 'arch' }, layout: { hero: 'color', heroHeight: 'full' } },
+    { style: { photoTone: 'mono', photoRatio: 'wide', decor: 'lines', theme: 'dark' }, layout: { hero: 'color', header: 'transparent', homeGallery: 'mosaic' } },
+    // Signature details
+    { style: { signature: 'numbers', kicker: 'pill' }, layout: { about: 'sandwich' }, sections: ['about', 'features', 'services', 'process', 'gallery', 'reviews', 'faq'] },
+    { style: { signature: 'tilted', images: 'framed', decor: 'grid' }, layout: { about: 'collage', features: 'split' } },
+    { style: { signature: 'vertical', align: 'left', kicker: 'dash' }, layout: { about: 'triptych' } },
+    { style: { signature: 'stamp' }, layout: { hero: 'editorial', heroHeight: 'full' } },
+    { style: { signature: 'stamp' }, layout: { hero: 'slideshow', heroHeight: 'full' } },
   ];
   for (const v of variants) {
     const spec = sanitizeSpec(v);
@@ -391,6 +407,266 @@ test('why choose us shows 3 to 6 strengths, as many as its layout can arrange', 
   for (const d of DIRECTIONS) {
     const plan = designPlan(d, []);
     assert.equal(plan.layout.featureCount, String(featureCount(plan.layout)), `${d.id}: count of the chosen layout`);
+  }
+});
+
+test('Home gallery, call to action and reviews: more layouts', () => {
+  const sections = ['about', 'features', 'cta', 'services', 'gallery', 'reviews'];
+  const build = (layout, site = sampleSite()) => buildSite(sanitizeSpec({ layout, sections }), site).docs;
+  const json = (x) => JSON.stringify(x);
+  const count = (x, re) => (json(x).match(re) || []).length;
+  const section = (docs, id) => docs.home.doc.content[1 + sections.indexOf(id)];
+  const photos = (el) => count(el, /"widgetType":"image"/g);
+
+  // Gallery: carousel by default (templates saved before); mosaic 1 + 4, masonry 3 × 2, strip of 4 across the screen
+  assert.equal(count(section(build({}), 'gallery'), /"widgetType":"image-carousel"/g), 1);
+  const mosaic = section(build({ homeGallery: 'mosaic' }), 'gallery');
+  assert.equal(photos(mosaic), 5);
+  assert.equal(count(mosaic, /"url":"\/galleria\/"/g), 6, 'every photo and the button lead to the Gallery page');
+  const masonry = section(build({ homeGallery: 'masonry' }), 'gallery');
+  assert.equal(photos(masonry), 6);
+  const cols = masonry.elements[1].elements;
+  assert.deepEqual(cols.map((c) => c.elements.map((t) => t.elements[0].settings.height.size)), [[340, 240], [240, 340], [340, 240]], 'staggered heights');
+  assert.equal(cols[2].settings.hide_mobile, 'hidden-mobile', 'two columns on phones');
+  const strip = section(build({ homeGallery: 'strip' }), 'gallery');
+  assert.equal(photos(strip), 4);
+  assert.equal(strip.settings.boxed_width.size, 2560, 'across the whole screen');
+  const docs = build({ homeGallery: 'mosaic' });
+  assert.ok([...docs.home.marks.values()].filter((m) => m.slot === 'photo').length >= 5, 'photos of the archive');
+
+  // Call to action with the phone number in large type, or a photo beside a colored panel
+  const phone = section(build({ cta: 'phone' }), 'cta');
+  assert.match(json(phone), /"title":"\+39 02 1234 567"[^}]*"link":\{"url":"tel:\+39021234567"/);
+  assert.equal(count(phone, /"widgetType":"button"/g), 1);
+  const noPhone = section(build({ cta: 'phone' }, { ...sampleSite(), phone: '' }), 'cta');
+  assert.doesNotMatch(json(noPhone), /tel:/, 'no phone number: a banner');
+  assert.equal(noPhone.settings.background_overlay_background, 'gradient');
+  const photoSplit = section(build({ cta: 'photo-split' }), 'cta');
+  const [photo, panel] = photoSplit.elements[0].elements;
+  assert.equal(photo.settings.background_image.url, TEMPLATE_IMAGE);
+  assert.equal(panel.elements.length, 3, 'title, text, button on the colored panel');
+
+  // Reviews beside the title and large stars, one under the other
+  const side = section(build({ testimonials: 'side' }), 'reviews');
+  assert.equal(side.elements.length, 2);
+  assert.equal(count(side.elements[0], /"widgetType":"star-rating"/g), 1);
+  assert.equal(side.elements[1].elements.length, 3);
+  assert.equal(count(side.elements[1], /"widgetType":"testimonial"/g), 3);
+  assert.equal(side.elements[1].elements[1].settings.border_width.top, '1', 'thin line between the reviews');
+});
+
+test('header with the logo in the middle, footer opening with an invitation', () => {
+  const build = (layout, site = sampleSite()) => buildSite(sanitizeSpec({ layout }), site).docs;
+  const json = (x) => JSON.stringify(x);
+
+  // Split header: first pages on the left (desktop only), logo, the others + button on the right; one hamburger with every page
+  const header = build({ header: 'split' }).header.doc.content;
+  assert.equal(header.length, 1);
+  const [left, logo, right] = header[0].elements;
+  assert.equal(left.settings.css_classes, 'esg-hd-side');
+  assert.equal(left.settings.hide_tablet, 'hidden-tablet');
+  assert.equal(left.settings.hide_mobile, 'hidden-mobile');
+  const leftHtml = left.elements[0].settings.html;
+  assert.deepEqual([...leftHtml.matchAll(/href="([^"]+)"/g)].map((m) => m[1]), ['/', '/chi-siamo/', '/servizi/']);
+  assert.doesNotMatch(leftHtml, /esg-nav-toggle|id="esg-nav-list"/, 'no second hamburger, no duplicate id');
+  assert.equal(logo.settings.css_classes, 'esg-hd-brand');
+  assert.deepEqual(right.elements.map((e) => e.settings.css_classes), ['esg-hd-nav', 'esg-hd-cta']);
+  const nav = right.elements[0].elements[0].settings.html;
+  assert.match(nav, /class="esg-nav esg-nav-skip"/);
+  assert.equal((nav.match(/<li><a href=/g) || []).length, 5, 'the whole menu behind the hamburger');
+  assert.match(nav, /@media \(min-width:1025px\)\{\.esg-nav-skip \.esg-nav-list li:nth-child\(-n\+3\)\{display:none\}\}/);
+  assert.doesNotMatch(json(build({}).header.doc), /esg-nav-skip|esg-hd-side/, 'other headers unchanged');
+
+  // Footer opening with a large invitation, the phone number and a button (AI texts), then the columns
+  const footer = build({ footerCta: 'large' }).footer;
+  const invite = footer.doc.content[0];
+  assert.equal(footer.doc.content.length, 3);
+  assert.match(json(invite), /"link":\{"url":"tel:\+39021234567"/);
+  const fields = analyzeDocument(footer.doc, { prefix: 'footer' }).fields;
+  const hints = fields.map((f) => footer.marks.get(f.ref)?.hint).filter(Boolean);
+  assert.ok(hints.some((h) => /large invitation to get in touch/.test(h)));
+  assert.ok(hints.some((h) => /button of the invitation/.test(h)));
+  assert.equal(footer.doc.content[1].elements.length, 4, 'then the 4 columns');
+  assert.doesNotMatch(json(build({ footerCta: 'large' }, { ...sampleSite(), phone: '' }).footer.doc.content[0]), /tel:/, 'no phone: only the button');
+  assert.equal(build({}).footer.doc.content.length, 2, 'no invitation by default');
+});
+
+test('more orders of the Home sections across a category', async () => {
+  const { designPlan, DIRECTIONS } = await import('../src/templates/directions.js');
+  const direction = DIRECTIONS.find((d) => d.id === 'corporate');
+  const saved = [];
+  for (let i = 0; i < 8; i++) {
+    const plan = designPlan(direction, saved);
+    saved.push({ style: { ...plan.style, fonts: plan.fonts }, layout: plan.layout, sections: plan.sections });
+  }
+  const required = (s) => s.sections.filter((x) => ['about', 'features', 'services', 'gallery', 'reviews'].includes(x)).join();
+  assert.ok(new Set(saved.map(required)).size >= 7, `orders: ${[...new Set(saved.map(required))].join(' / ')}`);
+});
+
+test('photo treatment and ratio, textures, hero on the brand color, amount of color', async () => {
+  const sections = ['about', 'features', 'services', 'gallery', 'reviews'];
+  const build = (style, layout) => buildSite(sanitizeSpec({ style, layout, sections }), sampleSite()).docs;
+  const json = (x) => JSON.stringify(x);
+  const header = (docs) => json(docs.header.doc);
+  const images = (docs, role) => {
+    const out = [];
+    const walk = (el) => (el.widgetType === 'image' ? out.push(el.settings) : el.elements.forEach(walk));
+    docs[role].doc.content.forEach(walk);
+    return out;
+  };
+
+  // Natural photos by default (templates saved before): no class, no filter
+  const plain = build({}, {});
+  assert.ok(images(plain, 'home').every((s) => !/esg-photo/.test(s._css_classes || '')));
+  assert.doesNotMatch(header(plain), /esg-duotone|filter:grayscale/);
+  // Black and white: every photo but the logo, colors back under the mouse
+  const mono = build({ photoTone: 'mono' }, {});
+  assert.ok(images(mono, 'home').every((s) => /esg-photo/.test(s._css_classes)));
+  assert.ok(images(mono, 'header').every((s) => !/esg-photo/.test(s._css_classes || '')), 'not the logo');
+  assert.match(header(mono), /\.esg-photo img,\.elementor-widget-image-carousel \.swiper-slide img,\.elementor-widget-image-gallery \.gallery-item img\{filter:grayscale\(1\)/);
+  assert.match(header(mono), /\.esg-photo:hover img[^{]*\{filter:none\}/);
+  // Duotone: an SVG filter from the dark color to a tint of the primary color, in the header of every page
+  const duo = build({ photoTone: 'duotone', colors: { dark: '#000000', primary: '#FFFFFF' } }, {});
+  assert.match(header(duo), /<filter id=\\"esg-duotone\\"/);
+  assert.match(header(duo), /<feFuncR type=\\"table\\" tableValues=\\"0\.000 1\.000\\"\/>/);
+  assert.match(header(duo), /filter:url\(#esg-duotone\)/);
+  // Faded: no color back under the mouse
+  assert.doesNotMatch(header(build({ photoTone: 'faded' }, {})), /\{filter:none\}/);
+  // The decor classes stay with the treatment
+  assert.match(json(build({ photoTone: 'mono', decor: 'grid' }, {}).home.doc), /"_css_classes":"esg-brackets esg-photo"/);
+
+  // Main photos taller or wider; the other photos keep the height of their layout
+  const aboutPhoto = (style) => build(style, { about: 'image-left' }).home.doc.content[1].elements[0].elements[0].settings.height.size;
+  assert.equal(aboutPhoto({}), 460);
+  assert.equal(aboutPhoto({ photoRatio: 'tall' }), 543);
+  assert.equal(aboutPhoto({ photoRatio: 'wide' }), 359);
+  const cards = (style) => images(build(style, { services: 'cards' }), 'home').filter((s) => s.height?.size === 230).length;
+  assert.equal(cards({ photoRatio: 'tall' }), cards({}), 'service cards unchanged');
+
+  // Textures on the tinted sections only
+  const dots = build({ decor: 'dots', rhythm: 'alternate' }, {});
+  assert.ok(dots.home.doc.content.some((s) => s.settings.css_classes === 'esg-texture'));
+  assert.match(header(dots), /\.esg-texture\{background-image:radial-gradient/);
+  assert.match(header(build({ decor: 'lines' }, {})), /\.esg-texture\{background-image:repeating-linear-gradient\(135deg/);
+
+  // Hero on the brand color: light texts, the hero photo framed beside them, no photo behind
+  const hero = build({ fill: 'flat' }, { hero: 'color' }).home.doc.content[0];
+  assert.ok(!hero.settings.background_image, 'no photo behind the text');
+  assert.equal(hero.settings.background_color, siteColorsOf(sanitizeSpec({}).style.colors).primaryText);
+  assert.match(json(hero.elements[0]), /"header_size":"h1"[^}]*"title_color":"#FFFFFF"|"title_color":"#FFFFFF"[^}]*"header_size":"h1"/);
+  assert.equal(hero.elements[1].elements[0].widgetType, 'image');
+
+  // Amount of color: colored and photo bands of the Home page + a hero not on a light tint
+  const { colorAmount } = await import('../src/templates/similarity.js');
+  assert.equal(colorAmount({ layout: { hero: 'split', features: 'icons', testimonials: 'cards' }, sections }), 0);
+  assert.equal(colorAmount({ layout: { hero: 'color', features: 'cards', testimonials: 'band', cta: 'phone' }, sections: [...sections, 'cta'] }), 4);
+});
+
+test('signature detail: offered by the planner, chosen by the AI, repeated on every page', async () => {
+  const sections = ['about', 'features', 'services', 'gallery', 'reviews'];
+  const build = (style, layout = {}, site = sampleSite()) => buildSite(sanitizeSpec({ style, layout, sections }), site).docs;
+  const json = (x) => JSON.stringify(x);
+  const header = (docs) => json(docs.header.doc);
+  const count = (x, re) => (json(x).match(re) || []).length;
+
+  // None by default (templates saved before)
+  const plain = build({});
+  assert.equal(sanitizeSpec({}).style.signature, 'none');
+  assert.doesNotMatch(json(plain.home.doc) + header(plain), /esg-num|esg-tilt|esg-vlabel|esg-stamp/);
+
+  // Numbers: one per section title (About included, hero excluded), counted by the page
+  const numbers = build({ signature: 'numbers' });
+  assert.equal(count(numbers.home.doc, /class=\\"esg-num\\"/g), 5);
+  assert.equal(count(numbers.home.doc.content[0], /esg-num/g), 0, 'not in the hero');
+  assert.match(header(numbers), /body\{counter-reset:esg-sec\}/);
+  assert.match(header(numbers), /content:counter\(esg-sec,decimal-leading-zero\)/);
+  assert.ok(count(numbers.about.doc, /esg-num/g) >= 2, 'also on the other pages');
+
+  // Tilted: only the main photos
+  const tilted = build({ signature: 'tilted' }, { about: 'image-left', homeGallery: 'mosaic' });
+  assert.equal(count(tilted.home.doc.content[1], /esg-tilt/g), 1, 'the About photo');
+  assert.equal(count(tilted.home.doc.content[4], /esg-tilt/g), 0, 'not the gallery photos');
+  assert.match(header(tilted), /\.esg-tilt img\{transform:rotate\(-2\.2deg\)/);
+
+  // Vertical: the labels of the left-aligned titles, not the hero one
+  const vertical = build({ signature: 'vertical', align: 'left', kicker: 'dash' });
+  assert.match(json(vertical.home.doc.content[1]), /"_css_classes":"esg-kicker-dash esg-vlabel"/);
+  assert.doesNotMatch(json(vertical.home.doc.content[0]), /esg-vlabel/);
+  assert.equal(count(build({ signature: 'vertical', align: 'center', titles: 'plain' }).home.doc.content[2], /esg-vlabel/g), 0, 'centered titles stay as they are');
+  assert.match(header(vertical), /writing-mode:vertical-rl/);
+
+  // Stamp: the business name around the circle, in the hero
+  const stamp = build({ signature: 'stamp' }, { hero: 'center' });
+  const hero = json(stamp.home.doc.content[0]);
+  assert.match(hero, /"_css_classes":"esg-stamp-w"/);
+  assert.match(hero, /EDIL TEST • EDIL TEST • /);
+  assert.match(header(stamp), /@keyframes esg-spin/);
+  const long = build({ signature: 'stamp' }, { hero: 'center' }, { ...sampleSite(), siteName: 'Impresa Edile Fratelli Rossi & Figli S.r.l.' });
+  const size = Number(json(long.home.doc.content[0]).match(/font-size=\\"([\d.]+)\\"/)[1]);
+  assert.ok(size < 10 && size > 4, `long names get a smaller font (${size})`);
+  assert.doesNotMatch(json(build({ signature: 'stamp' }, {}, { ...sampleSite(), siteName: '' }).home.doc), /esg-stamp/, 'no name, no stamp');
+
+  // The planner offers 2–3 details of the direction not used yet in the category; the AI chooses; otherwise the first
+  const { DIRECTIONS, designPlan, applyPlan } = await import('../src/templates/directions.js');
+  const direction = DIRECTIONS.find((d) => d.id === 'editorial');
+  const plan = designPlan(direction, [{ style: { signature: 'vertical' }, layout: {}, sections }]);
+  assert.ok(plan.signatures.length >= 2 && plan.signatures.length <= 3);
+  assert.ok(!plan.signatures.includes('vertical'), 'not the one another template has');
+  assert.ok(plan.signatures.every((x) => direction.style.signature.includes(x)));
+  const chosen = plan.signatures[1];
+  assert.equal(applyPlan(sanitizeSpec({ style: { signature: chosen } }), direction, plan).style.signature, chosen, 'the choice of the AI');
+  assert.equal(applyPlan(sanitizeSpec({ style: { signature: 'vertical' } }), direction, plan).style.signature, plan.signatures[0], 'a detail not offered: the first one');
+  assert.equal(applyPlan(sanitizeSpec({}), direction, plan).style.signature, plan.signatures[0]);
+  // The prompt describes the offered details and asks for one in "style"
+  const { prompt } = buildTemplatePrompt({ category: { name: 'Test' }, direction, plan });
+  assert.match(prompt, /Signature detail, repeated on every page: choose ONE/);
+  for (const id of plan.signatures) assert.match(prompt, new RegExp(`- "${id}": `));
+  assert.match(prompt, new RegExp(`"signature": "${plan.signatures.join('" \\| "')}"`));
+});
+
+test('templates are compared as a visitor sees them', async () => {
+  const { change, effective, homeShape, shapeDistance, repeatedBlocks, firstScreen, SAME_FAMILY } = await import('../src/templates/similarity.js');
+  // Look-alike values count less than different looks
+  assert.equal(change('layout', 'hero', 'center', 'center'), 0);
+  assert.equal(change('layout', 'hero', 'center', 'slideshow'), SAME_FAMILY, 'centered text over a photo or over a slideshow');
+  assert.equal(change('layout', 'hero', 'center', 'split'), 1);
+  assert.equal(change('layout', 'divider', 'curve', 'waves'), SAME_FAMILY);
+  assert.equal(change('layout', 'divider', 'curve', 'zigzag'), 1);
+  assert.equal(change('layout', 'gallery', '3', '4'), 1, 'decisions without families: any change is a different look');
+  // Decisions without a visible effect are ignored
+  assert.equal(effective({ layout: { hero: 'editorial', heroHeight: 'full' } }).layout.heroHeight, 'auto');
+  assert.equal(effective({ style: { edges: 'all' }, layout: { divider: 'none' } }).style.edges, 'hero');
+  assert.equal(effective({ layout: { features: 'center', featureCount: '5' } }).layout.featureCount, '4');
+
+  // Home shape: the forms of the blocks, whatever section they belong to
+  const shape = homeShape({ layout: { hero: 'split', about: 'image-left', features: 'split', services: 'cards', testimonials: 'band' }, sections: ['about', 'features', 'services', 'gallery', 'reviews'] });
+  assert.deepEqual(shape, ['split', 'media-row', 'media-row', 'card-grid', 'carousel', 'color-band']);
+  assert.equal(repeatedBlocks(shape), 1, 'text beside a photo twice in a row');
+  assert.equal(shapeDistance(shape, shape), 0);
+  assert.equal(shapeDistance(shape, ['split', 'media-row', 'card-grid', 'carousel', 'color-band']), 1, 'one block less');
+  assert.equal(shapeDistance(['a', 'b'], ['b', 'a']), 2);
+  // First screen: kind of header, hero, full screen or not
+  assert.equal(firstScreen({ layout: { header: 'classic', hero: 'center', heroHeight: 'compact' } }), firstScreen({ layout: { header: 'centered', hero: 'center', heroHeight: 'auto' } }));
+  assert.notEqual(firstScreen({ layout: { header: 'classic', hero: 'center', heroHeight: 'auto' } }), firstScreen({ layout: { header: 'classic', hero: 'center', heroHeight: 'full' } }));
+
+  // Five templates of a category (seeded, so the test is stable): different first screens and Home shapes,
+  // no hero layout taken twice while the direction has a free one, no two blocks of the same form in a row
+  const { designPlan, pickDirection } = await import('../src/templates/directions.js');
+  let seed = 7;
+  const rng = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const saved = [];
+  for (let i = 0; i < 5; i++) {
+    const direction = pickDirection(saved, { rng });
+    const free = (direction.layout.hero || []).some((h) => !saved.some((s) => s.layout.hero === h));
+    const plan = designPlan(direction, saved, rng);
+    if (free) assert.ok(!saved.some((s) => s.layout.hero === plan.layout.hero), `template ${i + 1}: a hero layout not in the category yet`);
+    saved.push({ direction: direction.id, style: { ...plan.style, fonts: plan.fonts }, layout: plan.layout, sections: plan.sections });
+  }
+  assert.equal(new Set(saved.map(firstScreen)).size, 5, 'five different first screens');
+  // Blocks of the same form in a row are a penalty, not a rule: rare
+  assert.ok(saved.reduce((n, s) => n + repeatedBlocks(homeShape(s)), 0) <= 1, 'at most one repeated block in the category');
+  for (let i = 0; i < saved.length; i++) {
+    for (let j = 0; j < i; j++) assert.ok(shapeDistance(homeShape(saved[i]), homeShape(saved[j])) >= 2, `templates ${j + 1} and ${i + 1}: different Home shapes`);
   }
 });
 
@@ -699,4 +975,47 @@ test('Home carousel, About in two alternating rows, designed articles', async ()
   // A site with one service: no empty "Other services" box
   const one = buildSite(spec, sampleSite(1)).docs.single_post.doc;
   assert.doesNotMatch(JSON.stringify(articleDoc(one, { title: 'Servizio 1', content: '', imageUrl: null, url: '/servizio-1/' })), /Altri servizi|background_image/);
+});
+
+test('compare the templates of a category and make one more different', async () => {
+  const { compareTemplates, diversify } = await import('../src/templates/directions.js');
+  const category = { name: 'Impresa edile', description: 'Costruzioni e ristrutturazioni' };
+  const provider = new MockProvider({});
+  const saved = [];
+  for (let i = 0; i < 4; i++) saved.push((await generateTemplateSpec(provider, { category, existing: saved })).spec);
+
+  // Likeness: 100 for the same design, low for planned templates, what they share is named
+  const self = compareTemplates(saved[0], saved[0]);
+  assert.equal(self.likeness, 100);
+  assert.ok(['direction', 'palette', 'fonts', 'firstScreen', 'shape'].every((x) => self.shared.includes(x)), self.shared.join());
+  for (let i = 1; i < 4; i++) {
+    const { likeness, shared } = compareTemplates(saved[0], saved[i]);
+    assert.ok(likeness >= 0 && likeness < 60, `planned templates look different (${likeness})`);
+    assert.ok(!shared.includes('direction') && !shared.includes('firstScreen'));
+  }
+  // A look-alike: same design, other hero → between the two
+  const twin = sanitizeSpec({ ...saved[0], layout: { ...saved[0].layout, hero: saved[0].layout.hero === 'card' ? 'split' : 'card' } });
+  const near = compareTemplates(saved[0], twin);
+  assert.ok(near.likeness > 80 && near.likeness < 100, String(near.likeness));
+  assert.ok(!near.shared.includes('firstScreen') && !near.shared.includes('hero'));
+
+  // "Make it more different": the look-alike moves away from the others, keeping palette, texts and sections
+  const others = saved;
+  const before = Math.max(...others.map((o) => compareTemplates(twin, o).likeness));
+  const next = sanitizeSpec(diversify(twin, others, { suitable: ['minimal', 'premium', 'technical', 'corporate', 'industrial', 'natural'] }));
+  const after = Math.max(...others.map((o) => compareTemplates(next, o).likeness));
+  assert.ok(after < before - 20, `${before} -> ${after}`);
+  assert.ok(compareTemplates(next, twin).likeness < 70);
+  assert.deepEqual(next.style.colors, twin.style.colors);
+  assert.deepEqual(next.copy, twin.copy);
+  assert.deepEqual([...next.sections].sort(), [...twin.sections].sort());
+  assert.ok(next.direction === twin.direction || !others.some((o) => o.direction === next.direction), 'a direction no other template has');
+  // Without its own hero phrases / about points / 5–6 strengths, no layout that would show sample texts
+  const legacy = sanitizeSpec({ ...twin, copy: { ...twin.copy, heroPhrases: undefined, aboutPoints: undefined, features: twin.copy.features.slice(0, 4) } });
+  for (let i = 0; i < 10; i++) {
+    const l = sanitizeSpec(diversify(legacy, others)).layout;
+    assert.notEqual(l.heroPhrases, 'rotating');
+    assert.notEqual(l.about, 'sandwich');
+    assert.ok(['3', '4'].includes(l.featureCount), l.featureCount);
+  }
 });

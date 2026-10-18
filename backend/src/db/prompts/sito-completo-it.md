@@ -95,14 +95,14 @@ Regole generali:
 ### 5.1 Home
 Prima l'**hero**, poi le sezioni del template in quest'ordine: {{SEZIONI_HOME}}.
 
-Le sezioni **Chi siamo, Perché sceglierci, I nostri servizi, Galleria a carosello e Recensioni** ci sono sempre; le altre (call to action, numeri chiave, come lavoriamo, domande frequenti, fascia di garanzie) sono state scelte dal template in base alle convenzioni del settore.
+Le sezioni **Chi siamo, Perché sceglierci, I nostri servizi, Galleria fotografica e Recensioni** ci sono sempre; le altre (call to action, numeri chiave, come lavoriamo, domande frequenti, fascia di garanzie) sono state scelte dal template in base alle convenzioni del settore.
 
 - **Hero / prima sezione** – esattamente come nel template, con immagine `{{IMG_HOME_HERO}}` e testi adattati al sito.
 - **Chi siamo** – breve testo di presentazione + immagine (scelta liberamente dall'archivio) + pulsante **"Scopri di più"** che porta alla pagina *Chi Siamo*.
-- **Perché sceglierci** – 4 punti di forza dell'attività (icone/box come da template, con eventuali immagini di sfondo o laterali prese dall'archivio), ciascuno con titolo e testo scritti per `{{NOME_SITO}}`: mai testo segnaposto o "lorem ipsum".
+- **Perché sceglierci** – i punti di forza dell'attività (da 3 a 6, quanti ne prevede il template; icone/box come da template, con eventuali immagini di sfondo o laterali prese dall'archivio), ciascuno con titolo e testo scritti per `{{NOME_SITO}}`: mai testo segnaposto o "lorem ipsum".
 - **Call to action** – *solo se prevista dal template*; con invito a contattare e link a *Contatti* o al telefono; eventuale immagine di sfondo dall'archivio.
 - **I nostri servizi** – 3 servizi in evidenza (immagine, titolo, breve descrizione, link all'articolo del servizio) + pulsante **"Tutti i servizi"** che porta alla pagina *Servizi*.
-- **Galleria a carosello** – slider/carosello di immagini (widget Carosello immagini di Elementor) con tutte le foto dell'archivio (logo escluso), ritagliate alla stessa dimensione, con frecce, punti di navigazione, scorrimento automatico e lightbox, responsive (3 foto su desktop, 2 su tablet, 1 su mobile) + pulsante verso la pagina *Galleria*.
+- **Galleria fotografica** – le foto dell'archivio (logo escluso) nel layout del template: carosello con frecce, scorrimento automatico e lightbox, mosaico (una foto grande e quattro piccole), striscia a tutta larghezza o colonne di foto sfalsate; sempre responsive, con le foto ritagliate in modo uniforme, + pulsante verso la pagina *Galleria*.
 - **Recensioni** – 3 recensioni (vedi sezione 5.6).
 - **Numeri chiave** (se previsti) – 4 cifre realistiche (es. anni di esperienza): sono esempi da verificare con il cliente, mai dati presentati come certi se non forniti.
 - **Come lavoriamo** (se previsto) – il metodo in 4 passi numerati.
@@ -171,7 +171,7 @@ Fornisci:
 ## 8. Controlli finali
 - Nessuna immagine o testo di esempio del template rimasto (nemmeno "lorem ipsum" nei box di "Perché sceglierci"); nessun placeholder immagine vuoto o rotto.
 - Recensioni senza foto dei clienti.
-- Galleria a carosello presente in Home, con tutte le foto alla stessa dimensione.
+- Galleria fotografica presente in Home, con le foto dell'archivio ritagliate in modo uniforme e il link alla pagina *Galleria*.
 - Pagina Chi Siamo divisa in due sezioni alternate (testo | immagine, immagine | testo).
 - Articoli con hero, barra laterale "Altri servizi" e commenti disattivati.
 - Numeri chiave (se presenti) verificati con il cliente.

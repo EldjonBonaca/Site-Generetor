@@ -158,13 +158,17 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }) {
   const ref = useRef(null);
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => e.key === 'Escape' && onClose?.();
+    // Only the dialog on top (the last one opened) closes
+    const onKey = (e) => {
+      const dialogs = document.querySelectorAll('[role="dialog"]');
+      if (e.key === 'Escape' && dialogs[dialogs.length - 1] === ref.current) onClose?.();
+    };
     document.addEventListener('keydown', onKey);
     ref.current?.focus();
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
   if (!open) return null;
-  const widths = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-5xl' };
+  const widths = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-5xl', '2xl': 'max-w-7xl' };
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 sm:items-center" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
       <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" className={cx('my-8 w-full rounded-xl bg-white shadow-xl outline-none', widths[size])}>

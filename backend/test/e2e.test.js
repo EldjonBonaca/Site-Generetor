@@ -86,6 +86,13 @@ test('templates: categories, AI generation, save, edit, duplicate, delete', asyn
   const copy = await api('POST', `/templates/${tpl.id}/duplicate`);
   assert.equal(copy.name, 'Blue classic v2 (copy)');
   assert.equal((await api('GET', '/template-categories')).find((c) => c.id === cat.id).template_count, 2);
+  // Compare: the copy is identical; "make it more different" returns a new design (not saved) with the same palette
+  const { pairs } = await api('GET', `/template-categories/${cat.id}/compare`);
+  assert.deepEqual(pairs.map(({ a, b, likeness }) => [a, b, likeness]), [[tpl.id, copy.id, 100]]);
+  const more = await api('POST', `/templates/${copy.id}/diversify`, { spec: copy.spec });
+  assert.deepEqual(more.spec.style.colors, copy.spec.style.colors);
+  assert.ok(more.direction.name);
+  assert.ok((await api('GET', `/template-categories/${cat.id}/compare`)).pairs[0].likeness === 100, 'not saved');
   await api('DELETE', `/templates/${copy.id}`);
   assert.equal((await api('GET', `/templates?category=${cat.id}`)).length, 1);
 });
@@ -147,7 +154,7 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
 
   const cat = await api('POST', '/template-categories', { name: 'Idraulici' });
   const draft = await api('POST', `/template-categories/${cat.id}/templates/generate`, { providerId: provider.id, language: 'en' });
-  const spec = { ...draft.spec, sections: ['about', 'features', 'cta', 'services', 'gallery', 'reviews'], layout: { ...draft.spec.layout, hero: 'center', heroButtons: 'two', cta: 'banner', contact: 'split', header: 'classic', subheader: 'photo' } };
+  const spec = { ...draft.spec, sections: ['about', 'features', 'cta', 'services', 'gallery', 'reviews'], layout: { ...draft.spec.layout, hero: 'center', heroButtons: 'two', homeGallery: 'carousel', cta: 'banner', contact: 'split', header: 'classic', subheader: 'photo' } };
   const tpl = await api('POST', `/template-categories/${cat.id}/templates`, { name: 'Plumber blue', spec });
   await assert.rejects(api('PUT', `/projects/${pid}/template`, { template_id: 9999 }), /404/);
   await api('PUT', `/projects/${pid}/template`, { template_id: tpl.id });

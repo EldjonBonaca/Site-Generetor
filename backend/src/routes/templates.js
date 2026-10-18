@@ -18,7 +18,7 @@ import { badRequest, notFound, HttpError, LANGUAGES } from '../lib/util.js';
 import { createProvider } from '../ai/registry.js';
 import { AIError } from '../ai/AIProvider.js';
 import { COLOR_KEYS, FONTS, ICONS, LAYOUTS, SPACINGS, STYLE_OPTIONS, WEIGHTS, sanitizeSpec } from '../templates/spec.js';
-import { directionById, directionList } from '../templates/directions.js';
+import { compareTemplates, directionById, directionList, diversify } from '../templates/directions.js';
 import { generateTemplateSpec } from '../templates/generate.js';
 import { analyzeCategory, sanitizeProfile } from '../templates/industry.js';
 import { touch } from './projects.js';
@@ -192,6 +192,21 @@ router.post('/template-categories/:cid/templates/generate', async (req, res) => 
   }
 });
 
+/**
+ * How alike the templates of the category are (the ones the user can see), pair by pair:
+ * -> { pairs: [{ a, b (template ids), likeness (0..100), shared: [what they visibly have in common] }] }
+ */
+router.get('/template-categories/:cid/compare', (req, res) => {
+  const cat = requireCategory(req.params.cid);
+  const templates = all(`${TEMPLATES_SQL} WHERE t.category_id = ? ORDER BY t.id`, cat.id)
+    .filter((r) => canUseTemplate(r, req.user))
+    .map((r) => serializeTemplate(r, req.user));
+  const pairs = [];
+  for (let i = 0; i < templates.length; i++)
+    for (let j = i + 1; j < templates.length; j++) pairs.push({ a: templates[i].id, b: templates[j].id, ...compareTemplates(templates[i].spec, templates[j].spec) });
+  res.json({ pairs });
+});
+
 /** Save a template in the category, owned by the user. Body: { name, spec, shared?, instructions?, language?, generated_by?, tokens_used? } */
 router.post('/template-categories/:cid/templates', (req, res) => {
   const cat = requireCategory(req.params.cid);
@@ -242,6 +257,22 @@ router.patch('/templates/:tid', (req, res) => {
   const categoryId = b.category_id !== undefined ? requireCategory(Number(b.category_id)).id : tpl.category_id;
   run("UPDATE site_templates SET name = ?, spec_json = ?, category_id = ?, updated_at = datetime('now') WHERE id = ?", name, JSON.stringify(spec), categoryId, tpl.id);
   res.json(requireTemplate(tpl.id, req.user));
+});
+
+/**
+ * "Make it more different": a new design (not saved) for the template, as different as possible from
+ * the other templates of its category, keeping palette, texts and Home sections (directions.js).
+ * Body: { spec? (the design being edited, else the saved one) } -> { spec, direction: { id, name } }
+ */
+router.post('/templates/:tid/diversify', (req, res) => {
+  const tpl = requireTemplate(req.params.tid, req.user, { edit: true });
+  const spec = req.body?.spec && typeof req.body.spec === 'object' ? sanitizeSpec(req.body.spec) : tpl.spec;
+  const others = all('SELECT spec_json FROM site_templates WHERE category_id = ? AND id != ? ORDER BY id', tpl.category_id, tpl.id).map((t) => sanitizeSpec(parseJson(t.spec_json, {})));
+  const library = all('SELECT spec_json FROM site_templates WHERE category_id != ? ORDER BY id DESC LIMIT 80', tpl.category_id).map((t) => sanitizeSpec(parseJson(t.spec_json, {})));
+  const suitable = serializeCategory(requireCategory(tpl.category_id)).profile?.directions || null;
+  const next = sanitizeSpec(diversify(spec, others, { library, suitable }));
+  const direction = directionById(next.direction);
+  res.json({ spec: next, direction: { id: direction.id, name: direction.name } });
 });
 
 /** Copy of a visible template, owned by the user (not shared). */

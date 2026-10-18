@@ -3,14 +3,15 @@
  *  - TemplateGenerator: the AI designs a template for a category (preview, regenerate, save);
  *  - TemplateEditor: change the design of a saved template (colors, fonts, layouts, icons, tone).
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowDown, ArrowUp, Bot, Plus, RefreshCw, Save, Sparkles, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Bot, Plus, RefreshCw, Save, Shuffle, Sparkles, Undo2, Wand2, X } from 'lucide-react';
 import { api } from '../api.js';
 import { useT } from '../i18n/index.jsx';
 import { useToast } from './Toast.jsx';
 import { Alert, Badge, Button, EmptyState, Field, Input, Modal, Select, Spinner, Textarea, Toggle } from './ui.jsx';
 import { TemplatePreview, TemplateSwatches, featureCount } from './TemplatePreview.jsx';
+import { PALETTE_NAMES, palettes, samePalette } from '../palettes.js';
 
 /** Sections of the Home page after the hero (spec.sections); the first five are always present. */
 export const HOME_SECTION_LABELS = {
@@ -86,6 +87,8 @@ export const SECTION_LABELS = {
   cta: 'Call to action',
   services: 'Services',
   testimonials: 'Reviews',
+  homeGallery: 'Home photos',
+  footerCta: 'Top of the footer',
   contact: 'Contact page',
   footer: 'Footer',
   gallery: 'Gallery',
@@ -113,6 +116,16 @@ const VARIANT_LABELS = {
   'about.triptych': 'Text between two photos',
   'about.stacked': 'Title beside the text, wide photo below',
   'about.sandwich': 'Text, photo, key points',
+  'header.split': 'Logo in the middle, menu on both sides',
+  'footerCta.none': 'Columns only',
+  'footerCta.large': 'Opens with a large invitation to get in touch',
+  'cta.phone': 'Colored band with the phone number',
+  'cta.photo-split': 'Photo beside a colored panel',
+  'testimonials.side': 'Beside the title, one under the other',
+  'homeGallery.carousel': 'Carousel',
+  'homeGallery.mosaic': 'One large photo + four small',
+  'homeGallery.strip': 'Strip across the whole width',
+  'homeGallery.masonry': 'Columns of staggered photos',
   'heroPhrases.none': 'Nothing more',
   'heroPhrases.rotating': 'Three phrases taking turns',
   'features.split': 'List beside a large photo',
@@ -127,6 +140,7 @@ const VARIANT_LABELS = {
   'hero.card': 'Text in a card over a photo',
   'hero.bottom': 'Big title at the bottom of a photo',
   'hero.editorial': 'Big centered title above a wide photo',
+  'hero.color': 'Text on the brand color, photo beside it',
   'divider.curve': 'Curve',
   'divider.tilt': 'Slant',
   'divider.waves': 'Waves',
@@ -176,7 +190,7 @@ const VARIANT_LABELS = {
 };
 
 /** Look of the whole site (spec.style options). */
-export const STYLE_LABELS = { theme: 'Theme', buttons: 'Buttons', cards: 'Cards', titles: 'Section titles', align: 'Title alignment', scale: 'Title size', images: 'Images', titleCase: 'Title case', kicker: 'Labels above titles', fill: 'Colored bands', motion: 'Entrance animation', hover: 'Card hover', edges: 'Shaped edges', rhythm: 'Section backgrounds', highlight: 'Highlighted word', decor: 'Signature detail' };
+export const STYLE_LABELS = { theme: 'Theme', buttons: 'Buttons', cards: 'Cards', titles: 'Section titles', align: 'Title alignment', scale: 'Title size', images: 'Images', titleCase: 'Title case', kicker: 'Labels above titles', fill: 'Colored bands', motion: 'Entrance animation', hover: 'Card hover', edges: 'Shaped edges', rhythm: 'Section backgrounds', highlight: 'Highlighted word', decor: 'Signature detail', photoTone: 'Photos', photoRatio: 'Main photos', signature: 'Signature element' };
 const STYLE_VALUE_LABELS = {
   'theme.light': 'Light pages',
   'theme.dark': 'Dark pages',
@@ -233,6 +247,20 @@ const STYLE_VALUE_LABELS = {
   'decor.blob': 'Soft shape behind the photos',
   'decor.dropcap': 'Drop cap on the About text',
   'decor.wordmark': 'Huge business name in the footer',
+  'decor.dots': 'Light dots on the tinted sections',
+  'decor.lines': 'Light diagonal lines on the tinted sections',
+  'photoTone.natural': 'Natural colors',
+  'photoTone.mono': 'Black and white (colors under the mouse)',
+  'photoTone.duotone': 'Duotone in the brand colors',
+  'photoTone.faded': 'Faded colors',
+  'signature.none': 'None',
+  'signature.numbers': 'Large numbers above the section titles',
+  'signature.tilted': 'Main photos slightly tilted',
+  'signature.vertical': 'Vertical labels beside the titles',
+  'signature.stamp': 'Round turning stamp in the hero',
+  'photoRatio.standard': 'As each layout',
+  'photoRatio.tall': 'Taller',
+  'photoRatio.wide': 'Wider',
 };
 export const styleLabel = (t, key, value) => t(STYLE_VALUE_LABELS[`${key}.${value}`] || value);
 
@@ -421,24 +449,59 @@ export function TemplateGenerator({ open, onClose, category, onSaved, onAnalyzed
   );
 }
 
-/** Edit the design of a saved template. */
-export function TemplateEditor({ template, onClose, onSaved }) {
+/**
+ * Edit the design of a saved template. "Make it more different" asks the server for a new design,
+ * as different as possible from the other templates of the category (same palette, texts and
+ * sections), shown in the preview until saved; diversifyOnOpen: ask for it as soon as it opens.
+ */
+export function TemplateEditor({ template, onClose, onSaved, diversifyOnOpen = false }) {
   const { t } = useT();
   const toast = useToast();
   const [options, setOptions] = useState(null);
   const [name, setName] = useState(template?.name || '');
   const [spec, setSpec] = useState(template?.spec || null);
   const [saving, setSaving] = useState(false);
+  const [diversifying, setDiversifying] = useState(false);
+  const [history, setHistory] = useState([]); // designs before each "Make it more different", for Undo
+  const [newDirection, setNewDirection] = useState('');
+  // Ready-made palettes around the main color of the saved template; "Other palettes" rotates its hue
+  const [hueShift, setHueShift] = useState(0);
+  const original = template?.spec.style.colors;
+  const choices = useMemo(() => (original ? palettes(original.primary, hueShift) : []), [original, hueShift]);
 
   useEffect(() => {
     if (!template) return;
     setName(template.name);
     setSpec(structuredClone(template.spec));
+    setHueShift(0);
+    setHistory([]);
+    setNewDirection('');
     api.get('/template-options').then(setOptions).catch((e) => toast(e.message, 'error'));
+    if (diversifyOnOpen) diversify(template.spec);
   }, [template]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const diversify = async (current) => {
+    setDiversifying(true);
+    try {
+      const res = await api.post(`/templates/${template.id}/diversify`, { spec: current });
+      setHistory((h) => [...h, current]);
+      setSpec(res.spec);
+      setNewDirection(res.direction.name);
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setDiversifying(false);
+    }
+  };
+  const undo = () => {
+    setSpec(history.at(-1));
+    setHistory((h) => h.slice(0, -1));
+    if (history.length === 1) setNewDirection('');
+  };
 
   const setStyle = (patch) => setSpec((s) => ({ ...s, style: { ...s.style, ...patch } }));
   const setColor = (key, value) => setSpec((s) => ({ ...s, style: { ...s.style, colors: { ...s.style.colors, [key]: value } } }));
+  const setColors = (colors) => setSpec((s) => ({ ...s, style: { ...s.style, colors: { ...colors } } }));
   const setLayout = (key, value) => setSpec((s) => ({ ...s, layout: { ...s.layout, [key]: value } }));
 
   const save = async () => {
@@ -463,6 +526,16 @@ export function TemplateEditor({ template, onClose, onSaved }) {
       size="xl"
       footer={
         <>
+          <div className="mr-auto flex gap-2">
+            <Button icon={Wand2} onClick={() => diversify(spec)} loading={diversifying} disabled={!spec} title={t('A new layout and look, as different as possible from the other templates of the category. Palette, texts and sections stay.')}>
+              {t('Make it more different')}
+            </Button>
+            {history.length > 0 && (
+              <Button icon={Undo2} onClick={undo} disabled={diversifying}>
+                {t('Undo')}
+              </Button>
+            )}
+          </div>
           <Button onClick={onClose}>{t('Cancel')}</Button>
           <Button variant="primary" icon={Save} onClick={save} loading={saving} disabled={!name.trim()}>
             {t('Save')}
@@ -477,6 +550,11 @@ export function TemplateEditor({ template, onClose, onSaved }) {
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
           <div className="order-2 lg:order-1">
+            {newDirection && (
+              <p className="mb-2 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-800">
+                {t('New design in the "{direction}" direction: palette, texts and sections are the same. Save to keep it.', { direction: t(newDirection) })}
+              </p>
+            )}
             <TemplatePreview spec={spec} />
             <p className="mt-2 text-xs text-slate-500">{t('Sketch of the Home page: the site uses your photos and the texts written for each project.')}</p>
           </div>
@@ -484,7 +562,39 @@ export function TemplateEditor({ template, onClose, onSaved }) {
             <Field label={t('Template name')}>{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />}</Field>
 
             <div>
-              <p className="mb-2 text-sm font-medium text-slate-700">{t('Colors')}</p>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-slate-700">{t('Colors')}</p>
+                <button
+                  type="button"
+                  onClick={() => setHueShift((h) => (h + 60 + Math.floor(Math.random() * 240)) % 360)}
+                  className="inline-flex items-center gap-1 rounded text-xs font-medium text-brand-600 hover:text-brand-800"
+                >
+                  <Shuffle className="size-3.5" />
+                  {t('Other palettes')}
+                </button>
+              </div>
+              <div className="mb-3 grid grid-cols-3 gap-2">
+                {[{ id: 'original', colors: original }, ...choices].map((p) => {
+                  const active = samePalette(p.colors, spec.style.colors);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setColors(p.colors)}
+                      aria-pressed={active}
+                      className={`rounded-lg border p-1.5 text-left transition ${active ? 'border-brand-500 ring-2 ring-brand-200' : 'border-slate-200 hover:border-slate-400'}`}
+                    >
+                      <span className="flex h-6 overflow-hidden rounded">
+                        {['primary', 'secondary', 'accent', 'heading', 'background'].map((k) => (
+                          <span key={k} className="flex-1" style={{ background: p.colors[k] }} />
+                        ))}
+                      </span>
+                      <span className="mt-1 block truncate text-[11px] text-slate-600">{t(p.id === 'original' ? 'Original' : PALETTE_NAMES[p.id])}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mb-2 text-xs text-slate-500">{t('Or change the colors one by one:')}</p>
               <div className="grid grid-cols-2 gap-2">
                 {options.colorKeys.map((k) => (
                   <label key={k} className="flex items-center gap-2 text-xs text-slate-600">

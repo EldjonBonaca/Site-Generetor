@@ -27,9 +27,11 @@ export const ICONS = [
 /** Layout variants of each section (the first value is the default). */
 export const LAYOUTS = {
   // "transparent": over the hero / banner photos, with white links (a normal header on the pages without a photo on top)
-  header: ['classic', 'centered', 'topbar', 'bold', 'transparent'],
-  // "slideshow": centered text over a slideshow of the hero image and other photos
-  hero: ['center', 'left', 'split', 'card', 'bottom', 'editorial', 'slideshow'],
+  // "split": the logo in the middle, the first pages of the menu on its left, the others and the button on its right
+  header: ['classic', 'centered', 'topbar', 'bold', 'transparent', 'split'],
+  // "slideshow": centered text over a slideshow of the hero image and other photos; "color": the text on the
+  // brand color (no photo behind it), the hero photo framed beside it
+  hero: ['center', 'left', 'split', 'card', 'bottom', 'editorial', 'slideshow', 'color'],
   // Buttons of the hero: contact + call, only the contact button, or the contact button + a text link to call
   heroButtons: ['two', 'one', 'link'],
   // Height of the hero: the one of its layout, the whole screen (with a "scroll down" arrow), or lower
@@ -44,11 +46,18 @@ export const LAYOUTS = {
   features: ['icons', 'cards', 'list', 'bento', 'split', 'center'],
   // Number of strengths of "why choose us" (each layout takes the nearest count it can arrange: featureCount())
   featureCount: ['4', '3', '5', '6'],
-  cta: ['banner', 'split'],
+  // "phone": a colored band with the phone number in large type; "photo-split": a photo beside a colored panel
+  cta: ['banner', 'split', 'phone', 'photo-split'],
   services: ['cards', 'boxed', 'overlay', 'list'],
-  testimonials: ['cards', 'minimal', 'band', 'quote'],
+  // "side": the title and large stars on the left, the reviews one under the other on the right
+  testimonials: ['cards', 'minimal', 'band', 'quote', 'side'],
+  // Photos of the Home page: a carousel, one large photo + four small ("mosaic"), a strip across the
+  // whole width ("strip"), or three columns of photos of staggered heights ("masonry")
+  homeGallery: ['carousel', 'mosaic', 'strip', 'masonry'],
   contact: ['split', 'stacked'],
   footer: ['dark', 'light', 'brand'],
+  // Top of the footer: nothing more, or a large invitation to get in touch with the phone number and a button
+  footerCta: ['none', 'large'],
   gallery: ['3', '4'],
   // Bottom edge of the hero and the banners (Elementor shape dividers; "none": straight)
   divider: ['curve', 'tilt', 'waves', 'none', 'curve-asymmetrical', 'opacity-tilt', 'wave-brush', 'mountains', 'triangle', 'arrow', 'zigzag'],
@@ -124,7 +133,15 @@ export function sanitizeSections(value, fallback = DEFAULT_SECTIONS) {
  *              marker stroke, or outlined (wrapped at runtime by a script of the header)
  *   decor      signature details of the direction: a fine grid on the tinted sections + corner brackets
  *              on the photos, a thin inset frame on the photos, a soft blob behind the photos, a drop
- *              cap on the About text, or the business name huge at the bottom of the footer
+ *              cap on the About text, the business name huge at the bottom of the footer, or a light
+ *              texture of dots or diagonal lines on the tinted sections
+ *   photoTone  the photos of the pages: natural, black and white, duotone in the brand colors, or faded
+ *              (black and white and duotone photos show their colors under the mouse)
+ *   photoRatio the main photos (About, why choose us, split hero…): as each layout, taller, or wider
+ *   signature  one detail repeated on every page, chosen by the AI among the ones the planner offers, to
+ *              express its concept: large outlined numbers above the section titles, main photos slightly
+ *              tilted, the labels of the titles written vertically beside them, or a round stamp with the
+ *              business name slowly turning in the hero
  */
 export const STYLE_OPTIONS = {
   theme: ['light', 'dark'],
@@ -142,7 +159,10 @@ export const STYLE_OPTIONS = {
   edges: ['hero', 'all'],
   rhythm: ['fixed', 'alternate', 'lines'],
   highlight: ['none', 'italic', 'color', 'marker', 'outline'],
-  decor: ['none', 'grid', 'frame', 'blob', 'dropcap', 'wordmark'],
+  decor: ['none', 'grid', 'frame', 'blob', 'dropcap', 'wordmark', 'dots', 'lines'],
+  photoTone: ['natural', 'mono', 'duotone', 'faded'],
+  photoRatio: ['standard', 'tall', 'wide'],
+  signature: ['none', 'numbers', 'tilted', 'vertical', 'stamp'],
 };
 
 export const SPACINGS = ['normal', 'compact', 'airy'];
@@ -166,6 +186,7 @@ export const COPY_KEYS = {
   contactTitle: 70, contactText: 300, formTitle: 70,
   postCtaTitle: 80, postCtaText: 200, postCtaButton: 30,
   headerButton: 30,
+  footerTitle: 80, footerButton: 30,
 };
 
 const DEFAULT_COPY = {
@@ -245,6 +266,8 @@ const DEFAULT_COPY = {
   postCtaText: 'Contattaci per una consulenza o un preventivo gratuito.',
   postCtaButton: 'Richiedi informazioni',
   headerButton: 'Contattaci',
+  footerTitle: 'Hai un progetto in mente? Parliamone.',
+  footerButton: 'Richiedi un preventivo',
 };
 
 export const DEFAULT_SPEC = Object.freeze({
@@ -348,14 +371,17 @@ export function describeSpec(spec) {
     images: { rounded: 'immagini con angoli arrotondati', square: 'immagini squadrate', framed: 'immagini con cornice colorata sfalsata', arch: 'immagini ad arco (bordo superiore arrotondato)' },
     kicker: { plain: 'etichette semplici sopra i titoli', pill: 'etichette a pillola sopra i titoli', dash: 'etichette con una linea sottile sopra i titoli' },
     fill: { gradient: 'fasce colorate sfumate', flat: 'fasce colorate in tinta unita', deep: 'fasce scure', radial: 'fasce colorate con sfumatura radiale' },
+    photoTone: { natural: 'foto a colori naturali', mono: 'foto in bianco e nero', duotone: 'foto in duotono nei colori del brand', faded: 'foto dai colori sbiaditi' },
+    photoRatio: { standard: 'foto principali in proporzione standard', tall: 'foto principali verticali', wide: 'foto principali panoramiche' },
+    signature: { none: '', numbers: 'elemento firma: grandi numeri sopra i titoli delle sezioni', tilted: 'elemento firma: foto principali leggermente inclinate', vertical: 'elemento firma: etichette dei titoli scritte in verticale', stamp: "elemento firma: timbro circolare rotante con il nome dell'attività nell'hero" },
   };
   const optional = [spec.sections.includes('stats') && `numeri chiave ${l.stats}`, spec.sections.includes('process') && `come lavoriamo ${l.process}`].filter(Boolean);
   return [
     spec.description,
-    `Aspetto: ${['theme', 'buttons', 'cards', 'titles', 'scale', 'images', 'kicker', 'fill'].map((k) => LOOK[k][st[k]]).join(', ')}, titoli allineati ${st.align === 'left' ? 'a sinistra' : 'al centro'}${st.titleCase === 'upper' ? ' e in maiuscolo' : ''}.`,
+    `Aspetto: ${['theme', 'buttons', 'cards', 'titles', 'scale', 'images', 'kicker', 'fill', 'photoTone', 'photoRatio', 'signature'].map((k) => LOOK[k][st[k]]).filter(Boolean).join(', ')}, titoli allineati ${st.align === 'left' ? 'a sinistra' : 'al centro'}${st.titleCase === 'upper' ? ' e in maiuscolo' : ''}.`,
     `Colori: primario ${colors.primary}, secondario ${colors.secondary}, accento ${colors.accent}, titoli ${colors.heading}, testo ${colors.text}.`,
     `Font: ${fonts.heading} (titoli), ${fonts.body} (testi).`,
-    `Layout: header ${l.header}, hero ${l.hero} (${{ two: 'due pulsanti', one: 'un solo pulsante', link: 'un pulsante e un link per chiamare' }[l.heroButtons]}${{ full: ', a tutto schermo', compact: ', bassa', auto: '' }[l.heroHeight]}${l.heroPhrases === 'rotating' ? ', tre frasi a rotazione sotto il titolo' : ''}, bordo inferiore ${l.divider}), banner delle pagine ${l.subheader}, chi siamo ${l.about}, perché sceglierci ${l.features} (${featureCount(l)} punti di forza), call to action ${l.cta}, servizi ${l.services}, recensioni ${l.testimonials} (senza foto dei clienti), ${optional.map((x) => `${x}, `).join('')}contatti ${l.contact}, footer ${l.footer}.`,
+    `Layout: header ${l.header}, hero ${l.hero} (${{ two: 'due pulsanti', one: 'un solo pulsante', link: 'un pulsante e un link per chiamare' }[l.heroButtons]}${{ full: ', a tutto schermo', compact: ', bassa', auto: '' }[l.heroHeight]}${l.heroPhrases === 'rotating' ? ', tre frasi a rotazione sotto il titolo' : ''}, bordo inferiore ${l.divider}), banner delle pagine ${l.subheader}, chi siamo ${l.about}, perché sceglierci ${l.features} (${featureCount(l)} punti di forza), call to action ${l.cta}, servizi ${l.services}, galleria della Home ${l.homeGallery}, recensioni ${l.testimonials} (senza foto dei clienti), ${optional.map((x) => `${x}, `).join('')}contatti ${l.contact}, footer ${l.footer}${l.footerCta === 'large' ? ' che si apre con un grande invito a contattare' : ''}.`,
     `Sezioni della Home dopo l'hero: ${describeSections(spec.sections)}.`,
     `Tono di voce: ${spec.tone}.`,
   ]
@@ -441,7 +467,7 @@ export const SECTION_NAMES_IT = {
   features: 'Perché sceglierci',
   cta: 'Call to action',
   services: 'I nostri servizi',
-  gallery: 'Galleria a carosello',
+  gallery: 'Galleria fotografica',
   reviews: 'Recensioni',
   stats: 'Numeri chiave',
   process: 'Come lavoriamo (4 passi)',

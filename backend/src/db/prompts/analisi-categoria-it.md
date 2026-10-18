@@ -29,7 +29,7 @@ Basandoti sulla tua conoscenza dei siti web delle attività di questo settore (i
 ---
 
 ## 3. Sezioni della Home
-Dopo l'hero, la Home contiene sempre queste sezioni **obbligatorie** (struttura base del sito): Chi siamo, Perché sceglierci, I nostri servizi, Galleria a carosello, Recensioni.
+Dopo l'hero, la Home contiene sempre queste sezioni **obbligatorie** (struttura base del sito): Chi siamo, Perché sceglierci, I nostri servizi, Galleria fotografica, Recensioni.
 
 Puoi aggiungere le sezioni **facoltative** utili al settore e decidere l'**ordine** di tutte le sezioni:
 - **Call to action**: invito a contattare (preventivo, prenotazione, chiamata).

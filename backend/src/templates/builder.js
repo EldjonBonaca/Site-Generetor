@@ -56,6 +56,8 @@ const PADDING = { compact: 64, normal: 96, airy: 128 };
 /** Height (px) of each shape divider at the bottom of the hero and the banners (others: 70). */
 const SHAPE_HEIGHT = { waves: 60, 'wave-brush': 50, triangle: 44, arrow: 30, zigzag: 26, mountains: 90, 'opacity-tilt': 90 };
 const SCALE = { normal: 1, large: 1.12, xl: 1.28 };
+/** Height of the main photos per the photo ratio of the template (others: the height of the layout). */
+const PHOTO_RATIO = { tall: 1.18, wide: 0.78 };
 
 const px = (size, unit = 'px') => ({ unit, size });
 const sides = (t, r, b, l) => ({ unit: 'px', top: String(t), right: String(r), bottom: String(b), left: String(l), isLinked: false });
@@ -240,8 +242,10 @@ function createDoc(role, spec, site) {
       });
       mark(el, 'background_slideshow_gallery', { slot: 'slideshow' });
     }
-    // "grid" decor: a fine grid on the tinted sections (CSS of the header)
-    const classes = [o.css, st.decor === 'grid' && o.bg === ink.alt && !o.slot && 'esg-grid'].filter(Boolean).join(' ');
+    // "grid", "dots" and "lines" decor: a fine grid or a light texture on the tinted sections (CSS of the header)
+    const tinted = o.bg === ink.alt && !o.slot;
+    const texture = tinted && ({ grid: 'esg-grid', dots: 'esg-texture', lines: 'esg-texture' })[st.decor];
+    const classes = [o.css, texture].filter(Boolean).join(' ');
     if (classes) settings.css_classes = classes;
     // Colored or photo band: may get shaped edges towards its neighbours (bandEdges)
     if (o.band) bands.add(el);
@@ -363,6 +367,8 @@ function createDoc(role, spec, site) {
       });
     }
     if (st.kicker === 'dash') el.settings._css_classes = align === 'center' ? 'esg-kicker-dash esg-kicker-c' : 'esg-kicker-dash';
+    // "vertical" signature: the label of a left-aligned section title written vertically beside it (desktop)
+    if (st.signature === 'vertical' && o.vertical !== false && align === 'left') el.settings._css_classes = [el.settings._css_classes, 'esg-vlabel'].filter(Boolean).join(' ');
     return el;
   };
   /** Short accent line under a title. */
@@ -417,6 +423,8 @@ function createDoc(role, spec, site) {
    */
   const picture = (slot, o = {}) => {
     const framed = o.frame && st.images === 'framed';
+    // Main photos (frame) taller or wider per the photo ratio of the template
+    const height = o.height && Math.round(o.height * ((o.frame && PHOTO_RATIO[st.photoRatio]) || 1));
     const settings = {
       image: image(),
       image_size: o.size || 'large',
@@ -428,10 +436,15 @@ function createDoc(role, spec, site) {
     // "framed": an offset block of the secondary color behind the photo; otherwise a soft shadow
     if (framed) Object.assign(settings, { image_box_shadow_box_shadow_type: 'yes', image_box_shadow_box_shadow: { horizontal: 18, vertical: 18, blur: 0, spread: 0, color: c.secondary } });
     else if (o.frame) Object.assign(settings, { image_box_shadow_box_shadow_type: 'yes', image_box_shadow_box_shadow: boxShadow(18, 40, 0.14) });
-    if (o.height) Object.assign(settings, { height: px(o.height), height_tablet: px(Math.round(o.height * 0.8)), height_mobile: px(o.mobileHeight || 260), 'object-fit': 'cover' });
+    if (height) Object.assign(settings, { height: px(height), height_tablet: px(Math.round(height * 0.8)), height_mobile: px(o.mobileHeight || 260), 'object-fit': 'cover' });
     if (o.url) Object.assign(settings, { link_to: 'custom', link: link(o.url) });
     const deco = (o.frame || o.deco) && { grid: 'esg-brackets', frame: 'esg-frame', blob: 'esg-blob' }[st.decor];
-    if (deco) settings._css_classes = deco;
+    // Photos (not the logo) take the photo treatment of the template (CSS of the header)
+    const tone = slot !== 'logo' && st.photoTone && st.photoTone !== 'natural' && 'esg-photo';
+    // "tilted" signature: the main photos slightly tilted
+    const tilt = o.frame && st.signature === 'tilted' && 'esg-tilt';
+    const classes = [deco, tone, tilt].filter(Boolean).join(' ');
+    if (classes) settings._css_classes = classes;
     const el = widget('image', settings);
     mark(el, 'image', { slot, ...(o.service !== undefined ? { service: o.service } : {}) });
     if (o.url) mark(el, 'link.url', { fixed: true });
@@ -584,11 +597,19 @@ function intro(b, parts, o = {}) {
   const align = bar ? 'left' : o.align || b.st.align;
   const light = o.light;
   const els = [];
+  if (b.st.signature === 'numbers') els.push(sectionNumber(b));
   if (parts.kicker) els.push(b.kicker(parts.kicker.value, { ...parts.kicker, align, color: light ? b.c.secondary : undefined, onDark: light }));
   els.push(b.heading(parts.title.value, { ...parts.title, align, bar, hl: true, color: light ? '#FFFFFF' : undefined }));
   if (b.st.titles === 'line') els.push(b.line(align));
   if (parts.text) els.push(b.text(parts.text.value, { ...parts.text, align, color: light ? 'rgba(255,255,255,0.86)' : undefined }));
   return align === 'center' ? b.box(els, { maxWidth: 760, gap: 12, align: 'center' }) : b.box(els, { maxWidth: 820, gap: 12, align: 'stretch' });
+}
+
+/** "numbers" signature: the number of the section (CSS counter of the page) in large outlined figures above its title. */
+function sectionNumber(b) {
+  const el = b.html('<div class="esg-num" aria-hidden="true"></div>');
+  b.mark(el, 'html', { fixed: true });
+  return el;
 }
 
 const shape = (b, color) => ({ shape: b.spec.layout.divider, color });
@@ -606,7 +627,7 @@ const underHeader = (b) => (b.spec.layout.header === 'transparent' ? 'esg-under'
 const NATURAL_SURFACE = {
   about: () => 'bg',
   features: (l) => (l.features === 'cards' ? 'band' : l.features === 'icons' || l.features === 'center' ? 'alt' : 'bg'),
-  cta: (l) => (l.cta === 'split' ? 'bg' : 'band'),
+  cta: (l) => (l.cta === 'split' || l.cta === 'photo-split' ? 'bg' : 'band'),
   services: (l) => (l.services === 'boxed' ? 'alt' : 'bg'),
   gallery: () => 'bg',
   reviews: (l) => (l.testimonials === 'band' ? 'band' : l.testimonials === 'cards' ? 'alt' : 'bg'),
@@ -811,10 +832,38 @@ function features(b) {
 
 function cta(b, site) {
   const { copy, layout } = b.spec;
-  const banner = layout.cta !== 'split';
+  // Without a phone number the "phone" band is a banner
+  const variant = layout.cta === 'phone' && !site.phone ? 'banner' : layout.cta;
+  const banner = variant === 'banner';
   const title = b.heading(copy.ctaTitle, { size: 40, color: '#FFFFFF', align: banner ? 'center' : 'left', hint: 'call to action title: invite to contact the business', max: 80 });
   const body = b.text(copy.ctaText, { color: 'rgba(255,255,255,0.9)', align: banner ? 'center' : 'left', size: 18, hint: 'call to action text (1–2 sentences)', max: 200 });
-  const btn = b.button(copy.ctaButton, site.pages.contact.url, { variant: 'secondary', align: banner ? 'center' : 'right', hint: 'call to action button text (leads to the contact page)', max: 30 });
+  const btn = b.button(copy.ctaButton, site.pages.contact.url, { variant: 'secondary', align: banner ? 'center' : variant === 'split' ? 'right' : 'left', hint: 'call to action button text (leads to the contact page)', max: 30 });
+  // "phone": a colored band, the invitation on the left, the phone number in large type and the button on the right
+  if (variant === 'phone') {
+    const icon = b.widget('icon', {
+      selected_icon: { value: 'fas fa-phone-alt', library: 'fa-solid' },
+      view: 'stacked',
+      shape: b.st.buttons === 'square' ? 'square' : 'circle',
+      primary_color: b.c.secondary,
+      secondary_color: b.c.onSecondary,
+      size: px(20),
+      icon_padding: px(16),
+    });
+    const number = b.heading(site.phone, { tag: 'p', size: 36, color: '#FFFFFF', url: `tel:${telHref(site.phone)}`, fixed: true });
+    return b.section(
+      [b.box([title, body], { width: 54, gap: 12, anim: 0 }), b.box([b.box([icon, number], { row: true, gap: 16 }), btn], { width: 40, gap: 20, align: 'flex-start', anim: 150 })],
+      { row: true, ...b.fill(), padY: Math.round(b.pad * 0.8), band: true }
+    );
+  }
+  // "photo-split": a photo beside a colored panel, the two with rounded outer corners
+  if (variant === 'photo-split') {
+    const panel = b.box([title, body, btn], { width: 50, tablet: 100, ...b.fill(), pad: 56, gap: 18, justify: 'center', anim: 0 });
+    const photo = b.box([], { width: 50, tablet: 100, slot: 'photo', minHeightPx: 420 });
+    return b.section([b.box([photo, panel], { row: true, gap: 0, align: 'stretch', overflow: true, radius: b.st.buttons === 'square' ? 0 : Math.min(b.radius + 6, 24) })], {
+      bg: surfaceBg(b, 'cta', 'bg'),
+      padY: Math.round(b.pad * 0.7),
+    });
+  }
   if (banner) {
     return b.section([b.box([title, body, btn], { maxWidth: 820, gap: 18, align: 'center', anim: 0 })], {
       slot: 'photo',
@@ -859,6 +908,13 @@ function reviews(b) {
       ],
       { bg: surfaceBg(b, 'reviews', 'bg'), align: 'center', gap: 48 }
     );
+  }
+  // "side": the title and large stars on the left, the reviews one under the other on the right, thin lines between them
+  if (layout.testimonials === 'side') {
+    const stars = b.widget('star-rating', { rating_scale: '5', rating: '5', star_style: 'star_fontawesome', stars_color: b.c.secondary, icon_size: px(28), align: 'left' });
+    const head = b.box([intro(b, parts, { align: 'left' }), stars], { width: 34, gap: 20 });
+    const items = copy.reviews.map((r, i) => b.box(b.review(r, i, { align: 'left' }), { gap: 10, anim: i * 120, ...(i ? { padding: [30, 0, 0, 0], border: [1, 0, 0, 0, b.ink.border] } : {}) }));
+    return b.section([head, b.box(items, { width: 58, gap: 30 })], { row: true, bg: surfaceBg(b, 'reviews', 'bg'), align: 'flex-start' });
   }
   const band = layout.testimonials === 'band';
   const cards = layout.testimonials === 'cards';
@@ -940,6 +996,26 @@ function rotatingPhrases(b, align, color) {
   return b.box(phrases, { gap: 0, css: 'esg-rotate' });
 }
 
+/**
+ * "stamp" signature: a round stamp with the business name around a dot, slowly turning in the
+ * bottom-right corner of the hero (CSS of the header; hidden on phones).
+ */
+function heroStamp(b, site, color) {
+  const name = String(site.siteName || '').toUpperCase();
+  const text = `${name} • `.repeat(Math.max(2, Math.ceil(36 / (name.length + 3))));
+  // Font size so that the text goes once around the circle (283 units), at most 10
+  const size = Math.min(10, 283 / (text.length * 0.72)).toFixed(1);
+  const el = b.html(
+    '<div class="esg-stamp" aria-hidden="true"><svg viewBox="0 0 120 120" width="100%" height="100%">' +
+      '<path id="esg-stamp-path" d="M60,60 m-45,0 a45,45 0 1,1 90,0 a45,45 0 1,1 -90,0" fill="none"/>' +
+      `<text font-size="${size}" font-weight="700" letter-spacing="1" fill="${color}" font-family="${escapeAttr(b.fonts.body)},sans-serif"><textPath href="#esg-stamp-path" textLength="280" lengthAdjust="spacingAndGlyphs">${escapeHtml(text)}</textPath></text>` +
+      `<circle cx="60" cy="60" r="6" fill="${b.c.secondary}"/></svg></div>`
+  );
+  el.settings._css_classes = 'esg-stamp-w';
+  b.mark(el, 'html', { fixed: true });
+  return el;
+}
+
 /** Arrow at the bottom of a full-screen hero, leading to the next section (CSS of the header: centered at the bottom, bobbing). */
 function scrollCue(b, color) {
   // An #anchor is not a link field (analyze.js): the AI and the export leave it as it is
@@ -963,33 +1039,42 @@ function hero(b, site) {
   const { copy, layout } = b.spec;
   const tel = `tel:${telHref(site.phone)}`;
   const variant = layout.hero;
-  const onImage = variant === 'center' || variant === 'left' || variant === 'bottom' || variant === 'slideshow';
+  // Light texts on a photo, or on the brand color ("color")
+  const onImage = variant === 'center' || variant === 'left' || variant === 'bottom' || variant === 'slideshow' || variant === 'color';
   const align = variant === 'center' || variant === 'editorial' || variant === 'slideshow' ? 'center' : 'left';
   const css = underHeader(b);
   const size = variant === 'bottom' ? 66 : variant === 'editorial' ? 64 : 58;
-  // Buttons: contact + call ("two"), contact only ("one"), or contact + a text link with a phone icon ("link")
-  const buttons = [b.button(copy.heroButton, site.pages.contact.url, { variant: onImage ? 'secondary' : 'main', hint: 'main hero button (leads to the contact page)', max: 30 })];
-  const callHint = { hint: 'second hero button: call the business by phone', max: 30 };
-  if (layout.heroButtons === 'link') {
-    buttons.push(b.button(copy.heroButton2, tel, { variant: 'link', icon: 'fas fa-phone-alt', color: onImage ? '#FFFFFF' : b.ink.heading, hoverColor: onImage ? b.c.secondary : b.ink.kicker, ...callHint }));
-  } else if (layout.heroButtons !== 'one') {
-    buttons.push(b.button(copy.heroButton2, tel, { variant: 'outline', outlineColor: onImage ? '#FFFFFF' : b.ink.heading, ...callHint }));
-  }
+  // Buttons: contact + call ("two"), contact only ("one"), or contact + a text link with a phone icon ("link").
+  // Built after the texts (element ids, hence field ids, follow the creation order)
+  const buttons = () => {
+    const list = [b.button(copy.heroButton, site.pages.contact.url, { variant: onImage ? 'secondary' : 'main', hint: 'main hero button (leads to the contact page)', max: 30 })];
+    const callHint = { hint: 'second hero button: call the business by phone', max: 30 };
+    if (layout.heroButtons === 'link') {
+      list.push(b.button(copy.heroButton2, tel, { variant: 'link', icon: 'fas fa-phone-alt', color: onImage ? '#FFFFFF' : b.ink.heading, hoverColor: onImage ? b.c.secondary : b.ink.kicker, ...callHint }));
+    } else if (layout.heroButtons !== 'one') {
+      list.push(b.button(copy.heroButton2, tel, { variant: 'outline', outlineColor: onImage ? '#FFFFFF' : b.ink.heading, ...callHint }));
+    }
+    return b.box(list, { row: true, gap: layout.heroButtons === 'link' ? 28 : 14, justify: align === 'center' ? 'center' : 'flex-start' });
+  };
   const content = [
-    b.kicker(copy.heroKicker, { align, color: onImage ? b.c.secondary : undefined, onDark: onImage, hint: 'short tagline above the main title', max: 50 }),
+    b.kicker(copy.heroKicker, { align, color: onImage ? b.c.secondary : undefined, onDark: onImage, vertical: false, hint: 'short tagline above the main title', max: 50 }),
     b.heading(copy.heroTitle, { tag: 'h1', size, align, hl: true, color: onImage ? '#FFFFFF' : undefined, hint: 'main title of the site (H1): the promise of the business, with its activity and city', max: 80 }),
     ...(layout.heroPhrases === 'rotating' ? [rotatingPhrases(b, align, onImage ? b.c.secondary : b.ink.kicker)] : []),
     b.text(copy.heroText, { align, color: onImage ? 'rgba(255,255,255,0.9)' : undefined, size: 19, hint: 'hero subtitle (1–2 sentences)', max: 200 }),
-    b.box(buttons, { row: true, gap: layout.heroButtons === 'link' ? 28 : 14, justify: align === 'center' ? 'center' : 'flex-start' }),
+    buttons(),
   ];
   const edge = shape(b, b.ink.bg);
   // Height (vh): the one of the layout, the whole screen with an arrow to the next section ("full"), or lower ("compact")
   const height = (base) => ({ full: 100, compact: Math.min(base, base > 90 ? 72 : 66) })[layout.heroHeight] || base;
-  const cue = hasScrollCue(layout) ? [scrollCue(b, variant === 'split' ? b.ink.heading : '#FFFFFF')] : [];
+  const light = variant === 'split' || variant === 'editorial';
+  const cue = [
+    ...(hasScrollCue(layout) ? [scrollCue(b, light ? b.ink.heading : '#FFFFFF')] : []),
+    ...(b.st.signature === 'stamp' && site.siteName ? [heroStamp(b, site, light ? b.ink.heading : '#FFFFFF')] : []),
+  ];
   if (variant === 'editorial') {
     // Magazine opening: big centered title on the page color, a wide photo below
     return b.section(
-      [b.box(content, { maxWidth: 900, gap: 22, align: 'center', anim: 0 }), b.box([b.picture('hero', { height: 560, mobileHeight: 280, wide: true, deco: true })], { anim: 200, overflow: true, zoom: true, radius: b.imgRadius })],
+      [b.box(content, { maxWidth: 900, gap: 22, align: 'center', anim: 0 }), b.box([b.picture('hero', { height: 560, mobileHeight: 280, wide: true, deco: true })], { anim: 200, overflow: true, zoom: true, radius: b.imgRadius }), ...cue],
       { bg: b.ink.alt, align: 'center', gap: 56, padY: Math.round(b.pad * 1.1) }
     );
   }
@@ -998,6 +1083,16 @@ function hero(b, site) {
       row: true,
       bg: b.ink.alt,
       minHeight: height(80),
+    });
+  }
+  if (variant === 'color') {
+    // The text on the brand color (no photo behind it), the hero photo framed beside it
+    return b.section([b.box(content, { width: 52, gap: 20, anim: 0 }), b.box([b.picture('hero', { height: 520, mobileHeight: 280, frame: true })], { width: 42, anim: 150 }), ...cue], {
+      row: true,
+      ...b.fill(),
+      minHeight: height(84),
+      divider: edge,
+      css,
     });
   }
   if (variant === 'card') {
@@ -1052,6 +1147,7 @@ function aboutTeaser(b, site) {
   // "triptych": the text centered between the photos
   const align = layout.about === 'triptych' && !bar ? 'center' : 'left';
   const head = [
+    ...(b.st.signature === 'numbers' ? [sectionNumber(b)] : []),
     b.kicker(copy.aboutKicker, { align, hint: 'small label of the "about us" section', max: 30 }),
     b.heading(copy.aboutTitle, { align, bar, hl: true, hint: '"About us" section title', max: 70 }),
     ...(b.st.titles === 'line' ? [b.line(align)] : []),
@@ -1116,8 +1212,45 @@ function featuredServices(b, site) {
 
 /** Photo carousel (Elementor image carousel, free): all the photos, cropped to the same size, with lightbox. */
 function homeGallery(b, site) {
-  const { copy } = b.spec;
+  const { copy, layout } = b.spec;
   const left = b.st.align === 'left' || b.st.titles === 'bar';
+  const url = site.pages.gallery.url;
+  // Title and button built when used: the carousel comes first (element ids, hence field ids, follow the creation order)
+  const head = () => intro(b, {
+    kicker: { value: copy.galleryKicker, hint: 'small label of the photo gallery section of the Home page', max: 30 },
+    title: { value: copy.galleryTitle, hint: 'title of the photo gallery of the Home page (e.g. our works)', max: 60 },
+  });
+  const more = () => b.button(copy.galleryButton, url, { variant: 'outline', outlineColor: b.ink.heading, align: left ? 'left' : 'center', hint: 'button leading to the Gallery page', max: 30 });
+  const bg = surfaceBg(b, 'gallery', 'bg');
+  /** One photo of the archive, cropped to `height`, zooming on hover and leading to the Gallery page. */
+  const tile = (height, o = {}) =>
+    b.box([b.picture('photo', { height, mobileHeight: o.mobileHeight || 200, url, size: 'medium_large', wide: true, round: o.round })], {
+      overflow: true,
+      zoom: true,
+      radius: o.round === false ? 0 : b.imgRadius,
+      anim: o.anim,
+      ...o.box,
+    });
+  // "mosaic": one large photo, four small ones in a 2 × 2 grid beside it
+  if (layout.homeGallery === 'mosaic') {
+    const big = tile(560, { mobileHeight: 280, box: { width: 49, tablet: 100 }, anim: 0 });
+    const small = [0, 1, 2, 3].map((i) => tile(271, { mobileHeight: 160, box: { width: 48, tablet: 48, mobile: 48 }, anim: (i + 1) * 100 }));
+    const grid = b.box([big, b.box(small, { width: 49, tablet: 100, row: true, gap: 18, align: 'stretch', justify: 'space-between' })], { row: true, gap: 18, align: 'stretch', justify: 'space-between' });
+    return b.section([head(), grid, more()], { bg, align: 'center', gap: 40 });
+  }
+  // "masonry": three columns of two photos of staggered heights (two columns on phones)
+  if (layout.homeGallery === 'masonry') {
+    const cols = [[340, 240], [240, 340], [340, 240]].map((heights, c) =>
+      b.box(heights.map((h, r) => tile(h, { mobileHeight: r === c % 2 ? 240 : 170, anim: (c * 2 + r) * 90 })), { width: 32, tablet: 32, mobile: 48, gap: 18 })
+    );
+    cols[2].settings.hide_mobile = 'hidden-mobile';
+    return b.section([head(), b.box(cols, { row: true, gap: 18, align: 'flex-start', justify: 'space-between' }), more()], { bg, align: 'center', gap: 40 });
+  }
+  // "strip": four photos edge to edge across the whole width of the screen, square corners
+  if (layout.homeGallery === 'strip') {
+    const photos = [0, 1, 2, 3].map((i) => tile(400, { mobileHeight: 200, round: false, box: { width: 24.6, tablet: 49.5, mobile: 49.5 }, anim: i * 100 }));
+    return b.section([head(), b.box(photos, { row: true, gap: 6, justify: 'space-between' }), more()], { bg, align: 'center', gap: 40, width: 2560 });
+  }
   const carousel = b.widget('image-carousel', {
     carousel: [image()],
     thumbnail_size: 'large',
@@ -1143,17 +1276,7 @@ function homeGallery(b, site) {
     dots_color_active: b.c.secondary,
   });
   b.mark(carousel, 'carousel', { slot: 'carousel' });
-  return b.section(
-    [
-      intro(b, {
-        kicker: { value: copy.galleryKicker, hint: 'small label of the photo gallery section of the Home page', max: 30 },
-        title: { value: copy.galleryTitle, hint: 'title of the photo gallery of the Home page (e.g. our works)', max: 60 },
-      }),
-      b.box([carousel], { anim: 0 }),
-      b.button(copy.galleryButton, site.pages.gallery.url, { variant: 'outline', outlineColor: b.ink.heading, align: left ? 'left' : 'center', hint: 'button leading to the Gallery page', max: 30 }),
-    ],
-    { bg: surfaceBg(b, 'gallery', 'bg'), align: 'center', gap: 40 }
-  );
+  return b.section([head(), b.box([carousel], { anim: 0 }), more()], { bg, align: 'center', gap: 40 });
 }
 
 /** AI hints of key figure i (shared: the same figure on the Home and About pages and in the photo badge). */
@@ -1639,6 +1762,8 @@ export function articleDoc(doc, post) {
 }
 
 const menuItems = (site) => ['home', 'about', 'services', 'gallery', 'contact'].map((r) => ({ text: site.pages[r].title, url: site.pages[r].url }));
+/** Links of a menu list (HTML). */
+const menuLinks = (items) => items.map((m) => `<li><a href="${escapeAttr(m.url)}">${escapeHtml(m.text)}</a></li>`).join('');
 
 /** Logo image, or the site name when the project has no logo. */
 function brand(b, site, o = {}) {
@@ -1737,6 +1862,8 @@ function signatureCss(b) {
 @media (max-width:767px){.esg-blob::before{top:-4%;right:0}}`,
     dropcap: `.esg-dropcap p:first-of-type::first-letter{float:left;margin:.06em .12em 0 0;font-family:"${fonts.heading}",serif;font-size:4.2em;line-height:.82;color:${ink.kicker}}`,
     wordmark: `.esg-wordmark .elementor-heading-title{font-size:clamp(56px,14vw,240px)!important;line-height:.82!important;letter-spacing:-.04em!important;white-space:nowrap;text-transform:none!important}`,
+    dots: `.esg-texture{background-image:radial-gradient(${ink.dark ? 'rgba(255,255,255,.08)' : rgba(c.heading, 0.1)} 1.2px,transparent 1.7px);background-size:22px 22px}`,
+    lines: `.esg-texture{background-image:repeating-linear-gradient(135deg,${ink.dark ? 'rgba(255,255,255,.05)' : rgba(c.heading, 0.06)} 0 1px,transparent 1px 16px)}`,
   }[b.st.decor];
   const marquee = b.spec.layout.highlights === 'marquee' && (b.spec.sections || []).includes('highlights')
     ? `.esg-marquee{overflow:hidden}
@@ -1774,7 +1901,69 @@ body:has(.esg-under) .esg-hd-brand img{filter:brightness(0) invert(1)}`
 @keyframes esg-rotate{0%{opacity:0;transform:translateY(14px)}4%,30%{opacity:1;transform:none}34%,100%{opacity:0;transform:translateY(-14px)}}
 @media (prefers-reduced-motion:reduce){.esg-rotate>.elementor-widget{animation:none}.esg-rotate>.elementor-widget:first-child{opacity:1}}`
     : '';
-  return [highlightCss(b), decor, marquee, over, scroll, rotate].filter(Boolean).map((css) => `\n${css}`).join('');
+  return [highlightCss(b), decor, marquee, over, scroll, rotate, photoToneCss(b), signatureDetailCss(b)].filter(Boolean).map((css) => `\n${css}`).join('');
+}
+
+/**
+ * The signature detail of the template, on every page: section numbers (a CSS counter of the page,
+ * outlined in the accent color), tilted main photos (alternating from one section to the next,
+ * straight under the mouse), vertical labels beside the left-aligned titles (desktop), or the round
+ * stamp of the hero (turning slowly; still with reduced motion, hidden on phones).
+ */
+function signatureDetailCss(b) {
+  const { c, fonts } = b;
+  return {
+    numbers: `body{counter-reset:esg-sec}
+.esg-num{counter-increment:esg-sec;line-height:1}
+.esg-num::before{content:counter(esg-sec,decimal-leading-zero);font-family:"${fonts.heading}",serif;font-size:64px;font-weight:700;line-height:.9;letter-spacing:-.02em;color:transparent;-webkit-text-stroke:1.5px ${c.secondary}}
+@media (max-width:767px){.esg-num::before{font-size:44px}}`,
+    tilted: `.esg-tilt img{transform:rotate(-2.2deg);transition:transform .6s cubic-bezier(.2,.7,.3,1)}
+.elementor > .e-con:nth-child(even) .esg-tilt img{transform:rotate(2.2deg)}
+.esg-tilt:hover img,.elementor > .e-con .esg-tilt:hover img{transform:none}
+@media (max-width:767px){.esg-tilt img,.elementor > .e-con:nth-child(even) .esg-tilt img{transform:rotate(-1.2deg)}}
+@media (prefers-reduced-motion:reduce){.esg-tilt img{transition:none}}`,
+    vertical: `@media (min-width:1025px){
+.e-con:has(> .esg-vlabel){position:relative;padding-left:56px!important}
+.elementor-widget.esg-vlabel{position:absolute!important;left:0;top:4px;width:auto!important;max-width:none!important;margin:0!important;writing-mode:vertical-rl;transform:rotate(180deg)}
+}`,
+    stamp: `.elementor-widget.esg-stamp-w{position:absolute!important;right:7%;bottom:16%;width:132px!important;max-width:none!important;margin:0!important;z-index:2;pointer-events:none}
+.esg-stamp svg{display:block;animation:esg-spin 26s linear infinite}
+@keyframes esg-spin{to{transform:rotate(360deg)}}
+@media (max-width:1024px){.elementor-widget.esg-stamp-w{width:96px!important;right:4%;bottom:10%}}
+@media (max-width:767px){.elementor-widget.esg-stamp-w{display:none}}
+@media (prefers-reduced-motion:reduce){.esg-stamp svg{animation:none}}`,
+  }[b.st.signature] || '';
+}
+
+/** Photos of the pages (image widgets, Home carousel, Gallery page), filtered per the photo treatment. */
+const TONED = ['.esg-photo img', '.elementor-widget-image-carousel .swiper-slide img', '.elementor-widget-image-gallery .gallery-item img'];
+const PHOTO_FILTERS = { mono: 'grayscale(1) contrast(1.06)', duotone: 'url(#esg-duotone)', faded: 'saturate(.68) contrast(.9) brightness(1.05)' };
+
+/**
+ * Photo treatment of the template: black and white, duotone (the SVG filter of the header maps the
+ * dark tones to the dark color and the light ones to a tint of the primary color) or faded. Black
+ * and white and duotone photos show their real colors under the mouse. The photos behind texts
+ * (hero, bands) keep their colors under the overlays of the template.
+ */
+function photoToneCss(b) {
+  const filter = PHOTO_FILTERS[b.st.photoTone];
+  if (!filter) return '';
+  const hover = ['.esg-zoom:hover .esg-photo img', '.esg-photo:hover img', '.elementor-widget-image-carousel .swiper-slide:hover img', '.elementor-widget-image-gallery .gallery-item:hover img'];
+  const reveal = b.st.photoTone === 'faded' ? '' : `\n${hover.join(',')}{filter:none}`;
+  return `${TONED.join(',')}{filter:${filter};transition:filter .6s ease}${reveal}`;
+}
+
+/** SVG duotone filter (in the header, so on every page): luminance -> from the dark color to a light tint of the primary color. */
+function duotoneSvg(b) {
+  if (b.st.photoTone !== 'duotone') return '';
+  const channels = (hex) => [1, 3, 5].map((i) => (parseInt(hex.slice(i, i + 2), 16) / 255).toFixed(3));
+  const [dark, light] = [channels(b.c.dark), channels(tint(b.c.primary, 0.78))];
+  const func = (n, i) => `<feFunc${n} type="table" tableValues="${dark[i]} ${light[i]}"/>`;
+  return (
+    '<svg aria-hidden="true" focusable="false" width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden">' +
+    '<filter id="esg-duotone" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values=".2126 .7152 .0722 0 0 .2126 .7152 .0722 0 0 .2126 .7152 .0722 0 0 0 0 0 1 0"/>' +
+    `<feComponentTransfer>${['R', 'G', 'B'].map(func).join('')}</feComponentTransfer></filter></svg>`
+  );
 }
 
 /**
@@ -1809,7 +1998,8 @@ function headerScripts(b) {
  * desktop; below 1025px a hamburger button opening a dropdown panel (with the call to action on
  * phones, where the header button is hidden). The style also keeps the header on one line:
  * logo and button take their width, the menu the rest.
- * o: { justify ('flex-end' | 'center'), color, hover, button: { text, url } }
+ * o: { justify ('flex-end' | 'center' | 'flex-start'), color, hover, button: { text, url },
+ *      skip: on desktop, the first pages are left out (shown by another menu on the left of the logo: "split" header) }
  */
 function navMenu(b, site, o) {
   const { st, c, ink, fonts } = b;
@@ -1830,7 +2020,7 @@ function navMenu(b, site, o) {
     '--esg-radius': `${Math.min(radius, 12)}px`,
   };
   const style = Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(';');
-  const items = menuItems(site).map((m) => `<li><a href="${escapeAttr(m.url)}">${escapeHtml(m.text)}</a></li>`).join('');
+  const items = menuLinks(menuItems(site));
   const css = `.esg-header{position:relative;z-index:100}
 .esg-header .esg-hd-brand,.esg-header .esg-hd-cta{flex:0 0 auto!important;width:auto!important;max-width:none}
 .esg-header .esg-hd-nav{flex:1 1 auto!important;width:auto!important;min-width:0}
@@ -1865,12 +2055,18 @@ function navMenu(b, site, o) {
 .esg-header .esg-hd-nav{margin-left:auto}
 .esg-nav-list .esg-nav-cta{display:block;margin-top:8px}
 .esg-nav-list .esg-nav-cta a,.esg-nav-list .esg-nav-cta a:hover{background:var(--esg-cta-bg);color:var(--esg-cta-color);text-align:center}
-}`;
+}${
+    o.skip
+      ? `
+.esg-header .esg-hd-side{flex:1 1 0!important;width:auto!important;min-width:0;flex-wrap:nowrap!important}
+@media (min-width:1025px){.esg-nav-skip .esg-nav-list li:nth-child(-n+${o.skip}){display:none}}`
+      : ''
+  }`;
   const html =
-    `<nav class="esg-nav" style="${style}" aria-label="${escapeAttr(b.L.menu)}">` +
+    `<nav class="esg-nav${o.skip ? ' esg-nav-skip' : ''}" style="${style}" aria-label="${escapeAttr(b.L.menu)}">` +
     `<button type="button" class="esg-nav-toggle" aria-expanded="false" aria-controls="esg-nav-list" aria-label="${escapeAttr(b.L.menu)}"><span class="esg-nav-bars" aria-hidden="true"><span></span><span></span><span></span></span></button>` +
     `<ul id="esg-nav-list" class="esg-nav-list">${items}<li class="esg-nav-cta"><a href="${escapeAttr(o.button.url)}">${escapeHtml(o.button.text)}</a></li></ul>` +
-    `</nav>\n<style>\n${css}\n${finishCss(b)}\n</style>\n<script>\n${headerScripts(b)}\n</script>`;
+    `</nav>${duotoneSvg(b)}\n<style>\n${css}\n${finishCss(b)}\n</style>\n<script>\n${headerScripts(b)}\n</script>`;
   const el = b.html(html);
   b.mark(el, 'html', { fixed: true });
   return el;
@@ -1897,6 +2093,32 @@ function header(b, site) {
   }
   // Logo, menu and button on one line (never wrapping); "centered": the menu in the middle, otherwise next to the button
   const button = { text: copy.headerButton, url: site.pages.contact.url };
+  // "split": the logo in the middle of two equal sides, the first pages on the left, the others and the button on the
+  // right; below 1025px the left side is hidden and the logo, the button and the whole menu are as in the other headers
+  if (layout.header === 'split') {
+    const pages = menuItems(site);
+    const cut = Math.ceil(pages.length / 2);
+    const vars = `--esg-justify:flex-end;--esg-color:${menuColor};--esg-hover:${hover}`;
+    const left = b.html(`<nav class="esg-nav" style="${vars}" aria-label="${escapeAttr(b.L.menu)}"><ul class="esg-nav-list">${menuLinks(pages.slice(0, cut))}</ul></nav>`);
+    b.mark(left, 'html', { fixed: true });
+    out.push(
+      b.section(
+        [
+          b.box([left], { css: 'esg-hd-side', desktopOnly: true }),
+          b.box([brand(b, site, { align: 'center', mobileWidth: 140 })], { css: 'esg-hd-brand' }),
+          b.box(
+            [
+              b.box([navMenu(b, site, { justify: 'flex-start', color: menuColor, hover, button, skip: cut })], { css: 'esg-hd-nav' }),
+              b.box([b.button(button.text, button.url, { variant: 'main', align: 'right', hint: 'header button leading to the contact page', max: 25 })], { align: 'flex-end', css: 'esg-hd-cta' }),
+            ],
+            { row: true, gap: 20, css: 'esg-hd-side' }
+          ),
+        ],
+        { row: true, wrap: false, bg, padY: 16, gap: 36, ...frame, css: 'esg-header' }
+      )
+    );
+    return out;
+  }
   out.push(
     b.section(
       [
@@ -1943,7 +2165,25 @@ function footer(b, site) {
     el.settings.overflow = 'hidden';
     wordmark.push(el);
   }
+  // "large": the footer opens with a large invitation to get in touch, the phone number and a button, above a thin line
+  const invite = [];
+  if (b.spec.layout.footerCta === 'large') {
+    const { copy } = b.spec;
+    const contact = [];
+    if (site.phone) contact.push(b.heading(site.phone, { tag: 'p', size: 26, color: titleColor, url: `tel:${telHref(site.phone)}`, fixed: true }));
+    contact.push(b.button(copy.footerButton, site.pages.contact.url, { variant: 'secondary', hint: 'button of the invitation at the top of the footer (leads to the contact page)', max: 30 }));
+    invite.push(
+      b.section(
+        [
+          b.box([b.heading(copy.footerTitle, { size: 50, color: titleColor, hl: true, hint: 'large invitation to get in touch at the top of the footer, shown on every page (one short sentence)', max: 80 })], { width: 62 }),
+          b.box(contact, { width: 32, gap: 16, align: 'flex-start' }),
+        ],
+        { row: true, ...style, padY: Math.round(b.pad * 0.8), borderBottom: light ? b.ink.border : 'rgba(255,255,255,0.12)' }
+      )
+    );
+  }
   return [
+    ...invite,
     b.section(cols, { row: true, ...style, align: 'flex-start', padY: Math.round(b.pad * 0.8) }),
     ...wordmark,
     b.section([b.text(`<p>${escapeHtml(site.copyright)}${LEGAL_LINKS}</p>`, { align: 'center', size: 14, color, fixed: true })], {
