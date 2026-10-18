@@ -7,7 +7,7 @@
  * project images.
  */
 import { Fragment, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, ImageIcon, Plus, Quote, Star } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ImageIcon, Plus, Quote, Star } from 'lucide-react';
 import { cx } from './ui.jsx';
 
 // Same color rules as the site builder (backend/src/templates/spec.js)
@@ -21,6 +21,14 @@ const luminance = (hex) => {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 };
 const onColor = (bg, dark) => (1.05 / (luminance(bg) + 0.05) >= 3 ? '#fff' : dark);
+
+// Same rule as the site builder (featureCount in backend/src/templates/spec.js): the strengths of
+// "why choose us" shown by its layout, the count of the template or the nearest one it can arrange
+const FEATURE_COUNTS = { icons: [3, 4, 5, 6], cards: [3, 4, 5, 6], list: [4, 6], bento: [3, 4, 5], split: [3, 4, 5], center: [4, 6] };
+export function featureCount(layout) {
+  const want = Number(layout?.featureCount) || 4;
+  return (FEATURE_COUNTS[layout?.features] || [4]).reduce((best, n) => (Math.abs(n - want) < Math.abs(best - want) ? n : best));
+}
 
 const Lines = ({ n = 2, color, width = '100%', center = false }) => (
   <div className={cx('space-y-1', center && 'flex flex-col items-center')} style={{ width }}>
@@ -105,7 +113,7 @@ export function TemplatePreview({ spec, compact = false, className }) {
   const order = spec.sections || ['about', 'features', 'cta', 'services', 'gallery', 'reviews'];
   const NATURAL = {
     about: 'bg',
-    features: l.features === 'cards' ? 'band' : l.features === 'icons' ? 'alt' : 'bg',
+    features: l.features === 'cards' ? 'band' : l.features === 'icons' || l.features === 'center' ? 'alt' : 'bg',
     cta: l.cta === 'split' ? 'bg' : 'band',
     services: l.services === 'boxed' ? 'alt' : 'bg',
     gallery: 'bg',
@@ -251,6 +259,37 @@ export function TemplatePreview({ spec, compact = false, className }) {
     </p>
   );
   const photoBg = (overlay) => ({ background: `${overlay}, linear-gradient(135deg, ${c.primary}, ${c.dark})` });
+  /** Rotating phrases under the title: the first one, with a dot for each phrase (the site shows them in turn). */
+  const phrases = (color, center = false) =>
+    l.heroPhrases === 'rotating' && (
+      <div className={cx('mt-0.5 flex items-center gap-1.5', center && 'justify-center')}>
+        <p className="text-[9px] leading-tight" style={{ ...head, color }}>
+          {copy.heroPhrases?.[0] || '…'}
+        </p>
+        <span className="flex gap-0.5">
+          {[0, 1, 2].map((i) => (
+            <span key={i} className="size-1 rounded-full" style={{ background: color, opacity: i ? 0.35 : 1 }} />
+          ))}
+        </span>
+      </div>
+    );
+  /** Buttons: contact + call, contact only, or contact + a call link with a phone icon (fg: color of the second one). */
+  const heroButtons = (bg, fg, center = false) => (
+    <div className={cx('flex items-center gap-1.5 pt-1', center && 'justify-center')}>
+      {btn(bg, copy.heroButton)}
+      {l.heroButtons === 'link' ? (
+        <span className="ml-1 text-[8px] font-semibold" style={{ ...body, color: fg }}>
+          ☎ {copy.heroButton2}
+        </span>
+      ) : (
+        l.heroButtons !== 'one' && btn(fg, copy.heroButton2, true, fg)
+      )}
+    </div>
+  );
+  // Height: the whole screen (with an arrow to the next section) or lower; the editorial hero keeps its height
+  const full = l.heroHeight === 'full' && l.hero !== 'editorial';
+  const compactHero = l.heroHeight === 'compact';
+  const cue = (color) => full && l.hero !== 'bottom' && <ChevronDown className="absolute bottom-4 left-1/2 size-3 -translate-x-1/2" style={{ color }} />;
   let hero;
   if (l.hero === 'editorial') {
     hero = (
@@ -258,39 +297,35 @@ export function TemplatePreview({ spec, compact = false, className }) {
         <div className="w-4/5 space-y-1">
           <div className="flex justify-center">{heroKicker(ink.kicker)}</div>
           {heroTitle(ink.heading, 15)}
-          <div className="flex justify-center gap-1.5 pt-1">
-            {btn(mainBg, copy.heroButton)}
-            {btn(ink.heading, copy.heroButton2, true)}
-          </div>
+          {phrases(ink.kicker, true)}
+          {heroButtons(mainBg, ink.heading, true)}
         </div>
         <Photo className="h-20 w-full" wide deco />
       </div>
     );
   } else if (l.hero === 'split') {
     hero = (
-      <div className="flex items-center gap-3 px-4 py-6" style={{ background: ink.alt }}>
+      <div className={cx('relative flex items-center gap-3 px-4', full ? 'min-h-48' : compactHero ? 'py-4' : 'py-6')} style={{ background: ink.alt }}>
         <div className="flex-1 space-y-1">
           {heroKicker(ink.kicker)}
           {heroTitle(ink.heading)}
-          <div className="flex gap-1.5 pt-1">
-            {btn(mainBg, copy.heroButton)}
-            {btn(ink.heading, copy.heroButton2, true)}
-          </div>
+          {phrases(ink.kicker)}
+          {heroButtons(mainBg, ink.heading)}
         </div>
-        <Photo className="h-24 w-2/5" frame />
+        <Photo className={cx('w-2/5', compactHero ? 'h-20' : 'h-24')} frame />
+        {cue(ink.heading)}
       </div>
     );
   } else if (l.hero === 'card') {
     hero = (
-      <div className="relative px-4 pt-6 pb-8" style={photoBg(`linear-gradient(90deg, ${c.dark}66, ${c.dark}22)`)}>
+      <div className={cx('relative flex items-center px-4', full ? 'min-h-48' : compactHero ? 'pt-4 pb-6' : 'pt-6 pb-8')} style={photoBg(`linear-gradient(90deg, ${c.dark}66, ${c.dark}22)`)}>
         <div className="w-3/5 space-y-1 p-3" style={card('photo')}>
           {heroKicker(ink.kicker)}
           {heroTitle(ink.heading, 13)}
-          <div className="flex gap-1.5 pt-1">
-            {btn(mainBg, copy.heroButton)}
-            {btn(ink.heading, copy.heroButton2, true)}
-          </div>
+          {phrases(ink.kicker)}
+          {heroButtons(mainBg, ink.heading)}
         </div>
+        {cue('#fff')}
         <Edge shape={l.divider} color={ink.bg} />
       </div>
     );
@@ -298,17 +333,16 @@ export function TemplatePreview({ spec, compact = false, className }) {
     const bottom = l.hero === 'bottom';
     const slideshow = l.hero === 'slideshow';
     const center = l.hero === 'center' || slideshow;
+    const height = full ? cx('min-h-48', bottom ? 'justify-end pt-14' : 'justify-center pt-8') : bottom ? cx(compactHero ? 'min-h-28' : 'min-h-36', 'justify-end pt-14') : compactHero ? 'pt-5' : 'pt-8';
     hero = (
       <div
-        className={cx('relative flex flex-col px-4 pb-9', bottom ? 'min-h-36 justify-end pt-14' : 'pt-8', center && 'items-center text-center')}
+        className={cx('relative flex flex-col px-4', compactHero ? 'pb-7' : 'pb-9', height, center && 'items-center text-center')}
         style={photoBg(bottom ? `linear-gradient(180deg, ${c.dark}11, ${c.dark}f0)` : center ? `linear-gradient(180deg, ${c.dark}aa, ${c.dark}dd)` : `linear-gradient(90deg, ${c.dark}ee, ${c.dark}44)`)}
       >
         {heroKicker(c.secondary)}
         <div className={cx('mt-1', center ? 'max-w-[85%]' : 'max-w-[70%]')}>{heroTitle('#fff', bottom ? 17 : 14)}</div>
-        <div className="mt-2 flex gap-1.5">
-          {btn(c.secondary, copy.heroButton)}
-          {btn('#ffffff', copy.heroButton2, true, '#fff')}
-        </div>
+        {phrases(c.secondary, center)}
+        <div className="mt-1">{heroButtons(c.secondary, '#fff', center)}</div>
         {/* Slideshow: the photos change behind the text */}
         {slideshow && (
           <div className="mt-3 flex gap-1">
@@ -317,15 +351,17 @@ export function TemplatePreview({ spec, compact = false, className }) {
             ))}
           </div>
         )}
+        {cue('#fff')}
         <Edge shape={l.divider} color={ink.bg} />
       </div>
     );
   }
 
   // --- About ---
+  const aboutTitle = title(copy.aboutKicker, copy.aboutTitle, { center: false });
   const aboutText = (
     <div className="flex-1 space-y-1.5">
-      {title(copy.aboutKicker, copy.aboutTitle, { center: false })}
+      {aboutTitle}
       {st.decor === 'dropcap' ? (
         <div className="flex items-start gap-1">
           <span className="text-[18px] leading-[0.8]" style={{ ...head, color: ink.kicker }}>
@@ -346,6 +382,46 @@ export function TemplatePreview({ spec, compact = false, className }) {
       <div className={cx('space-y-2 px-4', pad)} style={{ background: sbg('about') }}>
         <div className="mx-auto w-4/5">{aboutText}</div>
         <Photo className="h-14 w-full" frame />
+      </div>
+    ) : l.about === 'stacked' ? (
+      // The title beside the text, a wide photo below
+      <div className={cx('space-y-2 px-4', pad)} style={{ background: sbg('about') }}>
+        <div className="flex items-start gap-3">
+          <div className="w-2/5">{aboutTitle}</div>
+          <div className="flex-1 space-y-1.5">
+            <Lines n={3} color={ink.text} />
+            {btn(mainBg, copy.aboutButton)}
+          </div>
+        </div>
+        <Photo className="h-14 w-full" frame wide />
+      </div>
+    ) : l.about === 'sandwich' ? (
+      // Title and text | a tall photo | key points and button
+      <div className={cx('flex items-center gap-2 px-4', pad)} style={{ background: sbg('about') }}>
+        <div className="flex-1 space-y-1.5">
+          {aboutTitle}
+          <Lines n={3} color={ink.text} />
+        </div>
+        <Photo className="h-20 w-1/4" frame />
+        <div className="flex-1 space-y-1">
+          {(copy.aboutPoints || ['', '', '']).map((x, i) => (
+            <p key={i} className="flex items-center gap-1 text-[6px] font-semibold leading-tight" style={{ ...body, color: ink.heading }}>
+              <span style={{ color: c.secondary }}>✓</span> {x}
+            </p>
+          ))}
+          <div className="pt-0.5">{btn(mainBg, copy.aboutButton)}</div>
+        </div>
+      </div>
+    ) : l.about === 'triptych' ? (
+      // The text centered between two photos, the second one lower
+      <div className={cx('flex items-center gap-2 px-4', pad)} style={{ background: sbg('about') }}>
+        <Photo className="h-16 w-1/4" frame />
+        <div className="flex flex-1 flex-col items-center gap-1.5 text-center">
+          {title(copy.aboutKicker, copy.aboutTitle, { center: st.titles !== 'bar' })}
+          <Lines n={3} color={ink.text} center />
+          {btn(mainBg, copy.aboutButton)}
+        </div>
+        <Photo className="mt-5 h-12 w-1/4" />
       </div>
     ) : (
       <div className={cx('flex items-center gap-3 px-4', pad, l.about === 'image-right' && 'flex-row-reverse')} style={{ background: sbg('about') }}>
@@ -375,6 +451,7 @@ export function TemplatePreview({ spec, compact = false, className }) {
     );
 
   // --- Why choose us ---
+  const shown = copy.features.slice(0, featureCount(l));
   /** One strength: a centered card (cardOn), a row with the icon beside the text, or that row in a card (rowCardOn: bento). */
   const featureItem = (f, i, cardOn, rowCardOn = null) => (
     <div key={i} className={cx('flex gap-1 p-1.5', cardOn ? 'flex-col items-center text-center' : 'items-start')} style={cardOn ? card(cardOn) : rowCardOn ? card(rowCardOn) : undefined}>
@@ -395,7 +472,7 @@ export function TemplatePreview({ spec, compact = false, className }) {
   let why;
   if (l.features === 'bento') {
     // The first strength large over a photo, the other three as compact cards beside it
-    const [first, ...rest] = copy.features;
+    const [first, ...rest] = shown;
     why = (
       <div className={cx('px-4', pad)} style={{ background: sbg('features') }}>
         {title(copy.featuresKicker, copy.featuresTitle)}
@@ -407,7 +484,37 @@ export function TemplatePreview({ spec, compact = false, className }) {
             </span>
             <span className="text-[5px] leading-tight text-white/80">{first.text}</span>
           </div>
-          <div className="flex flex-1 flex-col gap-1">{rest.map((f, i) => featureItem(f, i + 1, null, son('features')))}</div>
+          <div className={cx('flex-1 gap-1', rest.length > 3 ? 'grid grid-cols-2' : 'flex flex-col')}>{rest.map((f, i) => featureItem(f, i + 1, null, son('features')))}</div>
+        </div>
+      </div>
+    );
+  } else if (l.features === 'split') {
+    // The strengths as a list beside a large photo, on the other side than the About photo
+    why = (
+      <div className={cx('flex items-center gap-3 px-4', pad, l.about === 'image-right' && 'flex-row-reverse')} style={{ background: sbg('features') }}>
+        <div className="flex-1 space-y-1.5">
+          {title(copy.featuresKicker, copy.featuresTitle, { center: false })}
+          <div className="divide-y" style={{ borderColor: ink.border }}>
+            {shown.map((f, i) => (
+              <div key={i} style={{ borderColor: ink.border }}>
+                {featureItem(f, i, null)}
+              </div>
+            ))}
+          </div>
+        </div>
+        <Photo className="h-28 w-2/5" frame />
+      </div>
+    );
+  } else if (l.features === 'center') {
+    // A photo in the middle, half of the strengths on each side facing it
+    const half = Math.ceil(shown.length / 2);
+    why = (
+      <div className={cx('px-4', pad)} style={{ background: sbg('features') }}>
+        {title(copy.featuresKicker, copy.featuresTitle)}
+        <div className="mt-2 flex items-center gap-2">
+          <div className="flex w-[30%] flex-col gap-2 text-right [&>div]:flex-row-reverse">{shown.slice(0, half).map((f, i) => featureItem(f, i, null))}</div>
+          <Photo className="h-24 flex-1" frame />
+          <div className="flex w-[30%] flex-col gap-2">{shown.slice(half).map((f, i) => featureItem(f, half + i, null))}</div>
         </div>
       </div>
     );
@@ -415,7 +522,7 @@ export function TemplatePreview({ spec, compact = false, className }) {
     why = (
       <div className={cx('flex gap-3 px-4', pad)} style={{ background: sbg('features') }}>
         <div className="w-1/3">{title(copy.featuresKicker, copy.featuresTitle, { center: false })}</div>
-        <div className="grid flex-1 grid-cols-2 gap-1.5">{copy.features.map((f, i) => featureItem(f, i, null))}</div>
+        <div className="grid flex-1 grid-cols-2 gap-1.5">{shown.map((f, i) => featureItem(f, i, null))}</div>
       </div>
     );
   } else {
@@ -423,7 +530,7 @@ export function TemplatePreview({ spec, compact = false, className }) {
     why = (
       <div className={cx('px-4', pad)} style={onPhoto ? photoBg(`linear-gradient(180deg, ${c.dark}ee, ${c.dark}cc)`) : { background: sbg('features') }}>
         {title(copy.featuresKicker, copy.featuresTitle, { light: onPhoto })}
-        <div className="mt-2 grid grid-cols-4 gap-1.5">{copy.features.map((f, i) => featureItem(f, i, onPhoto ? 'photo' : son('features')))}</div>
+        <div className={cx('mt-2 grid gap-1.5', shown.length === 4 ? 'grid-cols-4' : 'grid-cols-3')}>{shown.map((f, i) => featureItem(f, i, onPhoto ? 'photo' : son('features')))}</div>
       </div>
     );
   }

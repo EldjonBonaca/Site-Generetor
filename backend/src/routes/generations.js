@@ -5,9 +5,9 @@ import { Router } from 'express';
 import { all, get, run, parseJson } from '../db/index.js';
 import { config } from '../config.js';
 import { badRequest, notFound, HttpError, slugify } from '../lib/util.js';
-import { loadContext, checkReadiness, siteLinks } from '../generation/plan.js';
+import { loadContext, checkReadiness, siteLinks, hasDesign, designInfo } from '../generation/plan.js';
 import { initPages, runGeneration, regenerateField, cancelGeneration, isRunning } from '../generation/runner.js';
-import { SITE_PROMPT } from '../generation/site-prompt.js';
+import { sitePromptFor } from '../generation/site-prompt.js';
 import { BUILDER_VERSION } from '../templates/builder.js';
 import { exportGeneration, pluginFile } from '../generation/exporter.js';
 import { buildPagePrompt, estimateTokens } from '../generation/prompt-builder.js';
@@ -48,8 +48,9 @@ router.get('/projects/:id/plan', (req, res) => {
   const ctx = loadContext(req.params.id);
   if (!ctx) throw notFound('Project');
   const readiness = checkReadiness(ctx, req.user);
-  if (!ctx.template) return res.json({ pages: [], estimatedTokens: 0, readiness });
+  if (!hasDesign(ctx)) return res.json({ pages: [], estimatedTokens: 0, readiness });
   const links = siteLinks(ctx);
+  const SITE_PROMPT = sitePromptFor(ctx);
   let total = 0;
   const pages = initPages(ctx).map((p) => {
     const aiFields = p.fields.filter((f) => f.source === 'ai');
@@ -84,7 +85,7 @@ router.post('/projects/:id/generations', (req, res) => {
     ctx.project.id,
     gen.providerId,
     'queued',
-    JSON.stringify({ prompt: SITE_PROMPT.name, templateId: ctx.template.id, templateName: ctx.template.name, builderVersion: BUILDER_VERSION }),
+    JSON.stringify({ prompt: sitePromptFor(ctx).name, ...designInfo(ctx), builderVersion: BUILDER_VERSION }),
     JSON.stringify({ pages, links: siteLinks(ctx) })
   );
   runGeneration(lastInsertRowid).catch((e) => console.error('[generation]', e)); // background job

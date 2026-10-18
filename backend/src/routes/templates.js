@@ -273,7 +273,9 @@ router.put('/projects/:id/template', (req, res) => {
   const project = get('SELECT * FROM projects WHERE id = ?', req.params.id);
   if (!project) throw notFound('Project');
   const templateId = req.body?.template_id ? requireTemplate(Number(req.body.template_id), req.user).id : null;
-  run('UPDATE projects SET template_id = ? WHERE id = ?', templateId, project.id);
+  // A category template replaces the Template Kit of the project
+  if (templateId) run('UPDATE projects SET template_id = ?, template_kit_id = NULL WHERE id = ?', templateId, project.id);
+  else run('UPDATE projects SET template_id = NULL WHERE id = ?', project.id);
   touch(project.id);
   res.json({ template_id: templateId });
 });

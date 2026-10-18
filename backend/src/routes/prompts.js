@@ -1,14 +1,20 @@
 /** The built-in prompts (read-only) + preview of the site prompt with real project data. */
 import { Router } from 'express';
 import { buildPagePrompt, estimateTokens } from '../generation/prompt-builder.js';
-import { loadContext, buildPages, siteLinks } from '../generation/plan.js';
+import { loadContext, buildPages, siteLinks, hasDesign } from '../generation/plan.js';
 import { initPages } from '../generation/runner.js';
-import { SITE_PROMPT, TEMPLATE_PROMPT } from '../generation/site-prompt.js';
+import { SITE_PROMPT, KIT_SITE_PROMPT, TEMPLATE_PROMPT, sitePromptFor } from '../generation/site-prompt.js';
 
 const router = Router();
 
-/** The prompt used for every page of every site (it cannot be changed). */
-router.get('/prompts/site', (req, res) => res.json(SITE_PROMPT));
+/**
+ * The prompt used for every page of every site (it cannot be changed). ?project=<id>: the prompt of
+ * that project (sites built from a Template Kit use the Template Kit prompt).
+ */
+router.get('/prompts/site', (req, res) => res.json(req.query.project ? sitePromptFor(loadContext(Number(req.query.project))) : SITE_PROMPT));
+
+/** The prompt used for the sites built from a Template Kit (it cannot be changed). */
+router.get('/prompts/kit-site', (req, res) => res.json(KIT_SITE_PROMPT));
 
 /** The prompt used to generate the templates of a category (it cannot be changed). */
 router.get('/prompts/template', (req, res) => res.json(TEMPLATE_PROMPT));
@@ -27,7 +33,7 @@ router.post('/prompts/preview', (req, res) => {
   let fields = [];
   let pages = [];
 
-  if (ctx?.template) {
+  if (ctx && hasDesign(ctx)) {
     pages = initPages(ctx);
     page = pages.find((p) => p.key === b.pageKey) || pages[0];
     fields = page ? page.fields.filter((f) => f.source === 'ai') : [];
@@ -45,7 +51,7 @@ router.post('/prompts/preview', (req, res) => {
   const service = page?.serviceId ? services.find((s) => s.id === page.serviceId) : services[0];
   const seo = page?.slug !== null ? [{ id: '_seo.title', format: 'text', maxLength: 60, label: 'SEO title', hint: 'SEO title of the page' }, { id: '_seo.description', format: 'text', maxLength: 155, label: 'Meta description', hint: 'meta description' }] : [];
   const { prompt, system } = buildPagePrompt({
-    promptContent: SITE_PROMPT.content,
+    promptContent: sitePromptFor(ctx).content,
     project,
     services,
     service,
@@ -66,7 +72,7 @@ router.post('/prompts/preview', (req, res) => {
 });
 
 function buildPagesSummary(ctx, pages) {
-  if (!ctx?.template) return [];
+  if (!ctx || !hasDesign(ctx)) return [];
   return (pages.length ? pages : buildPages(ctx)).map((p) => ({ key: p.key, title: p.title, role: p.role }));
 }
 

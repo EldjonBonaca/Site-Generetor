@@ -12,7 +12,7 @@ import { config } from '../config.js';
 import { AdmZip, addFolderToZip } from '../lib/zip.js';
 import { badRequest, slugify, stripHtml } from '../lib/util.js';
 import { exportNames, galleryPool } from '../lib/images.js';
-import { loadContext, analyzePage, builtSite, siteLinks, fallbackLink, servicesCategory, oneLine, pageTitle, pageSlug, TEMPLATE_ROLES, SITE_PAGE_ROLES, DEFAULT_CROP_SIZES } from './plan.js';
+import { loadContext, analyzePage, builtSite, siteLinks, fallbackLink, servicesCategory, oneLine, pageTitle, pageSlug, hasDesign, TEMPLATE_ROLES, SITE_PAGE_ROLES, DEFAULT_CROP_SIZES } from './plan.js';
 import { applyFieldValues, applyImages, replaceContacts, sanitizeHtml } from '../elementor/apply.js';
 import { EMAIL_IN_TEXT } from '../elementor/analyze.js';
 import { normalizeUrl } from '../ai/json.js';
@@ -160,6 +160,11 @@ export function imageAssignment(ctx, page, slots, slotRoles, exported, neededCro
       assignment[slot.id] = pool.map((i) => ex(i, role === 'carousel' ? 'carousel' : null));
       continue;
     }
+    // Photos of demo people (Template Kit testimonials, team): removed, never replaced by an unrelated photo
+    if (role === 'remove') {
+      assignment[slot.id] = { remove: true };
+      continue;
+    }
     let img = null;
     if (role === 'hero') img = pick((i) => i.role === 'hero_home');
     else if (role === 'subheader') img = subheader();
@@ -191,6 +196,8 @@ function buildPageDocs(ctx, pages, exported, links, allPages = pages) {
         const value = s ? fieldValue(allPages, s) : null;
         if (typeof value === 'string') values[f.id] = value;
         else if (f.format === 'link' && !f.fixed) values[f.id] = fallbackLink(`${f.original} ${s?.hint || ''}`, links);
+        // Template Kit: a text the AI did not write is emptied, so no demo text stays on the site (reported in the checks)
+        else if (ctx.kit && !f.fixed && f.format !== 'number') values[f.id] = '';
       }
       applyFieldValues(doc, fields, values);
       applyImages(doc, slots, imageAssignment(ctx, page, slots, slotRoles, exported));
@@ -279,7 +286,7 @@ function runChecks(ctx, built, posts, links, baseUrl, T) {
     if (demoImages.size) add('error', T.chkDemoImages(page.title, [...demoImages]));
     if (badLinks.size) add('warning', T.chkLinks(page.title, [...badLinks]));
     if (lorem) add('error', T.chkLorem(page.title));
-    if (unchanged) add('warning', T.chkUnchanged(page.title, unchanged));
+    if (unchanged) add(ctx.kit ? 'error' : 'warning', ctx.kit ? T.chkKitEmptied(page.title, unchanged) : T.chkUnchanged(page.title, unchanged));
     if (otherEmails.size) add('warning', T.chkEmails(page.title, [...otherEmails]));
   }
   for (const p of posts) {
@@ -288,7 +295,8 @@ function runChecks(ctx, built, posts, links, baseUrl, T) {
     if (!p.image) add('warning', T.chkPostImage(p.title));
   }
   // Key figures written by the AI: realistic examples, the client must confirm them
-  if (ctx.template?.spec.sections?.includes('stats')) add('warning', T.chkStats);
+  const kitStats = ctx.kit && built.some(({ page }) => builtSite(ctx).docs[page.role]?.sections?.some((s) => s.type === 'stats' || s.type === 'pricing'));
+  if (ctx.template?.spec.sections?.includes('stats') || kitStats) add('warning', T.chkStats);
   if (!items.length) add('ok', T.chkAllGood);
   add('info', T.chkResponsive);
   return items;
@@ -383,6 +391,8 @@ function pluginInput(ctx, pages, allPages, posts, exported, links, category, ima
     imagesDir,
     category,
     globalStyles: builtSite(ctx).globalStyles,
+    // Free plugins the Template Kit needs (installed from wordpress.org by the WordPress plugin)
+    requiredPlugins: (ctx.kit?.info.requiredPlugins || []).filter((p) => !p.pro && p.slug !== 'elementor'),
   };
 }
 
@@ -395,12 +405,16 @@ export async function exportGeneration(generationId) {
   if (!gen) throw new Error('Generation not found');
   const output = parseJson(gen.output_json, { pages: [] });
   const ctx = loadContext(gen.project_id);
-  if (!ctx.template) throw badRequest('The project has no template anymore: choose one in the Template step.');
-  // Field ids belong to the template the generation was made with: generations of another template
-  // (or of the old Template Kits) cannot be exported with the current one
+  if (!hasDesign(ctx)) throw badRequest('The project has no template anymore: choose a template or a Template Kit in the Template step.');
+  // Field ids belong to the template / Template Kit the generation was made with: generations of
+  // another design cannot be exported with the current one
   const genConfig = parseJson(gen.config_json, {});
-  if (genConfig.templateId !== ctx.template.id) {
+  if (ctx.kit ? genConfig.kitId !== ctx.kit.id : genConfig.templateId !== ctx.template.id) {
     throw badRequest('This generation was made with another template: run a new generation with the current one.');
+  }
+  // ...and to the pages of the kit (roles of its templates, analysis)
+  if (ctx.kit && genConfig.kitVersion !== ctx.kit.version) {
+    throw badRequest('The Template Kit was changed after this generation (roles of its templates or analysis): run a new generation.');
   }
   // ...and to the version of the template builder (sections and widgets changed)
   if (genConfig.builderVersion !== BUILDER_VERSION) {

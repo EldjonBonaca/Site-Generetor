@@ -71,7 +71,7 @@ test('Italian full site: template, articles, gallery, reviews, contact form, men
   const cat = await api('POST', '/template-categories', { name: 'Edilizia', description: 'Imprese edili e ristrutturazioni' });
   const draft = await api('POST', `/template-categories/${cat.id}/templates/generate`, { providerId: provider.id, instructions: 'stile solido e moderno' });
   assert.match(draft.spec.copy.heroTitle, /^Edilizia/);
-  const spec = { ...draft.spec, sections: ['about', 'features', 'cta', 'services', 'gallery', 'reviews'], layout: { ...draft.spec.layout, cta: 'banner', header: 'topbar', contact: 'split' } };
+  const spec = { ...draft.spec, sections: ['about', 'features', 'cta', 'services', 'gallery', 'reviews'], layout: { ...draft.spec.layout, features: 'icons', featureCount: '4', cta: 'banner', header: 'topbar', contact: 'split' } };
   const tpl = await api('POST', `/template-categories/${cat.id}/templates`, { name: 'Edilizia moderna', spec, instructions: 'stile solido e moderno', language: 'it' });
   await api('PUT', `/projects/${pid}/template`, { template_id: tpl.id });
   await api('PATCH', `/projects/${pid}`, { settings: { generation: { providerId: provider.id } } });

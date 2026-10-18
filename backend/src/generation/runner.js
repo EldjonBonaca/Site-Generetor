@@ -9,7 +9,7 @@ import { AIError } from '../ai/AIProvider.js';
 import { extractJson, validateValues } from '../ai/json.js';
 import { buildPagePrompt, estimateTokens } from './prompt-builder.js';
 import { loadContext, buildPages, analyzePage, classifyField, siteLinks, fallbackLink } from './plan.js';
-import { SITE_PROMPT } from './site-prompt.js';
+import { sitePromptFor } from './site-prompt.js';
 import { sleep, stripHtml } from '../lib/util.js';
 
 const CHUNK_SIZE = 45; // max fields per AI call, keeps answers reliable on long pages
@@ -108,6 +108,7 @@ async function generateFields({ provider, ctx, page, promptRow, fields, log, ext
   for (const f of fields) {
     if (f.format === 'link') rules[f.id] = { allowed: links.map((l) => l.url) };
     if (f.minLength) rules[f.id] = { ...(rules[f.id] || {}), minLength: f.minLength };
+    if (f.format === 'number') rules[f.id] = { ...(rules[f.id] || {}), number: true };
   }
   const collected = {};
   let tokens = 0;
@@ -288,7 +289,7 @@ export async function runGeneration(generationId, { pageKeys = null } = {}) {
       save(id, state);
       log('info', `Generating "${page.title}" (${page.fields.filter((f) => f.source !== 'auto' && f.source !== 'shared').length} fields)...`);
       try {
-        await generatePage({ provider, ctx, page, promptRow: SITE_PROMPT, log });
+        await generatePage({ provider, ctx, page, promptRow: sitePromptFor(ctx), log });
         page.status = 'done';
         page.error = null;
         log('success', `"${page.title}" done (${page.tokens.toLocaleString('en')} tokens so far on this page).`);
@@ -344,7 +345,7 @@ export async function regenerateField(generationId, pageKey, fieldId) {
   const provider = getProvider(gen.provider_id);
   const before = page.tokens;
   log('info', `Regenerating field ${fieldId} of "${page.title}"...`);
-  await generatePage({ provider, ctx, page, promptRow: SITE_PROMPT, log, onlyFieldIds: [fieldId] });
+  await generatePage({ provider, ctx, page, promptRow: sitePromptFor(ctx), log, onlyFieldIds: [fieldId] });
   state.tokens += page.tokens - before;
   log('success', `Field ${fieldId} regenerated.`);
   save(generationId, state);

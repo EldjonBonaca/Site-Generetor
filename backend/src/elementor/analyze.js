@@ -63,6 +63,11 @@ const NON_TEXT_KEY =
 
 const RESPONSIVE_SUFFIX = /_(tablet|mobile|laptop|widescreen|tablet_extra|mobile_extra)$/;
 
+/** Numbers that are demo content (Template Kits, option `numbers`): key figures and prices. */
+const NUMERIC_KEYS = { counter: ['ending_number'], 'price-table': ['price'] };
+/** HTML widgets whose markup is code (scripts, maps, embeds), never copy (option `htmlText`). */
+const HTML_CODE = /<\s*(script|style|iframe|svg|form|canvas|object|embed|video|audio)\b/i;
+
 const IMAGE_KEY = /image|img|bg|background|logo|photo|picture|thumbnail|avatar/i;
 const HAS_LETTER = /\p{L}/u;
 const HTML_TAG = /<\/?[a-z][^>]*>/i;
@@ -155,15 +160,17 @@ const isLinkValue = (v) => v && typeof v === 'object' && !Array.isArray(v) && ty
  * @param {object} opts
  *   - prefix:   field id prefix (e.g. "home")
  *   - heroName: label for the 1st section ("hero")
+ *   - htmlText: HTML widgets with visible text (no script, map or embed) are text fields too
+ *   - numbers:  counters and prices are fields too (format 'number')
  * @returns {{ fields: Field[], slots: Slot[], widgets: Record<string, number>, contacts: {emails:string[], phones:string[]} }}
  *
- * Field = { id, ref, path, original, format: 'text'|'html'|'link', widget, key, section, label, maxLength }
+ * Field = { id, ref, path, original, format: 'text'|'html'|'link'|'number', widget, key, section, label, maxLength }
  *   ref = "<elementId>:<settings path>" (e.g. "a1b2c3d:icon_list.0.text"), the key used by the template builder marks.
  * Slot  = { id, path, key, kind: 'background'|'image'|'gallery', url, section, elType, widget, label }
  *   Slot ids are "<elementId>:<settings path>" (same format as field.ref).
  *   A gallery slot is a whole array of images (gallery widgets).
  */
-export function analyzeDocument(doc, { prefix = 'page', heroName = null } = {}) {
+export function analyzeDocument(doc, { prefix = 'page', heroName = null, htmlText = false, numbers = false } = {}) {
   const fields = [];
   const slots = [];
   const widgets = {};
@@ -218,9 +225,10 @@ export function analyzeDocument(doc, { prefix = 'page', heroName = null } = {}) 
           key,
           section: topIndex,
           label: `${widget} · ${key.replace(/_/g, ' ')}`,
-          maxLength: format === 'link' ? 200 : Math.max(20, Math.round(plainLen * 1.4)),
+          maxLength: format === 'link' ? 200 : format === 'number' ? 10 : Math.max(20, Math.round(plainLen * 1.4)),
+          ...(format === 'number' ? { hint: 'a number only (digits, no words or symbols)' } : {}),
         });
-        if (format !== 'link') collectContacts(original);
+        if (format !== 'link' && format !== 'number') collectContacts(original);
       };
 
       const addSlot = (path, key, kind, url) => {
@@ -238,16 +246,26 @@ export function analyzeDocument(doc, { prefix = 'page', heroName = null } = {}) 
         });
       };
 
-      // A link value is a candidate link field (tel:/mailto: are handled as contacts instead)
+      // A link value is a candidate link field (tel:/mailto: are handled as contacts instead; #anchors stay on the page)
       const maybeLink = (path, key, value, labelSuffix) => {
         if (!isLinkValue(value) || !LINK_KEY.test(key)) return;
         const url = value.url.trim();
-        if (!url || /^(tel:|mailto:)/i.test(url)) return;
+        if (!url || /^(tel:|mailto:|#)/i.test(url)) return;
         if (widget === 'image' && settings.link_to !== 'custom') return;
         addField([...path, 'url'], url, key, labelSuffix, 'link');
       };
 
       // --- text + link fields (widgets only) --------------------------------
+      if (htmlText && widget === 'html' && typeof settings.html === 'string' && !HTML_CODE.test(settings.html) && HAS_LETTER.test(settings.html.replace(/<[^>]+>/g, ' '))) {
+        addField([...sPath, 'html'], settings.html, 'html', 'html', 'html');
+      }
+      if (numbers && NUMERIC_KEYS[widget]) {
+        for (const key of NUMERIC_KEYS[widget]) {
+          const value = settings[key];
+          const numeric = typeof value === 'number' || (typeof value === 'string' && /^\s*\d[\d.,]*\s*$/.test(value));
+          if (numeric && !isDynamic(settings, key)) addField([...sPath, key], String(value).trim(), key, slugKey(key), 'number');
+        }
+      }
       if (widget && !SKIP_WIDGETS.has(widget)) {
         const known = KNOWN_TEXT_KEYS[widget];
         for (const [key, value] of Object.entries(settings)) {

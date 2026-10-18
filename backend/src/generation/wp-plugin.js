@@ -181,10 +181,11 @@ function contactFormInfo(ctx) {
  *   ctx, pages: [{ key, role, title, slug, seo, doc }] (the 5 site pages, doc = importable template or null),
  *   templates: [{ key, role, title, type, doc }], posts: [{ key, title, slug, content, excerpt, image, seo, doc }]
  *   (doc = Elementor document of the article, designed like the single post template),
- *   images: [{ file, alt, photo, logo }], imagesDir, category, globalStyles (template colors and fonts)
+ *   images: [{ file, alt, photo, logo }], imagesDir, category, globalStyles (template colors and fonts),
+ *   requiredPlugins: [{ slug, file, name }] (free plugins a Template Kit needs, installed from wordpress.org)
  * @returns {{ fileName: string, buffer: Buffer }}
  */
-export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, category, globalStyles }) {
+export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, category, globalStyles, requiredPlugins = [] }) {
   const { project } = ctx;
   const slug = pluginSlug(project);
   const hash = crypto.createHash('md5').update(`${project.id}:${slug}`).digest('hex').slice(0, 8);
@@ -222,6 +223,7 @@ export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, c
     posts: posts.map(({ doc, ...p }) => ({ ...p, elementor: doc ? addDoc(p.key, doc) : null })),
     templates: templates.map((t) => ({ key: t.key, role: t.role, title: t.title, type: t.type, elementor: addDoc(t.key, t.doc) })),
     globalStyles: globalStyles || null,
+    requiredPlugins: requiredPlugins.map(({ slug, file, name }) => ({ slug, file, name })),
     // Without Elementor Pro the plugin itself displays the header and footer (no other addon needed)
     headerFooter: templates.some((t) => t.role === 'header' || t.role === 'footer'),
   };

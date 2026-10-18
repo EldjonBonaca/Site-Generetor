@@ -27,6 +27,8 @@ addColumn('template_categories', 'profile_json', 'TEXT'); // industry analysis o
 addColumn('ai_providers', 'owner', 'TEXT');
 addColumn('site_templates', 'owner', 'TEXT');
 addColumn('site_templates', 'shared', 'INTEGER NOT NULL DEFAULT 0');
+// Template Kit used by the project instead of a category template (kits/site.js)
+addColumn('projects', 'template_kit_id', 'INTEGER REFERENCES template_kits(id) ON DELETE SET NULL');
 // Databases created before templates replaced the Template Kits keep the old `kits` / `kit_mappings`
 // tables and `projects.kit_id` (SQLite cannot drop a foreign-key column): they are no longer used.
 

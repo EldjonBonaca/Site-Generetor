@@ -28,7 +28,11 @@ export function applyFieldValues(doc, fields, values) {
     const v = values[f.id];
     if (typeof v !== 'string') continue;
     if (f.format === 'link') setAtPath(doc, f.path, v.trim());
-    else setAtPath(doc, f.path, f.format === 'html' ? sanitizeHtml(v) : v.replace(/<[^>]+>/g, ''));
+    else if (f.format === 'number') {
+      // Counters / prices: digits only (a separator is kept: "1.5", "1,200")
+      const n = v.replace(/[^\d.,]/g, '').replace(/^[.,]+|[.,]+$/g, '');
+      if (n) setAtPath(doc, f.path, n);
+    } else setAtPath(doc, f.path, f.format === 'html' ? sanitizeHtml(v) : v.replace(/<[^>]+>/g, ''));
   }
 }
 

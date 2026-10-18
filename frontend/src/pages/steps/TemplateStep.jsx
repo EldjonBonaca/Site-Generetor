@@ -1,19 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FolderPlus, LayoutTemplate, Pencil, Sparkles, X } from 'lucide-react';
+import { FolderPlus, Info, LayoutTemplate, Package, Pencil, Sparkles, X } from 'lucide-react';
 import { api } from '../../api.js';
 import { useT } from '../../i18n/index.jsx';
 import { useToast } from '../../components/Toast.jsx';
 import { useAutosave } from '../../hooks/useAutosave.js';
-import { Badge, Button, Card, EmptyState, Field, Input, SaveStatus, Select, Spinner, Toggle, cx } from '../../components/ui.jsx';
+import { Alert, Badge, Button, Card, EmptyState, Field, Input, SaveStatus, Select, Spinner, Toggle, cx } from '../../components/ui.jsx';
+import { KitCover, KitDetailsDialog, KitRequirements, KitRoles, KitSwatches } from '../../components/KitParts.jsx';
 import { StepIssues } from '../../components/StepIssues.jsx';
 import { TemplatePreview, TemplateSwatches } from '../../components/TemplatePreview.jsx';
 import { TemplateEditor, TemplateGenerator, SECTION_LABELS, variantLabel } from '../../components/TemplateDialogs.jsx';
 
-/** Template of the site: a category + one of its saved templates (or a new one generated here). */
+/**
+ * Design of the site: a category + one of its saved templates (or a new one generated here), or an
+ * uploaded Template Kit (its design and structure, with texts and images of the project).
+ */
 export default function TemplateStep({ project, reload }) {
   const { t } = useT();
   const toast = useToast();
+  const [mode, setMode] = useState(project.template_kit_id ? 'kit' : 'template');
   const [categories, setCategories] = useState(null);
   const [categoryId, setCategoryId] = useState(null);
   const [templates, setTemplates] = useState(null);
@@ -95,7 +100,31 @@ export default function TemplateStep({ project, reload }) {
     <>
       <StepIssues project={project} step="template" t={t} />
       <div className="space-y-6">
-        {current && !changing && (
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm" role="tablist" aria-label={t('Design of the site')}>
+          {[
+            ['template', LayoutTemplate, t('Category template')],
+            ['kit', Package, t('Template Kit')],
+          ].map(([key, Icon, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={mode === key}
+              onClick={() => setMode(key)}
+              className={cx('inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium', mode === key ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50')}
+            >
+              <Icon className="size-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {mode === 'kit' && <KitChooser project={project} reload={reload} />}
+        {mode === 'template' && project.template_kit_id && (
+          <Alert kind="info">{t('This project uses a Template Kit. Choosing a category template replaces it.')}</Alert>
+        )}
+
+        {mode === 'template' && current && !changing && (
           <Card
             title={current.name}
             description={t('Category: {name}', { name: current.category_name })}
@@ -132,7 +161,7 @@ export default function TemplateStep({ project, reload }) {
           </Card>
         )}
 
-        {showPicker && (
+        {mode === 'template' && showPicker && (
           <Card
             title={t('Choose a template')}
             description={t('Pick the category of the business, then one of its saved templates, or let the AI generate a new one.')}
@@ -237,6 +266,152 @@ export default function TemplateStep({ project, reload }) {
         onClose={() => setEditing(null)}
         onSaved={() => {
           loadCurrent();
+          reload();
+        }}
+      />
+    </>
+  );
+}
+
+/**
+ * Template Kit of the site: the kit keeps its design and structure; the AI rewrites every text for the
+ * business and the project images replace every demo image. Kits are uploaded in the Template Kit page.
+ */
+function KitChooser({ project, reload }) {
+  const { t } = useT();
+  const toast = useToast();
+  const [kits, setKits] = useState(null);
+  const [changing, setChanging] = useState(false);
+  const [details, setDetails] = useState(null);
+
+  const load = () => api.get('/template-kits').then(setKits);
+  useEffect(() => {
+    load().catch((e) => toast(e.message, 'error'));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const use = async (kit) => {
+    try {
+      await api.put(`/projects/${project.id}/template-kit`, { kit_id: kit.id });
+      setChanging(false);
+      await reload();
+      toast(t('Template Kit "{name}" selected', { name: kit.name }));
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+
+  if (!kits) {
+    return (
+      <div className="flex justify-center py-10">
+        <Spinner />
+      </div>
+    );
+  }
+  const current = kits.find((k) => k.id === project.template_kit_id) || null;
+
+  return (
+    <>
+      {current && !changing && (
+        <Card
+          title={current.name}
+          description={t('Template Kit')}
+          actions={
+            <>
+              <Button size="sm" icon={Info} onClick={() => setDetails(current.id)}>
+                {t('Kit details')}
+              </Button>
+              <Button size="sm" icon={Package} onClick={() => setChanging(true)}>
+                {t('Change kit')}
+              </Button>
+            </>
+          }
+        >
+          <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+            <KitCover kit={current} className="rounded-lg border border-slate-200" />
+            <div className="space-y-4 text-sm">
+              {current.summary && <p className="text-slate-700">{current.summary}</p>}
+              <KitSwatches styles={current.styles} />
+              <div>
+                <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">{t('Pages of the site')}</p>
+                <KitRoles kit={current} />
+              </div>
+              <KitRequirements kit={current} />
+              <p className="text-xs text-slate-500">
+                {t('The site keeps the layout, sections and styles of the kit. The AI rewrites every text for the industry of the project ("{industry}"), and the images of the project replace every demo image.', { industry: project.industry || t('set it in Site data') })}
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {(!current || changing) && (
+        <Card
+          title={t('Choose a Template Kit')}
+          description={t('The site reuses the design and structure of the kit, with texts written by the AI for this business and the images of the project.')}
+          actions={
+            <>
+              {current && (
+                <Button size="sm" icon={X} onClick={() => setChanging(false)}>
+                  {t('Cancel')}
+                </Button>
+              )}
+              <Link to="/template-kits" className="text-sm font-medium text-brand-700 hover:underline">
+                {t('Upload a Template Kit')}
+              </Link>
+            </>
+          }
+        >
+          {!kits.length ? (
+            <EmptyState
+              icon={Package}
+              title={t('No Template Kits yet')}
+              description={t('Upload the zip of an Elementor Template Kit in the Template Kit page: the AI analyzes it, then you can choose it here.')}
+              action={
+                <Link to="/template-kits" className="inline-flex h-9 items-center rounded-lg bg-brand-600 px-3.5 text-sm font-medium text-white hover:bg-brand-700">
+                  {t('Upload a Template Kit')}
+                </Link>
+              }
+            />
+          ) : (
+            <ul className="grid gap-5 md:grid-cols-2">
+              {kits.map((kit) => {
+                const selected = kit.id === project.template_kit_id;
+                return (
+                  <li key={kit.id} className={cx('overflow-hidden rounded-xl border', selected ? 'border-brand-400 ring-2 ring-brand-500/20' : 'border-slate-200')}>
+                    <KitCover kit={kit} className="border-b border-slate-100" />
+                    <div className="flex items-center justify-between gap-3 p-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-slate-900">{kit.name}</p>
+                        <p className="truncate text-xs text-slate-500">
+                          {t('{n} templates', { n: kit.page_count })}
+                          {kit.industry ? ` · ${t('demo: {industry}', { industry: kit.industry })}` : ''}
+                          {!kit.analyzed ? ` · ${t('Not analyzed')}` : ''}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <Button size="sm" variant="ghost" icon={Info} onClick={() => setDetails(kit.id)} aria-label={t('Details of {name}', { name: kit.name })} />
+                        {selected ? (
+                          <Badge color="blue">{t('Selected')}</Badge>
+                        ) : (
+                          <Button size="sm" variant="primary" onClick={() => use(kit)}>
+                            {t('Use')}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Card>
+      )}
+
+      <KitDetailsDialog
+        kitId={details}
+        onClose={() => setDetails(null)}
+        onChanged={() => {
+          load().catch(() => {});
           reload();
         }}
       />

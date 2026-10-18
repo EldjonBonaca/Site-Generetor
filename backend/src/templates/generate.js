@@ -13,7 +13,7 @@ import { extractJson } from '../ai/json.js';
 import { AIError } from '../ai/AIProvider.js';
 import { estimateTokens, languageName } from '../generation/prompt-builder.js';
 import { TEMPLATE_PROMPT } from '../generation/site-prompt.js';
-import { COLOR_KEYS, COPY_KEYS, ICONS, SECTION_NAMES_IT, sanitizeSpec, similarColor } from './spec.js';
+import { COLOR_KEYS, COPY_KEYS, ICONS, MAX_FEATURES, SECTION_NAMES_IT, sanitizeSpec, similarColor } from './spec.js';
 import { applyPlan, designPlan, pickDirection } from './directions.js';
 import { describeProfile } from './industry.js';
 
@@ -113,10 +113,12 @@ The generator builds the Elementor templates itself from the design decisions ab
   "style": {
     "colors": { ${COLOR_KEYS.map((k) => `"${k}": "#RRGGBB"`).join(', ')} }
   },
-  "icons": ["4 icons for the 4 strengths of \\"why choose us\\""],
+  "icons": ["${MAX_FEATURES} icons, one for each strength of \\"why choose us\\", in the same order"],
   "copy": {
 ${copyShape},
-    "features": [4 × { "title": "max 50 chars", "text": "max 160 chars" }],
+    "features": [${MAX_FEATURES} × { "title": "max 50 chars", "text": "max 160 chars" }],
+    "heroPhrases": [3 short phrases, max 40 chars each],
+    "aboutPoints": [3 key points, max 60 chars each],
     "reviews": [3 × { "name": "fictional customer", "role": "role or city", "text": "2–3 sentences" }]${lists}
   }
 }
@@ -125,7 +127,9 @@ Rules:
 - Icons: only from this list (Font Awesome 5 solid): ${ICONS.join(', ')}.
 - Texts of "copy": in ${languageLabel}. "aboutText", "aboutPageText" and "aboutPageText2" may use simple HTML (<p>, <strong>, <ul>, <li>); every other text is plain text. No business names, phone numbers, emails or addresses, no placeholder text.
 - The About page shows its text in two rows (text beside a photo, then a photo beside the text), without sub-titles: "aboutPageText" = who we are, history and experience (2 paragraphs); "aboutPageText2" = values, method and commitment to the customers (2 paragraphs, may include a short list).
-- "features": 4 real strengths of a business of this category (short title + concrete explanation).
+- "features": ${MAX_FEATURES} real strengths of a business of this category (short title + concrete explanation), the most important first: the site shows the first 3 to 6 of them, depending on the layout.
+- "heroPhrases": 3 short benefits or services of a business of this category (2–5 words each), shown one after the other under the hero title.
+- "aboutPoints": 3 key points of a business of this category for the "about us" section (3–7 words each, e.g. experience, team, materials).
 - Reviews have no photo of the customer.`;
 }
 

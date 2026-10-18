@@ -8,6 +8,33 @@ const ORDER = { header: 0, footer: 1, single_post: 2, home: 3, about: 4, service
 const sortedTemplates = (built) => [...built].sort((a, b) => (ORDER[a.page.role] ?? 9) - (ORDER[b.page.role] ?? 9));
 const list = (arr) => arr.map((x) => `  - \`${x}\``).join('\n');
 const PARTS = ['header', 'footer', 'single_post'];
+const names = (list) => list.map((p) => `**${p.name}**`).join(', ');
+
+/** Design of the site and the plugins it needs: the category template, or the Template Kit (its plugins, Elementor Pro widgets). */
+function designText(ctx, form, lang) {
+  const it = lang === 'it';
+  if (!ctx.kit) {
+    return it
+      ? `Questo pacchetto usa il template **${ctx.template.name}** (categoria *${ctx.template.category.name}*). Nulla è stato pubblicato.\n\nPlugin necessari: **Elementor** e **${form.name}** (modulo di contatto). Le pagine usano solo widget nativi di Elementor. Senza Elementor Pro, header e footer sono template di **Ultimate Addons for Elementor (UAE)** (gratuito, installato dal plugin). Elementor Pro è facoltativo.`
+      : `This package uses the template **${ctx.template.name}** (category *${ctx.template.category.name}*). Nothing has been published.\n\nRequired plugins: **Elementor** and **${form.name}** (contact form). The pages only use native Elementor widgets. Without Elementor Pro, the header and footer are **Ultimate Addons for Elementor (UAE)** templates (free, installed by the plugin). Elementor Pro is optional.`;
+  }
+  const plugins = ctx.kit.info.requiredPlugins || [];
+  const free = plugins.filter((p) => !p.pro && p.slug !== 'elementor');
+  const pro = plugins.filter((p) => p.pro);
+  const proWidgets = ctx.kit.info.proWidgets || [];
+  const lines = it
+    ? [
+        `Questo pacchetto usa il Template Kit **${ctx.kit.name}**: design e struttura del kit, testi riscritti dall'AI per ${ctx.project.site_name} e le immagini del sito al posto di quelle della demo. Nulla è stato pubblicato.`,
+        `Plugin necessari: **Elementor** e **${form.name}** (modulo di contatto)${free.length ? `, più i plugin richiesti dal kit: ${names(free)} (il plugin del sito li installa da wordpress.org)` : ''}. Senza Elementor Pro, header e footer sono template di **Ultimate Addons for Elementor (UAE)** (gratuito, installato dal plugin).`,
+        (pro.length || proWidgets.length) && `Il kit usa ${pro.length ? names(pro) : '**Elementor Pro**'}${proWidgets.length ? ` (widget: ${proWidgets.join(', ')})` : ''}: senza Pro quelle parti non vengono mostrate. Installa Elementor Pro prima di attivare il plugin del sito.`,
+      ]
+    : [
+        `This package uses the Template Kit **${ctx.kit.name}**: the design and structure of the kit, texts rewritten by the AI for ${ctx.project.site_name} and the site images instead of the demo ones. Nothing has been published.`,
+        `Required plugins: **Elementor** and **${form.name}** (contact form)${free.length ? `, plus the plugins required by the kit: ${names(free)} (the site plugin installs them from wordpress.org)` : ''}. Without Elementor Pro, the header and footer are **Ultimate Addons for Elementor (UAE)** templates (free, installed by the plugin).`,
+        (pro.length || proWidgets.length) && `The kit uses ${pro.length ? names(pro) : '**Elementor Pro**'}${proWidgets.length ? ` (widgets: ${proWidgets.join(', ')})` : ''}: without Pro those parts are not shown. Install Elementor Pro before activating the site plugin.`,
+      ];
+  return lines.filter(Boolean).join('\n\n');
+}
 
 // ---------------------------------------------------------------------------- IT
 const IT = {
@@ -19,6 +46,7 @@ const IT = {
   chkLorem: (p) => `**${p}**: contiene ancora "Lorem ipsum".`,
   chkStats: '**Numeri chiave**: le cifre (anni di esperienza, clienti, tempi…) sono esempi realistici scritti dall\'AI: verificale con il cliente e correggile prima di pubblicare.',
   chkUnchanged: (p, n) => `**${p}**: ${n} testo/i non generato/i dall'AI (testo di esempio del template). Rigenera la pagina o modificali nell'anteprima.`,
+  chkKitEmptied: (p, n) => `**${p}**: ${n} testo/i della demo del kit non riscritto/i dall'AI: sono stati lasciati vuoti, così nessun testo della demo resta nel sito. Rigenera la pagina o scrivili nell'anteprima.`,
   chkEmails: (p, vals) => `**${p}**: email diverse da quella del sito: ${vals.join(', ')}`,
   chkPostShort: (t, n) => `Articolo **${t}**: testo di soli ${n} caratteri (minimo 300).`,
   chkPostImage: (t) => `Articolo **${t}**: manca l'immagine in evidenza (assegna l'immagine al servizio).`,
@@ -43,9 +71,7 @@ const IT = {
     const contact = pages.find((b) => b.page.role === 'contact');
     return `# Guida all'importazione — "${ctx.project.site_name}"
 
-Questo pacchetto usa il template **${ctx.template.name}** (categoria *${ctx.template.category.name}*). Nulla è stato pubblicato.
-
-Plugin necessari: **Elementor** e **${form.name}** (modulo di contatto). Le pagine usano solo widget nativi di Elementor. Senza Elementor Pro, header e footer sono template di **Ultimate Addons for Elementor (UAE)** (gratuito, installato dal plugin). Elementor Pro è facoltativo.
+${designText(ctx, form, 'it')}
 
 ## Metodo rapido: plugin WordPress (consigliato)
 
@@ -164,6 +190,7 @@ const EN = {
   chkLorem: (p) => `**${p}**: still contains "Lorem ipsum".`,
   chkStats: '**Key figures**: the numbers (years of experience, customers, times…) are realistic examples written by the AI: check them with the client and fix them before publishing.',
   chkUnchanged: (p, n) => `**${p}**: ${n} text(s) not generated by the AI (sample text of the template). Regenerate the page or edit them in the preview.`,
+  chkKitEmptied: (p, n) => `**${p}**: ${n} demo text(s) of the kit not rewritten by the AI: they were left empty, so no demo text stays on the site. Regenerate the page or write them in the preview.`,
   chkEmails: (p, vals) => `**${p}**: emails different from the site email: ${vals.join(', ')}`,
   chkPostShort: (t, n) => `Article **${t}**: text is only ${n} characters (minimum 300).`,
   chkPostImage: (t) => `Article **${t}**: featured image missing (assign an image to the service).`,
@@ -188,9 +215,7 @@ const EN = {
     const contact = pages.find((b) => b.page.role === 'contact');
     return `# How to import "${ctx.project.site_name}" into WordPress + Elementor
 
-This package uses the template **${ctx.template.name}** (category *${ctx.template.category.name}*). Nothing has been published.
-
-Required plugins: **Elementor** and **${form.name}** (contact form). The pages only use native Elementor widgets. Without Elementor Pro, the header and footer are **Ultimate Addons for Elementor (UAE)** templates (free, installed by the plugin). Elementor Pro is optional.
+${designText(ctx, form, 'en')}
 
 ## Fastest way: the WordPress plugin (recommended)
 

@@ -20,7 +20,7 @@ export default function AiStep({ project, setProject }) {
   const gen = project.settings.generation;
 
   useEffect(() => {
-    Promise.all([api.get('/providers'), api.get('/prompts/site'), api.get(`/projects/${project.id}/plan`)])
+    Promise.all([api.get('/providers'), api.get(`/prompts/site?project=${project.id}`), api.get(`/projects/${project.id}/plan`)])
       .then(([pv, sp, pl]) => {
         setProviders(pv);
         setSitePrompt(sp);

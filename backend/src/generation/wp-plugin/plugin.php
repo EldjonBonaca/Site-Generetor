@@ -407,6 +407,14 @@ function setup_dependencies() {
 	if (!defined('ELEMENTOR_PRO_VERSION') && has_header_footer()) {
 		ensure_plugin(UAE, $messages);
 	}
+	// Free plugins needed by the widgets of the Template Kit the site is made with
+	$data = data();
+	$required = isset($data['requiredPlugins']) && is_array($data['requiredPlugins']) ? $data['requiredPlugins'] : array();
+	foreach ($required as $plugin) {
+		if (!empty($plugin['slug']) && !empty($plugin['file']) && preg_match('/^[a-z0-9-]+$/i', $plugin['slug'])) {
+			ensure_plugin($plugin, $messages);
+		}
+	}
 	return array('done' => true, 'messages' => $messages);
 }
 
@@ -545,6 +553,16 @@ function prepare_elementor($node, array $r) {
 		$node['id'] = $img['id'];
 	}
 	if (isset($node['widgetType'], $node['settings']) && is_array($node['settings'])) {
+		// The Elementor Pro menu of a Template Kit header needs Pro: without it, the free UAE menu widget
+		if ($node['widgetType'] === 'nav-menu' && !empty($r['uae_menu'])) {
+			$node['widgetType'] = 'navigation-menu';
+			$node['settings'] = array_merge(
+				array_filter($node['settings'], function ($key) {
+					return strpos($key, '_') === 0;
+				}, ARRAY_FILTER_USE_KEY),
+				array('menu' => $r['menu'], 'layout' => 'horizontal', 'navmenu_align' => 'right')
+			);
+		}
 		if (preg_match('/nav-menu|mega-menu|navigation-menu/', $node['widgetType'])) {
 			$node['settings']['menu'] = $r['menu'];
 		}
@@ -749,6 +767,7 @@ function import_content() {
 	$r = array(
 		'images' => $images,
 		'menu' => $menu->slug,
+		'uae_menu' => use_uae(),
 		'strings' => ($shortcode && !empty($data['contactForm']['placeholder'])) ? array($data['contactForm']['placeholder'] => $shortcode) : array(),
 	);
 

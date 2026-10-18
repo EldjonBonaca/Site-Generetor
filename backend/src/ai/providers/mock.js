@@ -95,6 +95,15 @@ export default class MockProvider extends AIProvider {
       const text = JSON.stringify(demoProfile(options.context || {}));
       return { text, usage: { inputTokens: Math.round(prompt.length / 4), outputTokens: Math.round(text.length / 4) } };
     }
+    if (options.task === 'kit-analysis') {
+      // Template Kit analysis (demo): roles from the titles, the section types are left to the heuristics
+      const c = options.context || {};
+      const text = JSON.stringify({
+        kit: { industry: 'demo', summary: `Demo analysis of "${c.kit}" written by the offline demo provider.`, style: 'Style described by the offline demo provider.', tone: 'neutral' },
+        templates: (c.templates || []).map((t) => ({ ref: t.ref, role: t.role || 'ignore', purpose: `Demo: ${t.title}`, sections: [] })),
+      });
+      return { text, usage: { inputTokens: Math.round(prompt.length / 4), outputTokens: Math.round(text.length / 4) } };
+    }
     if (options.task === 'template') {
       const text = JSON.stringify(demoTemplate(options.context || {}, prompt));
       return { text, usage: { inputTokens: Math.round(prompt.length / 4), outputTokens: Math.round(text.length / 4) } };
@@ -118,6 +127,10 @@ export default class MockProvider extends AIProvider {
         const links = options.links || [];
         const match = links.find((l) => !/^(tel|mailto):/.test(l.url) && l.url !== '/' && text.includes(l.label.toLowerCase().split(' ')[0]));
         out[f.id] = match?.url || links.find((l) => l.url === '/')?.url || '/';
+        continue;
+      }
+      if (f.format === 'number') {
+        out[f.id] = String(10 + (f.id.length % 90));
         continue;
       }
       // Placeholder text (never echoes the template sample text)

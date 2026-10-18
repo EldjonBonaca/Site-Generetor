@@ -30,10 +30,20 @@ export const LAYOUTS = {
   header: ['classic', 'centered', 'topbar', 'bold', 'transparent'],
   // "slideshow": centered text over a slideshow of the hero image and other photos
   hero: ['center', 'left', 'split', 'card', 'bottom', 'editorial', 'slideshow'],
-  // "collage": a large photo with a smaller one overlapping its corner
-  about: ['image-left', 'image-right', 'wide', 'badge', 'collage'],
-  // "bento": the first strength large over a photo, the other three as compact cards beside it
-  features: ['icons', 'cards', 'list', 'bento'],
+  // Buttons of the hero: contact + call, only the contact button, or the contact button + a text link to call
+  heroButtons: ['two', 'one', 'link'],
+  // Height of the hero: the one of its layout, the whole screen (with a "scroll down" arrow), or lower
+  heroHeight: ['auto', 'full', 'compact'],
+  // Under the hero title: nothing more, or three short phrases taking turns (CSS only, the title stays for SEO)
+  heroPhrases: ['none', 'rotating'],
+  // "collage": a large photo with a smaller one overlapping its corner; "triptych": photo | text | photo;
+  // "stacked": title beside the text, a wide photo below; "sandwich": title and text | photo | key points and button
+  about: ['image-left', 'image-right', 'wide', 'badge', 'collage', 'triptych', 'stacked', 'sandwich'],
+  // "bento": the first strength large over a photo, the other three as compact cards beside it;
+  // "split": the strengths as a list beside a large photo; "center": a photo between two strengths on each side
+  features: ['icons', 'cards', 'list', 'bento', 'split', 'center'],
+  // Number of strengths of "why choose us" (each layout takes the nearest count it can arrange: featureCount())
+  featureCount: ['4', '3', '5', '6'],
   cta: ['banner', 'split'],
   services: ['cards', 'boxed', 'overlay', 'list'],
   testimonials: ['cards', 'minimal', 'band', 'quote'],
@@ -51,6 +61,16 @@ export const LAYOUTS = {
   // Strip of guarantees: centered on one line, or scrolling endlessly (marquee)
   highlights: ['strip', 'marquee'],
 };
+
+/** Strengths a template holds, most important first: "why choose us" shows the first featureCount() of them. */
+export const MAX_FEATURES = 6;
+/** Counts of strengths each "why choose us" layout can arrange (two columns or two sides: even counts; bento and split: up to 5). */
+export const FEATURE_COUNTS = { icons: [3, 4, 5, 6], cards: [3, 4, 5, 6], list: [4, 6], bento: [3, 4, 5], split: [3, 4, 5], center: [4, 6] };
+/** Strengths shown by the layout: the count of the template, or the nearest one the layout can arrange (the smaller on a tie). */
+export function featureCount(layout) {
+  const want = Number(layout?.featureCount) || 4;
+  return (FEATURE_COUNTS[layout?.features] || [4]).reduce((best, n) => (Math.abs(n - want) < Math.abs(best - want) ? n : best));
+}
 
 /**
  * Sections of the Home page after the hero, in the order chosen by the template.
@@ -158,6 +178,8 @@ const DEFAULT_COPY = {
   aboutTitle: 'Una realtà affidabile al tuo servizio',
   aboutText: '<p>Da anni seguiamo ogni cliente con professionalità e attenzione ai dettagli, offrendo soluzioni su misura e un rapporto diretto e trasparente.</p>',
   aboutButton: 'Scopri di più',
+  heroPhrases: ['Ristrutturazioni complete', 'Preventivi gratuiti', 'Lavori garantiti'],
+  aboutPoints: ['Squadra qualificata e sempre aggiornata', 'Materiali certificati e garantiti', 'Un referente unico per ogni lavoro'],
   featuresKicker: 'I nostri punti di forza',
   featuresTitle: 'Perché sceglierci',
   featuresText: 'I motivi per cui i nostri clienti tornano da noi e ci consigliano.',
@@ -166,6 +188,8 @@ const DEFAULT_COPY = {
     { title: 'Puntualità', text: 'Rispettiamo tempi e appuntamenti concordati.' },
     { title: 'Prezzi chiari', text: 'Preventivi trasparenti, senza sorprese.' },
     { title: 'Assistenza', text: 'Ti seguiamo prima, durante e dopo il lavoro.' },
+    { title: 'Materiali di qualità', text: 'Scegliamo solo prodotti affidabili e duraturi.' },
+    { title: 'Lavori garantiti', text: 'Ogni intervento è coperto da garanzia.' },
   ],
   ctaTitle: 'Hai bisogno di un consiglio?',
   ctaText: 'Contattaci senza impegno: ti rispondiamo in giornata.',
@@ -239,7 +263,7 @@ export const DEFAULT_SPEC = Object.freeze({
   },
   layout: Object.fromEntries(Object.entries(LAYOUTS).map(([k, v]) => [k, v[0]])),
   sections: DEFAULT_SECTIONS,
-  icons: ['fas fa-award', 'fas fa-clock', 'fas fa-euro-sign', 'fas fa-handshake'],
+  icons: ['fas fa-award', 'fas fa-clock', 'fas fa-euro-sign', 'fas fa-handshake', 'fas fa-gem', 'fas fa-shield-alt'],
   copy: DEFAULT_COPY,
 });
 
@@ -274,16 +298,21 @@ export function sanitizeSpec(raw) {
   const copy = {};
   for (const [key, max] of Object.entries(COPY_KEYS)) copy[key] = str(copyIn[key], max, d.copy[key]);
   const list = (arr, n, map) => Array.from({ length: n }, (_, i) => map((Array.isArray(arr) ? arr : [])[i] || {}, i));
-  copy.features = list(copyIn.features, 4, (f, i) => ({ title: str(f.title, 50, d.copy.features[i].title), text: str(f.text, 160, d.copy.features[i].text) }));
+  copy.features = list(copyIn.features, MAX_FEATURES, (f, i) => ({ title: str(f.title, 50, d.copy.features[i].title), text: str(f.text, 160, d.copy.features[i].text) }));
   copy.reviews = list(copyIn.reviews, 3, (rv, i) => ({ name: str(rv.name, 50, d.copy.reviews[i].name), role: str(rv.role, 50, d.copy.reviews[i].role), text: str(rv.text, 300, d.copy.reviews[i].text) }));
   copy.stats = list(copyIn.stats, 4, (x, i) => ({ value: str(x.value, 12, d.copy.stats[i].value), label: str(x.label, 40, d.copy.stats[i].label) }));
   copy.steps = list(copyIn.steps, 4, (x, i) => ({ title: str(x.title, 50, d.copy.steps[i].title), text: str(x.text, 160, d.copy.steps[i].text) }));
   copy.faq = list(copyIn.faq, 4, (x, i) => ({ q: str(x.q, 120, d.copy.faq[i].q), a: str(x.a, 400, d.copy.faq[i].a) }));
   copy.highlights = list(copyIn.highlights, 4, (x, i) => str(x, 40, d.copy.highlights[i]));
+  copy.heroPhrases = list(copyIn.heroPhrases, 3, (x, i) => str(x, 40, d.copy.heroPhrases[i]));
+  copy.aboutPoints = list(copyIn.aboutPoints, 3, (x, i) => str(x, 60, d.copy.aboutPoints[i]));
   // Templates saved before the sections existed: no call to action when its layout was "none"
   const legacy = !Array.isArray(r.sections) && r.layout?.cta === 'none' ? DEFAULT_SECTIONS.filter((x) => x !== 'cta') : DEFAULT_SECTIONS;
 
   const fonts = s.fonts || {};
+  const layout = Object.fromEntries(Object.entries(LAYOUTS).map(([k, v]) => [k, oneOf(r.layout?.[k], v)]));
+  // The count of strengths the "why choose us" layout really shows
+  layout.featureCount = String(featureCount(layout));
   return {
     version: 1,
     direction: /^[a-z][a-z-]{0,30}$/.test(String(r.direction ?? '')) ? r.direction : '',
@@ -298,9 +327,9 @@ export function sanitizeSpec(raw) {
       uppercase: s.uppercase === true || s.uppercase === 'true',
       ...Object.fromEntries(Object.entries(STYLE_OPTIONS).map(([k, v]) => [k, oneOf(s[k], v)])),
     },
-    layout: Object.fromEntries(Object.entries(LAYOUTS).map(([k, v]) => [k, oneOf(r.layout?.[k], v)])),
+    layout,
     sections: sanitizeSections(r.sections, legacy),
-    icons: list(r.icons, 4, (v, i) => icon(v, d.icons[i])),
+    icons: list(r.icons, MAX_FEATURES, (v, i) => icon(v, d.icons[i])),
     copy,
   };
 }
@@ -326,7 +355,7 @@ export function describeSpec(spec) {
     `Aspetto: ${['theme', 'buttons', 'cards', 'titles', 'scale', 'images', 'kicker', 'fill'].map((k) => LOOK[k][st[k]]).join(', ')}, titoli allineati ${st.align === 'left' ? 'a sinistra' : 'al centro'}${st.titleCase === 'upper' ? ' e in maiuscolo' : ''}.`,
     `Colori: primario ${colors.primary}, secondario ${colors.secondary}, accento ${colors.accent}, titoli ${colors.heading}, testo ${colors.text}.`,
     `Font: ${fonts.heading} (titoli), ${fonts.body} (testi).`,
-    `Layout: header ${l.header}, hero ${l.hero} (bordo inferiore ${l.divider}), banner delle pagine ${l.subheader}, chi siamo ${l.about}, perché sceglierci ${l.features}, call to action ${l.cta}, servizi ${l.services}, recensioni ${l.testimonials} (senza foto dei clienti), ${optional.map((x) => `${x}, `).join('')}contatti ${l.contact}, footer ${l.footer}.`,
+    `Layout: header ${l.header}, hero ${l.hero} (${{ two: 'due pulsanti', one: 'un solo pulsante', link: 'un pulsante e un link per chiamare' }[l.heroButtons]}${{ full: ', a tutto schermo', compact: ', bassa', auto: '' }[l.heroHeight]}${l.heroPhrases === 'rotating' ? ', tre frasi a rotazione sotto il titolo' : ''}, bordo inferiore ${l.divider}), banner delle pagine ${l.subheader}, chi siamo ${l.about}, perché sceglierci ${l.features} (${featureCount(l)} punti di forza), call to action ${l.cta}, servizi ${l.services}, recensioni ${l.testimonials} (senza foto dei clienti), ${optional.map((x) => `${x}, `).join('')}contatti ${l.contact}, footer ${l.footer}.`,
     `Sezioni della Home dopo l'hero: ${describeSections(spec.sections)}.`,
     `Tono di voce: ${spec.tone}.`,
   ]

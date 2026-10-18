@@ -34,7 +34,7 @@ test('sanitizeSpec turns any AI answer into a valid template spec', () => {
   assert.equal(spec.layout.cta, 'banner');
   assert.deepEqual(spec.icons.slice(0, 2), ['fas fa-bolt', DEFAULT_SPEC.icons[1]]);
   assert.equal(spec.copy.heroTitle, 'Hello x world');
-  assert.equal(spec.copy.features.length, 4);
+  assert.equal(spec.copy.features.length, 6, 'six strengths, the layout shows the first ones');
   assert.equal(spec.copy.features[0].title, 'A');
   assert.equal(spec.copy.reviews.length, 3);
   assert.deepEqual(sanitizeSpec(null), sanitizeSpec({}), 'nothing -> the default template');
@@ -90,6 +90,18 @@ test('buildSite: every variant builds valid documents whose marks match the anal
     { layout: { header: 'transparent', hero: 'slideshow', about: 'collage', features: 'bento' }, sections: ['about', 'stats', 'features', 'cta', 'services', 'gallery', 'reviews'] },
     { style: { theme: 'dark', rhythm: 'alternate', decor: 'blob', edges: 'all' }, layout: { header: 'transparent', hero: 'split', about: 'collage', features: 'bento', subheader: 'photo', divider: 'waves' } },
     { style: { decor: 'grid', cards: 'tinted' }, layout: { header: 'transparent', hero: 'card', subheader: 'plain', features: 'bento' } },
+    // Varied structures: hero buttons and height, about between two photos / stacked, why us beside or around a photo
+    { style: { titles: 'line', decor: 'dropcap' }, layout: { heroButtons: 'link', heroHeight: 'full', about: 'triptych', features: 'center' } },
+    { style: { titles: 'bar', theme: 'dark' }, layout: { hero: 'split', heroButtons: 'one', heroHeight: 'compact', about: 'stacked', features: 'split' } },
+    { layout: { hero: 'bottom', heroHeight: 'full', about: 'image-right', features: 'split' }, sections: ['features', 'about', 'services', 'gallery', 'reviews'] },
+    // 3 to 6 strengths
+    { layout: { features: 'bento', featureCount: '5' } },
+    { layout: { features: 'center', featureCount: '6' } },
+    { layout: { features: 'cards', featureCount: '3' } },
+    { layout: { features: 'list', featureCount: '6' } },
+    // Rotating phrases under the hero title, about: text | photo | text
+    { layout: { hero: 'slideshow', heroPhrases: 'rotating', about: 'sandwich' } },
+    { style: { theme: 'dark', titles: 'bar' }, layout: { hero: 'split', heroPhrases: 'rotating', about: 'sandwich' } },
   ];
   for (const v of variants) {
     const spec = sanitizeSpec(v);
@@ -237,6 +249,151 @@ test('larger layouts: slideshow hero, transparent header, bento, collage', async
   assert.match(JSON.stringify(about), new RegExp(`"image_border_color":"${about.settings.background_color}"`));
 });
 
+test('varied structures: hero buttons and height, about triptych / stacked, why us split / center', () => {
+  const sections = ['about', 'features', 'services', 'gallery', 'reviews'];
+  const build = (layout) => buildSite(sanitizeSpec({ layout, sections }), sampleSite()).docs;
+  const json = (x) => JSON.stringify(x);
+  const count = (x, re) => (json(x).match(re) || []).length;
+
+  // Hero buttons: contact + call, contact only, contact + a call link with a phone icon
+  const hero = (layout) => build({ hero: 'center', ...layout }).home.doc.content[0];
+  assert.equal(count(hero({}), /"widgetType":"button"/g), 2, 'two buttons by default (templates saved before)');
+  assert.equal(count(hero({ heroButtons: 'one' }), /"widgetType":"button"/g), 1);
+  assert.doesNotMatch(json(hero({ heroButtons: 'one' })), /tel:/);
+  const buttons = [];
+  const walk = (el) => (el.widgetType === 'button' ? buttons.push(el.settings) : el.elements.forEach(walk));
+  walk(hero({ heroButtons: 'link' }));
+  assert.equal(buttons.length, 2);
+  const call = buttons.find((s) => s.link.url.startsWith('tel:'));
+  assert.equal(call.selected_icon.value, 'fas fa-phone-alt');
+  assert.equal(call.background_color, 'rgba(0,0,0,0)', 'a text link, not a button');
+
+  // Height: the one of the layout, the whole screen, or lower
+  assert.equal(hero({}).settings.min_height.size, 88);
+  assert.equal(hero({ heroHeight: 'full' }).settings.min_height.size, 100);
+  assert.equal(hero({ heroHeight: 'compact' }).settings.min_height.size, 66);
+  // Full screen: an arrow to the next section (not a link field), its CSS in the header
+  const full = build({ hero: 'center', heroHeight: 'full' });
+  assert.match(json(full.home.doc.content[0]), /"url":"#esg-next"/);
+  assert.equal(full.home.doc.content[1].settings._element_id, 'esg-next');
+  assert.ok(!analyzeDocument(full.home.doc, { prefix: 'home' }).fields.some((f) => f.value === '#esg-next'));
+  assert.match(json(full.header.doc), /\.elementor-widget\.esg-scroll\{position:absolute/);
+  for (const docs of [build({}), build({ hero: 'bottom', heroHeight: 'full' }), build({ hero: 'editorial', heroHeight: 'full' })]) {
+    assert.doesNotMatch(json(docs.home.doc) + json(docs.header.doc), /esg-scroll|esg-next/, 'no arrow: normal height, title at the bottom, editorial');
+  }
+
+  // About between two photos: the second one only on desktop, the text centered
+  const triptych = build({ about: 'triptych' }).home.doc.content[1];
+  assert.equal(triptych.elements.length, 3);
+  assert.equal(count(triptych, /"widgetType":"image"/g), 2);
+  assert.equal(triptych.elements[2].settings.hide_mobile, 'hidden-mobile');
+  assert.match(json(triptych.elements[1]), /"widgetType":"heading","settings":\{"title":"[^"]*","header_size":"h2","align":"center"/);
+  // Stacked: title beside the text, a wide photo below
+  const stacked = build({ about: 'stacked' }).home.doc.content[1];
+  assert.equal(stacked.elements.length, 2);
+  assert.equal(stacked.elements[0].elements.length, 2);
+  assert.equal(stacked.elements[1].elements[0].widgetType, 'image');
+
+  // Why us beside a photo (on the other side than the About photo), and around a photo
+  const split = (about) => build({ about, features: 'split' }).home.doc.content[2];
+  assert.equal(split('image-left').elements[1].elements[0].widgetType, 'image', 'photo on the right');
+  assert.equal(split('image-right').elements[0].elements[0].widgetType, 'image', 'photo on the left');
+  assert.equal(count(split('image-left'), /"widgetType":"icon-box"/g), 4);
+  const center = build({ features: 'center' }).home.doc.content[2].elements[1];
+  assert.deepEqual(center.elements.map((e) => count(e, /"widgetType":"icon-box"/g)), [2, 0, 2]);
+  assert.equal(center.elements[1].elements[0].widgetType, 'image');
+  assert.match(json(center.elements[0]), /"position":"right"/, 'the strengths on the left face the photo');
+});
+
+test('rotating phrases under the hero title, about with text on both sides of the photo', () => {
+  const sections = ['about', 'features', 'services', 'gallery', 'reviews'];
+  const build = (layout, copy) => buildSite(sanitizeSpec({ layout, sections, copy }), sampleSite()).docs;
+  const json = (x) => JSON.stringify(x);
+
+  // Three phrases in one box after the H1, each an AI field; the H1 stays the same
+  const docs = build({ hero: 'center', heroPhrases: 'rotating' }, { heroPhrases: ['Uno', 'Due', 'Tre'] });
+  const content = docs.home.doc.content[0].elements[0].elements;
+  assert.equal(content[1].settings.header_size, 'h1');
+  const rotator = content[2];
+  assert.equal(rotator.settings.css_classes, 'esg-rotate');
+  assert.deepEqual(rotator.elements.map((e) => e.settings.title), ['Uno', 'Due', 'Tre']);
+  assert.ok(rotator.elements.every((e) => e.settings.header_size === 'p'), 'not headings for SEO');
+  const fields = analyzeDocument(docs.home.doc, { prefix: 'home' }).fields;
+  for (const e of rotator.elements) {
+    const f = fields.find((x) => x.ref === `${e.id}:title`);
+    assert.match(docs.home.marks.get(f.ref).hint, /rotating phrase \d of 3/);
+  }
+  // CSS only when used, with a still version for reduced motion
+  assert.match(json(docs.header.doc), /\.e-con\.esg-rotate\{display:grid!important\}/);
+  assert.match(json(docs.header.doc), /prefers-reduced-motion:reduce\)\{\.esg-rotate/);
+  const plain = build({ hero: 'center' });
+  assert.doesNotMatch(json(plain.home.doc) + json(plain.header.doc), /esg-rotate/);
+
+  // Sandwich: title and text | photo | the 3 key points and the button
+  const about = build({ about: 'sandwich' }, { aboutPoints: ['A', 'B', 'C'] }).home.doc.content[1];
+  assert.equal(about.elements.length, 3);
+  const left = about.elements[0].elements;
+  assert.equal(left[1].settings.title, DEFAULT_SPEC.copy.aboutTitle);
+  assert.equal(left.at(-1).widgetType, 'text-editor');
+  assert.equal(about.elements[1].elements[0].widgetType, 'image');
+  const [points, button] = about.elements[2].elements;
+  assert.deepEqual(points.settings.icon_list.map((x) => x.text), ['A', 'B', 'C']);
+  assert.equal(button.widgetType, 'button');
+  // Templates saved before: default phrases and points
+  assert.equal(sanitizeSpec({}).copy.heroPhrases.length, 3);
+  assert.equal(sanitizeSpec({}).copy.aboutPoints.length, 3);
+});
+
+test('why choose us shows 3 to 6 strengths, as many as its layout can arrange', async () => {
+  const { featureCount, FEATURE_COUNTS, LAYOUTS } = await import('../src/templates/spec.js');
+  const sections = ['about', 'features', 'services', 'gallery', 'reviews'];
+  const features = (layout) => buildSite(sanitizeSpec({ layout, sections }), sampleSite()).docs.home.doc.content[2];
+  const boxes = (el) => (JSON.stringify(el).match(/"widgetType":"icon-box"/g) || []).length;
+  const titles = (el) => [...JSON.stringify(el).matchAll(/"title_text":"([^"]*)"/g)].map((m) => m[1]);
+  for (const layout of LAYOUTS.features) assert.ok(FEATURE_COUNTS[layout], `${layout}: counts it can arrange`);
+
+  // Each layout with each count it can arrange: the first strengths of the template, in order
+  for (const [layout, counts] of Object.entries(FEATURE_COUNTS)) {
+    for (const n of counts) {
+      const el = features({ features: layout, featureCount: String(n) });
+      assert.equal(boxes(el), n, `${layout} with ${n} strengths`);
+      assert.deepEqual(titles(el), DEFAULT_SPEC.copy.features.slice(0, n).map((f) => f.title), `${layout}: the first ${n}, in order`);
+    }
+  }
+  // A count the layout cannot arrange: the nearest one (the smaller on a tie), saved as such
+  assert.equal(featureCount({ features: 'center', featureCount: '5' }), 4);
+  assert.equal(featureCount({ features: 'center', featureCount: '3' }), 4);
+  assert.equal(featureCount({ features: 'bento', featureCount: '6' }), 5);
+  assert.equal(featureCount({ features: 'list', featureCount: '3' }), 4);
+  assert.equal(sanitizeSpec({ layout: { features: 'center', featureCount: '5' } }).layout.featureCount, '4');
+  assert.equal(sanitizeSpec({ layout: { features: 'icons' } }).layout.featureCount, '4', 'templates saved before: 4 strengths');
+
+  // Cards: 4 in a row; otherwise 3 per row, the last row of 5 centered
+  const row = (n) => features({ features: 'icons', featureCount: String(n) }).elements[1];
+  assert.equal(row(4).elements[0].settings.width.size, 22.5);
+  assert.equal(row(5).elements[0].settings.width.size, 31);
+  assert.equal(row(5).settings.flex_justify_content, 'center');
+  assert.equal(row(6).settings.flex_justify_content, 'space-between');
+  // Bento with five: the four small cards in a 2 × 2 grid
+  const small = features({ features: 'bento', featureCount: '5' }).elements[1].elements[1];
+  assert.equal(small.settings.flex_direction, 'row');
+  assert.equal(small.elements[0].settings.width.size, 48);
+  // The AI fields say how many strengths there are
+  const { marks } = buildSite(sanitizeSpec({ layout: { features: 'icons', featureCount: '6' }, sections }), sampleSite()).docs.home;
+  assert.ok([...marks.values()].some((m) => m.hint === 'strength 6 of 6 of the business (short title, 2–4 words)'));
+  // The template prompt asks for six strengths and icons, most important first
+  const { DIRECTIONS, designPlan } = await import('../src/templates/directions.js');
+  const direction = DIRECTIONS[0];
+  const { prompt } = buildTemplatePrompt({ category: { name: 'Test' }, direction, plan: designPlan(direction, []), existing: [] });
+  assert.match(prompt, /"features": \[6 ×/);
+  assert.match(prompt, /the most important first/);
+  // The planner saves the count the layout really shows
+  for (const d of DIRECTIONS) {
+    const plan = designPlan(d, []);
+    assert.equal(plan.layout.featureCount, String(featureCount(plan.layout)), `${d.id}: count of the chosen layout`);
+  }
+});
+
 test('templates of a category vary the order of the Home sections', async () => {
   const { DIRECTIONS, designPlan } = await import('../src/templates/directions.js');
   const direction = DIRECTIONS.find((d) => d.id === 'corporate');
@@ -357,7 +514,7 @@ test('buildSite: structure required by the prompt', () => {
   };
   for (const [role, d] of Object.entries(docs)) d.doc.content.forEach((el) => walk(el, role));
   const featureBoxes = JSON.parse(json('home')).content[2].elements[1].elements.map((e) => e.elements[0].settings);
-  assert.deepEqual(featureBoxes.map((s) => s.title_text), DEFAULT_SPEC.copy.features.map((f) => f.title), '"Why choose us": the 4 strengths of the template');
+  assert.deepEqual(featureBoxes.map((s) => s.title_text), DEFAULT_SPEC.copy.features.slice(0, 4).map((f) => f.title), '"Why choose us": the first 4 strengths of the template');
   // About: subheader, "Chi siamo" in two alternating rows (text | image, image | text), why us, reviews
   assert.equal(docs.about.doc.content.length, 5, 'subheader, Chi siamo in two rows, why us, reviews');
   assert.match(json('about'), /"title":"Chi siamo"/);

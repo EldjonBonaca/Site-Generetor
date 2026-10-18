@@ -29,7 +29,7 @@
  */
 import crypto from 'node:crypto';
 import { telHref } from '../lib/util.js';
-import { DEFAULT_SECTIONS, mix, rgba, siteColors, tint } from './spec.js';
+import { DEFAULT_SECTIONS, featureCount, mix, rgba, siteColors, tint } from './spec.js';
 
 /** Image of a template before a project fills it (never left in an exported site). */
 export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
@@ -263,7 +263,7 @@ function createDoc(role, spec, site) {
    * Inner container (column / card / row). o: { width, tablet, mobile, maxWidth, row, align, justify, bg, gradient, card,
    * on ('base' | 'alt' | 'photo': what the card stands on), gap, pad, overflow, anim, slot, service, overlay, minHeightPx, radius,
    * margin [t, r, b, l] (negative top: overlaps the element above), padding [t, r, b, l], border [t, r, b, l, color], zIndex,
-   * lift (hover), zoom (photo zoom on hover), css }
+   * lift (hover), zoom (photo zoom on hover), desktopOnly (hidden on tablets and phones), css }
    */
   const box = (elements, o = {}) => {
     const settings = {
@@ -303,6 +303,7 @@ function createDoc(role, spec, site) {
     if (o.zIndex) settings.z_index = o.zIndex;
     if (o.minHeightPx) Object.assign(settings, { min_height: px(o.minHeightPx), min_height_mobile: px(Math.round(o.minHeightPx * 0.8)) });
     if (o.overflow) settings.overflow = 'hidden';
+    if (o.desktopOnly) Object.assign(settings, { hide_tablet: 'hidden-tablet', hide_mobile: 'hidden-mobile' });
     if (o.anim !== undefined && o.anim !== false) animate(settings, o.anim);
     const el = { id: id(), elType: 'container', isInner: true, settings, elements };
     if (o.slot) photo(settings, el, o);
@@ -378,7 +379,7 @@ function createDoc(role, spec, site) {
     if (o.dropcap && st.decor === 'dropcap') el.settings._css_classes = 'esg-dropcap';
     return el;
   };
-  /** variant: main | primary | secondary | outline | link */
+  /** variant: main | primary | secondary | outline | link; o.icon: Font Awesome icon before the label; o.hoverColor: of a link */
   const button = (label, url, o = {}) => {
     const variant = o.variant === 'main' || !o.variant ? mainButton : o.variant;
     const fg = { primary: c.onPrimary, secondary: c.onSecondary, outline: o.outlineColor || ink.heading, link: o.color || ink.kicker }[variant];
@@ -388,6 +389,7 @@ function createDoc(role, spec, site) {
       align: o.align || 'left',
       button_text_color: fg,
       border_radius: corners(btnRadius),
+      ...(o.icon ? { selected_icon: { value: o.icon, library: 'fa-solid' }, icon_align: 'left', icon_indent: px(10) } : {}),
       ...typo('', fonts.body, 15, '600', st.uppercase ? { typography_text_transform: 'uppercase', typography_letter_spacing: px(1) } : {}),
     };
     if (variant === 'primary') Object.assign(settings, { background_color: c.primary, button_background_hover_color: c.dark, hover_color: '#FFFFFF', text_padding: sides(16, 32, 16, 32) });
@@ -402,7 +404,7 @@ function createDoc(role, spec, site) {
         border_color: fg,
         text_padding: sides(14, 30, 14, 30),
       });
-    if (variant === 'link') Object.assign(settings, { background_color: 'rgba(0,0,0,0)', button_background_hover_color: 'rgba(0,0,0,0)', hover_color: ink.heading, text_padding: sides(4, 0, 4, 0) });
+    if (variant === 'link') Object.assign(settings, { background_color: 'rgba(0,0,0,0)', button_background_hover_color: 'rgba(0,0,0,0)', hover_color: o.hoverColor || ink.heading, text_padding: sides(4, 0, 4, 0) });
     const el = widget('button', settings);
     field(el, 'text', o);
     // tel:/mailto: links are not link fields (analyze.js); site links are decided here
@@ -462,13 +464,14 @@ function createDoc(role, spec, site) {
   };
   /** Icon box. o: { position, align, titleSize, url, light (on a photo), fixed | titleHint + textHint } */
   const iconBox = (icon, title, desc, o = {}) => {
-    const left = o.position === 'left';
+    // Icon beside the text (left or right): smaller icon and spacing
+    const left = o.position === 'left' || o.position === 'right';
     const el = widget('icon-box', {
       selected_icon: { value: icon, library: 'fa-solid' },
       view: 'stacked',
       shape: st.buttons === 'square' ? 'square' : 'circle',
       position: o.position || 'top',
-      text_align: o.align || (left ? 'left' : 'center'),
+      text_align: o.align || (o.position === 'left' ? 'left' : o.position === 'right' ? 'right' : 'center'),
       title_text: title,
       description_text: desc,
       ...(o.url ? { link: link(o.url) } : {}),
@@ -602,7 +605,7 @@ const underHeader = (b) => (b.spec.layout.header === 'transparent' ? 'esg-under'
  */
 const NATURAL_SURFACE = {
   about: () => 'bg',
-  features: (l) => (l.features === 'cards' ? 'band' : l.features === 'icons' ? 'alt' : 'bg'),
+  features: (l) => (l.features === 'cards' ? 'band' : l.features === 'icons' || l.features === 'center' ? 'alt' : 'bg'),
   cta: (l) => (l.cta === 'split' ? 'bg' : 'band'),
   services: (l) => (l.services === 'boxed' ? 'alt' : 'bg'),
   gallery: () => 'bg',
@@ -725,19 +728,23 @@ function subheader(b, site, role, nextBg = b.ink.bg) {
   );
 }
 
-const featureHints = (i) => ({ titleHint: `strength ${i + 1} of 4 of the business (short title, 2–4 words)`, textHint: `explanation of strength ${i + 1} (1–2 sentences)` });
+const featureHints = (i, n) => ({ titleHint: `strength ${i + 1} of ${n} of the business (short title, 2–4 words)`, textHint: `explanation of strength ${i + 1} (1–2 sentences)` });
 
 function features(b) {
   const { copy, icons, layout } = b.spec;
+  // The first strengths (most important first), as many as the layout shows
+  const n = featureCount(layout);
+  const shown = copy.features.slice(0, n);
   const parts = {
     kicker: { value: copy.featuresKicker, hint: 'small label above the "Why choose us" title', max: 40 },
     title: { value: copy.featuresTitle, hint: '"Why choose us" section title', max: 60 },
     text: { value: copy.featuresText, hint: 'intro of the "why choose us" section (1 sentence)', max: 200 },
   };
-  // "bento": the first strength large over a photo, the other three as compact cards stacked beside it
+  // "bento": the first strength large over a photo, the others as compact cards beside it (stacked, or 2 × 2 for four)
   if (layout.features === 'bento') {
-    const [first, ...rest] = copy.features;
-    const big = b.box([b.iconBox(icons[0], first.title, first.text, { light: true, align: 'left', titleSize: 26, ...featureHints(0) })], {
+    const [first, ...rest] = shown;
+    const grid = rest.length > 3;
+    const big = b.box([b.iconBox(icons[0], first.title, first.text, { light: true, align: 'left', titleSize: 26, ...featureHints(0, n) })], {
       width: 48,
       tablet: 100,
       slot: 'photo',
@@ -749,17 +756,45 @@ function features(b) {
       anim: 0,
     });
     const small = rest.map((f, i) =>
-      b.box([b.iconBox(icons[i + 1], f.title, f.text, { position: 'left', ...featureHints(i + 1) })], { card: true, on: surfaceOn(b, 'features', 'bg'), pad: 26, anim: (i + 1) * 120, lift: true })
+      b.box([b.iconBox(icons[i + 1], f.title, f.text, { position: 'left', ...featureHints(i + 1, n) })], { card: true, on: surfaceOn(b, 'features', 'bg'), pad: 26, anim: (i + 1) * 120, lift: true, ...(grid ? { width: 48, tablet: 48, mobile: 100 } : {}) })
     );
-    return b.section([intro(b, parts), b.box([big, b.box(small, { width: 48, tablet: 100, gap: 20, justify: 'space-between' })], { row: true, gap: 24, align: 'stretch', justify: 'space-between' })], {
+    return b.section([intro(b, parts), b.box([big, b.box(small, { width: 48, tablet: 100, gap: 20, justify: 'space-between', ...(grid ? { row: true, align: 'stretch' } : {}) })], { row: true, gap: 24, align: 'stretch', justify: 'space-between' })], {
       bg: surfaceBg(b, 'features', 'bg'),
       align: 'center',
       gap: 44,
     });
   }
-  // "list": title on the left, the 4 strengths in two columns (icon beside the text, no cards)
+  // "split": title and the strengths as a list (thin lines between them) beside a large photo, on the other side than the About photo
+  if (layout.features === 'split') {
+    const items = shown.map((f, i) =>
+      b.box([b.iconBox(icons[i], f.title, f.text, { position: 'left', ...featureHints(i, n) })], { anim: i * 100, ...(i ? { padding: [22, 0, 0, 0], border: [1, 0, 0, 0, b.ink.border] } : {}) })
+    );
+    const list = b.box([intro(b, parts, { align: 'left' }), b.box(items, { gap: 22 })], { width: 48, gap: 36 });
+    const photo = b.box([b.picture('photo', { height: 600, mobileHeight: 300, frame: true })], { width: 44, anim: 0 });
+    return b.section(layout.about === 'image-right' ? [photo, list] : [list, photo], { row: true, bg: surfaceBg(b, 'features', 'bg') });
+  }
+  // "center": a photo in the middle, half of the strengths on each side facing it (stacked on tablets and phones)
+  if (layout.features === 'center') {
+    const half = Math.ceil(shown.length / 2);
+    const side = (list, offset, right) =>
+      b.box(
+        list.map((f, j) => {
+          const i = offset + j;
+          const el = b.iconBox(icons[i], f.title, f.text, { position: right ? 'right' : 'left', ...featureHints(i, n) });
+          if (right) Object.assign(el.settings, { position_tablet: 'left', text_align_tablet: 'left' });
+          return b.box([el], { anim: i * 120 });
+        }),
+        { width: 30, tablet: 100, gap: 44 }
+      );
+    const photo = b.box([b.picture('photo', { height: 540, mobileHeight: 300, frame: true })], { width: 32, tablet: 100, anim: 0 });
+    return b.section(
+      [intro(b, parts), b.box([side(shown.slice(0, half), 0, true), photo, side(shown.slice(half), half, false)], { row: true, gap: 32, align: 'center', justify: 'space-between' })],
+      { bg: surfaceBg(b, 'features', 'alt'), align: 'center', gap: 56 }
+    );
+  }
+  // "list": title on the left, the strengths in two columns (icon beside the text, no cards)
   if (layout.features === 'list') {
-    const items = copy.features.map((f, i) => b.box([b.iconBox(icons[i], f.title, f.text, { position: 'left', ...featureHints(i) })], { width: 47, tablet: 100, anim: i * 100 }));
+    const items = shown.map((f, i) => b.box([b.iconBox(icons[i], f.title, f.text, { position: 'left', ...featureHints(i, n) })], { width: 47, tablet: 100, anim: i * 100 }));
     return b.section([b.box([intro(b, parts, { align: 'left' })], { width: 36 }), b.box(items, { width: 58, row: true, gap: 32, align: 'flex-start', justify: 'space-between' })], {
       row: true,
       bg: surfaceBg(b, 'features', 'bg'),
@@ -767,9 +802,9 @@ function features(b) {
     });
   }
   const onPhoto = layout.features === 'cards';
-  const items = copy.features.map((f, i) => b.box([b.iconBox(icons[i], f.title, f.text, featureHints(i))], { width: b.columns(4), card: true, on: onPhoto ? 'photo' : surfaceOn(b, 'features', 'alt'), pad: 30, anim: i * 120, lift: true }));
+  const items = shown.map((f, i) => b.box([b.iconBox(icons[i], f.title, f.text, featureHints(i, n))], { width: b.columns(n === 4 ? 4 : 3), card: true, on: onPhoto ? 'photo' : surfaceOn(b, 'features', 'alt'), pad: 30, anim: i * 120, lift: true }));
   return b.section(
-    [intro(b, parts, { light: onPhoto }), b.box(items, { row: true, gap: 24, align: 'stretch', justify: 'space-between' })],
+    [intro(b, parts, { light: onPhoto }), b.box(items, { row: true, gap: 24, align: 'stretch', justify: n === 5 ? 'center' : 'space-between' })],
     onPhoto ? { slot: 'photo', overlay: [rgba(b.c.dark, 0.9), rgba(b.c.dark, 0.78), 180], align: 'center', gap: 44, band: true } : { bg: surfaceBg(b, 'features', 'alt'), align: 'center', gap: 44 }
   );
 }
@@ -842,7 +877,8 @@ function reviews(b) {
 
 /**
  * Image + text (about teaser on Home, "Chi siamo" on the About page): image on the left or on the
- * right of the text, or ("wide") text on top and a wide photo below.
+ * right of the text, ("wide") text on top and a wide photo below, or ("triptych") the text between
+ * two photos. ("stacked" is built by aboutTeaser: it splits the title from the text.)
  */
 function mediaRow(b, content, o = {}) {
   const variant = o.imageFirst === undefined ? b.spec.layout.about : o.imageFirst ? 'image-left' : 'image-right';
@@ -862,6 +898,17 @@ function mediaRow(b, content, o = {}) {
     const img = b.box([b.box([b.picture('photo', { height: o.height || 440, frame: true })], { width: 80, tablet: 80, mobile: 100 }), small], { width: 46, gap: 0, anim: 0 });
     return b.section([img, b.box(content, { width: 48, gap: 16 })], { row: true, bg });
   }
+  // "triptych": the text between two photos, the second one lower and smaller (only on desktop)
+  if (variant === 'triptych') {
+    return b.section(
+      [
+        b.box([b.picture('photo', { height: o.height || 460, frame: true })], { width: 27, tablet: 100, anim: 0 }),
+        b.box(content, { width: 38, tablet: 100, gap: 16, align: 'center' }),
+        b.box([b.picture('photo', { height: 380 })], { width: 27, margin: [90, 0, 0, 0], desktopOnly: true, anim: 200 }),
+      ],
+      { row: true, bg: o.bg || b.ink.bg }
+    );
+  }
   // "badge": photo on the left with a small colored card (a key figure) overlapping its bottom-left corner
   const stat = b.spec.copy.stats[0];
   const badge = variant === 'badge'
@@ -875,6 +922,39 @@ function mediaRow(b, content, o = {}) {
 /** Accent line under a left-aligned title (only for the "line" title style). */
 const titleLine = (b) => (b.st.titles === 'line' ? [b.line()] : []);
 
+/** Full-screen hero (the editorial hero keeps its height: title + wide photo). */
+const fullHero = (layout) => layout.heroHeight === 'full' && layout.hero !== 'editorial';
+/** The arrow to the next section: full-screen heroes, except "bottom" whose title already sits at the bottom. */
+const hasScrollCue = (layout) => fullHero(layout) && layout.hero !== 'bottom';
+/** CSS id of the section after the hero, target of the arrow. */
+const NEXT_ID = 'esg-next';
+
+/**
+ * Three short phrases under the hero title, taking turns in the same place (CSS of the header,
+ * no script: without it they stay readable one under the other). The H1 does not change.
+ */
+function rotatingPhrases(b, align, color) {
+  const phrases = b.spec.copy.heroPhrases.map((x, i) =>
+    b.heading(x, { tag: 'p', size: 26, align, color, hint: `rotating phrase ${i + 1} of 3 under the hero title: a short benefit or service of the business (2–5 words), different from the others`, max: 40 })
+  );
+  return b.box(phrases, { gap: 0, css: 'esg-rotate' });
+}
+
+/** Arrow at the bottom of a full-screen hero, leading to the next section (CSS of the header: centered at the bottom, bobbing). */
+function scrollCue(b, color) {
+  // An #anchor is not a link field (analyze.js): the AI and the export leave it as it is
+  return b.widget('icon', {
+    selected_icon: { value: 'fas fa-chevron-down', library: 'fa-solid' },
+    view: 'default',
+    primary_color: color,
+    hover_primary_color: b.c.secondary,
+    size: px(22),
+    align: 'center',
+    link: link(`#${NEXT_ID}`),
+    _css_classes: 'esg-scroll',
+  });
+}
+
 // ---------------------------------------------------------------------------------------------
 // Documents
 // ---------------------------------------------------------------------------------------------
@@ -887,19 +967,25 @@ function hero(b, site) {
   const align = variant === 'center' || variant === 'editorial' || variant === 'slideshow' ? 'center' : 'left';
   const css = underHeader(b);
   const size = variant === 'bottom' ? 66 : variant === 'editorial' ? 64 : 58;
+  // Buttons: contact + call ("two"), contact only ("one"), or contact + a text link with a phone icon ("link")
+  const buttons = [b.button(copy.heroButton, site.pages.contact.url, { variant: onImage ? 'secondary' : 'main', hint: 'main hero button (leads to the contact page)', max: 30 })];
+  const callHint = { hint: 'second hero button: call the business by phone', max: 30 };
+  if (layout.heroButtons === 'link') {
+    buttons.push(b.button(copy.heroButton2, tel, { variant: 'link', icon: 'fas fa-phone-alt', color: onImage ? '#FFFFFF' : b.ink.heading, hoverColor: onImage ? b.c.secondary : b.ink.kicker, ...callHint }));
+  } else if (layout.heroButtons !== 'one') {
+    buttons.push(b.button(copy.heroButton2, tel, { variant: 'outline', outlineColor: onImage ? '#FFFFFF' : b.ink.heading, ...callHint }));
+  }
   const content = [
     b.kicker(copy.heroKicker, { align, color: onImage ? b.c.secondary : undefined, onDark: onImage, hint: 'short tagline above the main title', max: 50 }),
     b.heading(copy.heroTitle, { tag: 'h1', size, align, hl: true, color: onImage ? '#FFFFFF' : undefined, hint: 'main title of the site (H1): the promise of the business, with its activity and city', max: 80 }),
+    ...(layout.heroPhrases === 'rotating' ? [rotatingPhrases(b, align, onImage ? b.c.secondary : b.ink.kicker)] : []),
     b.text(copy.heroText, { align, color: onImage ? 'rgba(255,255,255,0.9)' : undefined, size: 19, hint: 'hero subtitle (1–2 sentences)', max: 200 }),
-    b.box(
-      [
-        b.button(copy.heroButton, site.pages.contact.url, { variant: onImage ? 'secondary' : 'main', hint: 'main hero button (leads to the contact page)', max: 30 }),
-        b.button(copy.heroButton2, tel, { variant: 'outline', outlineColor: onImage ? '#FFFFFF' : b.ink.heading, hint: 'second hero button: call the business by phone', max: 30 }),
-      ],
-      { row: true, gap: 14, justify: align === 'center' ? 'center' : 'flex-start' }
-    ),
+    b.box(buttons, { row: true, gap: layout.heroButtons === 'link' ? 28 : 14, justify: align === 'center' ? 'center' : 'flex-start' }),
   ];
   const edge = shape(b, b.ink.bg);
+  // Height (vh): the one of the layout, the whole screen with an arrow to the next section ("full"), or lower ("compact")
+  const height = (base) => ({ full: 100, compact: Math.min(base, base > 90 ? 72 : 66) })[layout.heroHeight] || base;
+  const cue = hasScrollCue(layout) ? [scrollCue(b, variant === 'split' ? b.ink.heading : '#FFFFFF')] : [];
   if (variant === 'editorial') {
     // Magazine opening: big centered title on the page color, a wide photo below
     return b.section(
@@ -908,18 +994,18 @@ function hero(b, site) {
     );
   }
   if (variant === 'split') {
-    return b.section([b.box(content, { width: 50, gap: 20 }), b.box([b.picture('hero', { height: 540, mobileHeight: 300, frame: true })], { width: 46, anim: 0 })], {
+    return b.section([b.box(content, { width: 50, gap: 20 }), b.box([b.picture('hero', { height: 540, mobileHeight: 300, frame: true })], { width: 46, anim: 0 }), ...cue], {
       row: true,
       bg: b.ink.alt,
-      minHeight: 80,
+      minHeight: height(80),
     });
   }
   if (variant === 'card') {
     // Full photo with the text in a card on the left
-    return b.section([b.box(content, { maxWidth: 620, card: true, on: 'photo', pad: 52, gap: 20, anim: 0 })], {
+    return b.section([b.box(content, { maxWidth: 620, card: true, on: 'photo', pad: 52, gap: 20, anim: 0 }), ...cue], {
       slot: 'hero',
       overlay: [rgba(b.c.dark, 0.35), rgba(b.c.dark, 0.15), 90],
-      minHeight: 86,
+      minHeight: height(86),
       align: 'flex-start',
       divider: edge,
       css,
@@ -927,10 +1013,10 @@ function hero(b, site) {
   }
   if (variant === 'bottom') {
     // Big title at the bottom of a full-height photo
-    return b.section([b.box(content, { maxWidth: 900, gap: 20, align: 'flex-start', anim: 0 })], {
+    return b.section([b.box(content, { maxWidth: 900, gap: 20, align: 'flex-start', anim: 0 }), ...cue], {
       slot: 'hero',
       overlay: [rgba(b.c.dark, 0.1), rgba(b.c.dark, 0.94), 180],
-      minHeight: 94,
+      minHeight: height(94),
       align: 'flex-start',
       justify: 'flex-end',
       padBottom: Math.round(b.pad * 1.1),
@@ -940,19 +1026,19 @@ function hero(b, site) {
   }
   if (variant === 'slideshow') {
     // Centered text over a slideshow of photos (Elementor background slideshow: fade + slow Ken Burns zoom)
-    return b.section([b.box(content, { maxWidth: 860, gap: 20, align: 'center', anim: 0 })], {
+    return b.section([b.box(content, { maxWidth: 860, gap: 20, align: 'center', anim: 0 }), ...cue], {
       slideshow: true,
       overlay: [rgba(b.c.dark, 0.5), rgba(b.c.dark, 0.82), 180],
-      minHeight: 92,
+      minHeight: height(92),
       align: 'center',
       divider: edge,
       css,
     });
   }
-  return b.section([b.box(content, { maxWidth: variant === 'left' ? 680 : 860, gap: 20, align: variant === 'left' ? 'flex-start' : 'center', anim: 0 })], {
+  return b.section([b.box(content, { maxWidth: variant === 'left' ? 680 : 860, gap: 20, align: variant === 'left' ? 'flex-start' : 'center', anim: 0 }), ...cue], {
     slot: 'hero',
     overlay: variant === 'left' ? [rgba(b.c.dark, 0.9), rgba(b.c.dark, 0.3), 90] : [rgba(b.c.dark, 0.55), rgba(b.c.dark, 0.8), 180],
-    minHeight: 88,
+    minHeight: height(88),
     align: variant === 'left' ? 'flex-start' : 'center',
     divider: edge,
     css,
@@ -961,14 +1047,47 @@ function hero(b, site) {
 
 /** "Chi siamo" teaser of the Home page. */
 function aboutTeaser(b, site) {
-  const { copy } = b.spec;
-  return mediaRow(b, [
-    b.kicker(copy.aboutKicker, { hint: 'small label of the "about us" section', max: 30 }),
-    b.heading(copy.aboutTitle, { bar: b.st.titles === 'bar', hl: true, hint: '"About us" section title', max: 70 }),
-    ...titleLine(b),
-    b.text(copy.aboutText, { dropcap: true, hint: 'short presentation of the business (2–4 sentences)', max: 600 }),
-    b.button(copy.aboutButton, site.pages.about.url, { hint: 'button "Scopri di più" leading to the About page', max: 30 }),
-  ], { bg: surfaceBg(b, 'about', 'bg') });
+  const { copy, layout } = b.spec;
+  const bar = b.st.titles === 'bar';
+  // "triptych": the text centered between the photos
+  const align = layout.about === 'triptych' && !bar ? 'center' : 'left';
+  const head = [
+    b.kicker(copy.aboutKicker, { align, hint: 'small label of the "about us" section', max: 30 }),
+    b.heading(copy.aboutTitle, { align, bar, hl: true, hint: '"About us" section title', max: 70 }),
+    ...(b.st.titles === 'line' ? [b.line(align)] : []),
+  ];
+  const body = [
+    b.text(copy.aboutText, { align, dropcap: align === 'left', hint: 'short presentation of the business (2–4 sentences)', max: 600 }),
+    b.button(copy.aboutButton, site.pages.about.url, { align, hint: 'button "Scopri di più" leading to the About page', max: 30 }),
+  ];
+  const bg = surfaceBg(b, 'about', 'bg');
+  // "sandwich": title and text | a tall photo | key points and button
+  if (layout.about === 'sandwich') {
+    const points = b.iconList(
+      copy.aboutPoints.map((x, i) => ({ text: x, icon: 'fas fa-check-circle', hint: `key point ${i + 1} of 3 of the business in the "about us" section (3–7 words), different from the others`, max: 60 })),
+      { size: 17, weight: '600', color: b.ink.heading }
+    );
+    points.settings.space_between = px(18);
+    return b.section(
+      [
+        b.box([...head, body[0]], { width: 32, tablet: 100, gap: 16 }),
+        b.box([b.picture('photo', { height: 540, mobileHeight: 300, frame: true })], { width: 30, tablet: 100, anim: 0 }),
+        b.box([points, body[1]], { width: 30, tablet: 100, gap: 28, anim: 150 }),
+      ],
+      { row: true, bg }
+    );
+  }
+  // "stacked": the title on the left, the text and button on the right, a wide photo below
+  if (layout.about === 'stacked') {
+    return b.section(
+      [
+        b.box([b.box(head, { width: 44, tablet: 100, gap: 12 }), b.box(body, { width: 50, tablet: 100, gap: 16, anim: 120 })], { row: true, gap: 32, align: 'flex-start', justify: 'space-between' }),
+        b.box([b.picture('photo', { height: 520, mobileHeight: 260, frame: true, wide: true })], { anim: 0 }),
+      ],
+      { bg, gap: 56 }
+    );
+  }
+  return mediaRow(b, [...head, ...body], { bg });
 }
 
 /** Featured services (max 3) + "all services". */
@@ -1234,6 +1353,8 @@ function home(b, site) {
   // The shaped bottom edge of the hero takes the color of the next section
   const next = out[1]?.settings;
   if (next && out[0].settings.shape_divider_bottom) out[0].settings.shape_divider_bottom_color = next.background_color || b.ink.bg;
+  // Target of the arrow of a full-screen hero
+  if (next && hasScrollCue(layout)) next._element_id = NEXT_ID;
   sectionLines(b, out, ['hero', ...ids]);
   bandEdges(b, out);
   return out;
@@ -1485,11 +1606,16 @@ export function articleDoc(doc, post) {
     list
       .map((el) => {
         const st = el.settings || {};
-        if (st.__dynamic__?.background_image) {
-          delete st.__dynamic__.background_image;
-          if (!Object.keys(st.__dynamic__).length) delete st.__dynamic__;
-          if (post.imageUrl) st.background_image = { url: post.imageUrl, id: '', alt: post.title, source: 'library' };
-          else delete st.background_image;
+        // Dynamic featured image (background, or an image of a Template Kit single post) -> the article image
+        for (const key of Object.keys(st.__dynamic__ || {}).filter((k) => /image/.test(k))) {
+          delete st.__dynamic__[key];
+          if (post.imageUrl) st[key] = { url: post.imageUrl, id: '', alt: post.title, source: 'library' };
+          else delete st[key];
+        }
+        if (st.__dynamic__ && !Object.keys(st.__dynamic__).length) delete st.__dynamic__;
+        if (el.widgetType === 'theme-post-featured-image') {
+          el.widgetType = 'image';
+          st.image = post.imageUrl ? { url: post.imageUrl, id: '', alt: post.title, source: 'library' } : { url: '', id: '' };
         }
         if (el.widgetType === 'theme-post-title') {
           el.widgetType = 'heading';
@@ -1629,7 +1755,26 @@ body:has(.esg-under) .esg-nav{--esg-color:#FFFFFF;--esg-hover:${c.secondary};--e
 body:has(.esg-under) .esg-hd-brand .elementor-heading-title{color:#FFFFFF!important}
 body:has(.esg-under) .esg-hd-brand img{filter:brightness(0) invert(1)}`
     : '';
-  return [highlightCss(b), decor, marquee, over].filter(Boolean).map((css) => `\n${css}`).join('');
+  // Arrow of a full-screen hero: centered at the bottom, above the shaped edge, gently bobbing
+  const layout = b.spec.layout;
+  const edge = layout.hero !== 'split' && layout.divider !== 'none' ? SHAPE_HEIGHT[layout.divider] || 70 : 0;
+  const scroll = hasScrollCue(layout)
+    ? `.elementor-widget.esg-scroll{position:absolute!important;left:50%;bottom:${edge + 24}px;transform:translateX(-50%);width:auto!important;margin:0!important;z-index:3}
+.esg-scroll .elementor-icon{animation:esg-bob 2.4s ease-in-out infinite}
+@keyframes esg-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(8px)}}
+@media (max-width:767px){.elementor-widget.esg-scroll{bottom:${edge ? 40 : 20}px}}
+@media (prefers-reduced-motion:reduce){.esg-scroll .elementor-icon{animation:none}}`
+    : '';
+  // Rotating phrases of the hero: stacked in one grid cell, each shown for 3s (rising in, rising out)
+  const rotate = layout.heroPhrases === 'rotating'
+    ? `.e-con.esg-rotate{display:grid!important}
+.esg-rotate>.elementor-widget{grid-area:1/1;width:100%;opacity:0;animation:esg-rotate 9s infinite}
+.esg-rotate>.elementor-widget:nth-child(2){animation-delay:3s}
+.esg-rotate>.elementor-widget:nth-child(3){animation-delay:6s}
+@keyframes esg-rotate{0%{opacity:0;transform:translateY(14px)}4%,30%{opacity:1;transform:none}34%,100%{opacity:0;transform:translateY(-14px)}}
+@media (prefers-reduced-motion:reduce){.esg-rotate>.elementor-widget{animation:none}.esg-rotate>.elementor-widget:first-child{opacity:1}}`
+    : '';
+  return [highlightCss(b), decor, marquee, over, scroll, rotate].filter(Boolean).map((css) => `\n${css}`).join('');
 }
 
 /**

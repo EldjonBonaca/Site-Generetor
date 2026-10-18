@@ -1,11 +1,16 @@
 /**
  * Project context + page plan shared by the generation runner, the exporter and the API.
- * The Elementor documents of a project are built from its template (templates/builder.js).
+ * The Elementor documents of a project are built from its template (templates/builder.js), or from
+ * its Template Kit (kits/site.js).
  */
+import path from 'node:path';
 import { get, all, parseJson } from '../db/index.js';
+import { config } from '../config.js';
 import { canUseProvider } from '../lib/owner.js';
 import { analyzeDocument } from '../elementor/analyze.js';
 import { buildSite } from '../templates/builder.js';
+import { buildKitSite } from '../kits/site.js';
+import { effectiveRoles } from '../kits/analysis.js';
 import { sanitizeSpec } from '../templates/spec.js';
 import { isValidEmail, isValidPhone, slugify, telHref } from '../lib/util.js';
 import { galleryPool } from '../lib/images.js';
@@ -77,15 +82,34 @@ export function loadTemplateRow(id) {
   };
 }
 
+/** A Template Kit with its analysis and the role of each template (null when missing). */
+export function loadKitRow(id) {
+  const row = id ? get('SELECT * FROM template_kits WHERE id = ?', id) : null;
+  if (!row) return null;
+  const info = parseJson(row.info_json, { templates: [] });
+  const analysis = parseJson(row.analysis_json, null);
+  return {
+    id: row.id,
+    name: row.name,
+    version: row.updated_at,
+    dir: path.join(config.storageDir, row.dir),
+    info,
+    analysis,
+    roles: effectiveRoles(info, analysis, parseJson(row.roles_json, {})),
+  };
+}
+
 export function loadContext(projectId) {
   const project = get('SELECT * FROM projects WHERE id = ?', projectId);
   if (!project) return null;
   const settings = defaultSettings(parseJson(project.settings_json, {}));
   const services = all('SELECT * FROM services WHERE project_id = ? ORDER BY position, id', projectId);
   const images = all('SELECT * FROM images WHERE project_id = ? ORDER BY id', projectId);
-  const template = loadTemplateRow(project.template_id);
+  // A Template Kit replaces the category template
+  const kit = loadKitRow(project.template_kit_id);
+  const template = kit ? null : loadTemplateRow(project.template_id);
   const menuName = settings.menuName || MENU_NAME[project.language] || MENU_NAME.en;
-  return { project, settings, services, images, template, menu: { name: menuName, slug: slugify(menuName) } };
+  return { project, settings, services, images, template, kit, menu: { name: menuName, slug: slugify(menuName) } };
 }
 
 /** Copyright line: the one set by the user, or "© <year> <site>. All rights reserved." in the site language. */
@@ -111,21 +135,39 @@ export function siteInfo(ctx) {
     hasLogo: ctx.images.some((i) => i.role === 'logo'),
     mapEmbed: ctx.settings.mapEmbed !== false,
     contactShortcode: contactForm(ctx).placeholder,
+    menuSlug: ctx.menu.slug,
     pages: Object.fromEntries(SITE_PAGE_ROLES.map((r) => [r, { title: pageTitle(lang, r), url: r === 'home' ? '/' : `/${pageSlug(lang, r)}/` }])),
     services: ctx.services.map((s) => ({ name: s.name || s.slug, url: `/${s.slug}/` })),
   };
 }
 
-/** The Elementor documents of the project (built once per context). */
+/** The Elementor documents of the project (built once per context), from its template or its Template Kit. */
 export function builtSite(ctx) {
-  if (!ctx.template) return null;
-  ctx.built ||= buildSite(ctx.template.spec, siteInfo(ctx));
-  return ctx.built;
+  if (ctx.kit) ctx.built ||= buildKitSite(ctx.kit, siteInfo(ctx));
+  else if (ctx.template) ctx.built ||= buildSite(ctx.template.spec, siteInfo(ctx));
+  return ctx.built || null;
+}
+
+/** Does the project have a design (a category template or a Template Kit)? */
+export const hasDesign = (ctx) => Boolean(ctx.template || ctx.kit);
+
+/** What a generation is made with: the export checks that the project still uses the same design. */
+export function designInfo(ctx) {
+  if (ctx.kit) return { kitId: ctx.kit.id, kitName: ctx.kit.name, kitVersion: ctx.kit.version };
+  return ctx.template ? { templateId: ctx.template.id, templateName: ctx.template.name } : {};
+}
+
+/** Where a kit page comes from (shown in the preview). */
+function kitPageTitle(kit, entry) {
+  if (entry?.source === 'kit') return `${kit.name} – ${entry.templateTitle}`;
+  if (entry?.source === 'composed') return `${kit.name} – composed from its sections`;
+  return `${kit.name} – built with the kit colors`;
 }
 
 /** The pages to generate: the template documents (5 pages, single post, header, footer) + one article per service. */
 export function buildPages(ctx) {
-  if (!ctx.template) return [];
+  if (!hasDesign(ctx)) return [];
+  const docs = ctx.kit ? builtSite(ctx).docs : null;
   const lang = ctx.project.language;
   const pages = TEMPLATE_ROLES.map((role) => {
     const key = role.replace('_', '-');
@@ -134,8 +176,8 @@ export function buildPages(ctx) {
       key,
       role,
       title: pageTitle(lang, role),
-      templateId: ctx.template.id,
-      templateTitle: ctx.template.name,
+      templateId: ctx.kit ? `kit-${ctx.kit.id}` : ctx.template.id,
+      templateTitle: ctx.kit ? kitPageTitle(ctx.kit, docs[role]) : ctx.template.name,
       serviceId: null,
       prefix: key.replace(/-/g, '_'),
       slug: noUrl ? null : pageSlug(lang, role),
@@ -204,7 +246,8 @@ export function analyzePage(ctx, page) {
   if (!entry) throw new Error(`The template has no "${page.role}" document.`);
   const doc = structuredClone(entry.doc);
   const heroName = page.role === 'home' ? 'hero' : ['header', 'footer', 'single_post'].includes(page.role) ? null : 'intro';
-  const analysis = analyzeDocument(doc, { prefix: page.prefix, heroName });
+  // Kit projects: the texts of HTML widgets, counters and prices are fields too (also in the fallback builder documents)
+  const analysis = analyzeDocument(doc, { prefix: page.prefix, heroName, ...(builtSite(ctx).analyzeOptions || {}) });
   for (const f of analysis.fields) {
     const m = entry.marks.get(f.ref) || {};
     if (m.fixed) f.fixed = true;
@@ -267,7 +310,13 @@ export function checkReadiness(ctx, user = null) {
     }
   }
 
-  if (!ctx.template) add('template', 'error', 'Choose a category and one of its saved templates (or generate a new one).');
+  if (!hasDesign(ctx)) add('template', 'error', 'Choose a category and one of its saved templates (or generate a new one), or a Template Kit.');
+  if (ctx.kit) {
+    // The demo of the kit is about another business: the AI needs the business category of the site
+    if (!p.industry.trim()) add('site', 'error', 'Industry is required with a Template Kit: the AI rewrites every text of the kit for this business category.');
+    if (!ctx.kit.analysis?.ai) add('template', 'warning', 'The Template Kit has not been analyzed by the AI yet: analyze it in Template Kit, so the texts fit each section better.');
+    if (!Object.values(ctx.kit.roles).includes('home')) add('template', 'warning', 'No template of the kit is used as Home page: the Home page is composed from the sections of the kit.');
+  }
 
   // Each user generates with their own AI provider (the project is shared, the API keys are not)
   const providerId = ctx.settings.generation.providerId;

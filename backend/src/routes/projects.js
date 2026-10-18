@@ -100,8 +100,8 @@ router.post('/projects/:id/duplicate', (req, res) => {
   const src = requireProject(req.params.id);
   const newId = tx(() => {
     const { lastInsertRowid: id } = run(
-      `INSERT INTO projects (${PROJECT_FIELDS.join(', ')}, template_id, settings_json)
-       SELECT ${PROJECT_FIELDS.map((f) => (f === 'site_name' ? "site_name || ' (copy)'" : f)).join(', ')}, template_id, settings_json FROM projects WHERE id = ?`,
+      `INSERT INTO projects (${PROJECT_FIELDS.join(', ')}, template_id, template_kit_id, settings_json)
+       SELECT ${PROJECT_FIELDS.map((f) => (f === 'site_name' ? "site_name || ' (copy)'" : f)).join(', ')}, template_id, template_kit_id, settings_json FROM projects WHERE id = ?`,
       src.id
     );
     const serviceMap = new Map();

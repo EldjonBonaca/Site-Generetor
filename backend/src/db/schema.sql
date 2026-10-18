@@ -128,3 +128,23 @@ CREATE TABLE IF NOT EXISTS library_images (
 );
 
 CREATE INDEX IF NOT EXISTS idx_library_images_category ON library_images(category_id);
+
+-- Template Kits: Elementor Template Kits (zip) uploaded by the users, shared by every project.
+-- A project uses either a category template (projects.template_id) or a kit (projects.template_kit_id):
+-- the kit pages keep their design and structure, the AI rewrites every text and the project images
+-- replace every image (kits/site.js).
+CREATE TABLE IF NOT EXISTS template_kits (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  name          TEXT NOT NULL,
+  file_name     TEXT NOT NULL DEFAULT '',   -- uploaded zip
+  dir           TEXT NOT NULL DEFAULT '',   -- extracted kit (relative to storage dir)
+  format        TEXT NOT NULL DEFAULT '',   -- template-kit | website-kit | loose
+  info_json     TEXT NOT NULL DEFAULT '{}', -- structure read from the zip (kits/read.js)
+  analysis_json TEXT,                       -- AI analysis: design, role of each template, sections (kits/analysis.js)
+  roles_json    TEXT NOT NULL DEFAULT '{}', -- role of each template chosen by the user (overrides the analysis)
+  analyzed_by   TEXT NOT NULL DEFAULT '',   -- provider · model
+  tokens_used   INTEGER NOT NULL DEFAULT 0,
+  uploaded_by   TEXT,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);

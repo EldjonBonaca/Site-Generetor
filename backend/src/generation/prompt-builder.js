@@ -4,8 +4,10 @@
  */
 import { LANGUAGES, stripHtml } from '../lib/util.js';
 import { exportNames, galleryPool } from '../lib/images.js';
-import { copyrightText } from './plan.js';
+import { builtSite, copyrightText } from './plan.js';
 import { DEFAULT_SECTIONS, describeSections, describeSpec } from '../templates/spec.js';
+import { describeKit } from '../kits/analysis.js';
+import { describePageSections } from '../kits/site.js';
 
 /** Variables available in user prompts (also shown in the UI). */
 export const PROMPT_VARIABLES = [
@@ -34,6 +36,7 @@ export const PROMPT_VARIABLES = [
   { name: 'template_category', alias: 'CATEGORIA_TEMPLATE', description: 'Category of the template' },
   { name: 'template_style', alias: 'STILE_TEMPLATE', description: 'Design of the template: colors, fonts, layouts, tone of voice' },
   { name: 'home_sections', alias: 'SEZIONI_HOME', description: 'Sections of the Home page after the hero, in the order of the template' },
+  { name: 'page_sections', alias: 'SEZIONI_PAGINA', description: 'Sections of the page being generated (Template Kit sites)' },
   { name: 'form_plugin', alias: 'PLUGIN_MODULO', description: 'Contact form plugin (Contact Form 7)' },
   { name: 'template_structure', alias: 'STRUTTURA_TEMPLATE', description: 'List of text fields to fill, extracted from the template' },
   { name: 'notes', alias: 'NOTE', description: 'Additional notes' },
@@ -102,7 +105,7 @@ export function expandIndexedLines(content, count) {
 /**
  * All variables for a page. `ctx` (project context) enables image / template variables.
  */
-export function buildVariables({ project, services, service, fields, pageTitle, ctx = null }) {
+export function buildVariables({ project, services, service, fields, pageTitle, role = null, ctx = null }) {
   const lang = project.language;
   const none = NONE[lang] || NONE.en;
   const names = ctx ? exportNames(ctx.images, ctx.settings.image) : new Map();
@@ -139,8 +142,20 @@ export function buildVariables({ project, services, service, fields, pageTitle, 
     template_category: ctx?.template?.category.name || none,
     template_style: ctx?.template ? describeSpec(ctx.template.spec) : none,
     home_sections: ctx?.template ? describeSections(ctx.template.spec.sections) : describeSections(DEFAULT_SECTIONS),
+    page_sections: none,
     form_plugin: 'Contact Form 7',
   };
+  if (ctx?.kit) {
+    // Template Kit: its name, its design (AI analysis + global styles) and the sections of each page
+    const docs = builtSite(ctx).docs;
+    Object.assign(vars, {
+      template_name: ctx.kit.name,
+      template_category: ctx.kit.analysis?.industry || none,
+      template_style: describeKit(ctx.kit),
+      home_sections: describePageSections(docs.home) || none,
+      page_sections: (role === 'post' ? describePageSections(docs.single_post) : describePageSections(docs[role])) || none,
+    });
+  }
   services.forEach((s, i) => {
     vars[`service_${i + 1}`] = `${s.name}${s.description ? ` – ${s.description}` : ''}`;
     vars[`service_image_${i + 1}`] = imgName(ctx?.images.find((img) => img.role === 'service' && img.service_id === s.id));
@@ -170,9 +185,13 @@ const ROLE_DESCRIPTION = {
 };
 
 /** Instructions appended after the user prompt so the output is machine-readable. */
-export function technicalInstructions({ fields, languageLabel, pageTitle, role, links = [], includeStructure, extra = '' }) {
+export function technicalInstructions({ fields, languageLabel, pageTitle, role, links = [], includeStructure, extra = '', kit = false }) {
   const shape = `{\n${fields.map((f) => `  ${JSON.stringify(f.id)}: "..."`).join(',\n')}\n}`;
   const hasLinks = fields.some((f) => f.format === 'link');
+  const kitRules = kit
+    ? `\n- The page comes from an Elementor Template Kit made for another business. The "demo text" of a field only shows its role and length: write completely new content for this business. Never reuse, translate or paraphrase demo texts, and never keep demo brand names, people, prices, figures, dates, addresses, emails or phone numbers.`
+    : '';
+  const numbers = fields.some((f) => f.format === 'number') ? '\n- Fields marked [number] contain only digits (e.g. "250"): no words, units or symbols.' : '';
   const pages = links.filter((l) => !['phone', 'email'].includes(l.role));
   return `
 
@@ -184,7 +203,7 @@ ${pages.length ? `Site structure: ${pages.map((l) => `${l.label} (${l.url})`).jo
 - Values: strings written in ${languageLabel}.
 - Fields marked [html] may use simple HTML only (<p>, <h2>, <h3>, <strong>, <em>, <ul>, <li>, <br>, <a>). Fields marked [text] are plain text without HTML.
 - Stay within the indicated maximum length of each field so the design does not break; respect the minimum length when indicated.
-- Use the real business data (name, phone, email, address) wherever contact details are needed. Never output placeholders like "Lorem ipsum" or "[your phone]".${
+- Use the real business data (name, phone, email, address) wherever contact details are needed. Never output placeholders like "Lorem ipsum" or "[your phone]".${kitRules}${numbers}${
     hasLinks
       ? `\n- Fields marked [link]: the value must be exactly one of these URLs (choose the one matching the button/link text): ${links.map((l) => l.url).join(' , ')}`
       : ''
@@ -205,11 +224,11 @@ export const SYSTEM_PROMPT =
  * @returns {{ prompt: string, system: string, vars: object }}
  */
 export function buildPagePrompt({ promptContent, project, services, service, fields, pageTitle, role = 'generic', links = [], ctx = null, extra }) {
-  const vars = buildVariables({ project, services, service, fields, pageTitle, ctx });
+  const vars = buildVariables({ project, services, service, fields, pageTitle, role, ctx });
   const userPart = renderTemplate(promptContent, vars, services.length);
   const usesStructure = /\{\{\s*(template_structure|STRUTTURA_TEMPLATE)\s*\}\}/i.test(promptContent || '');
   const prompt =
-    userPart + technicalInstructions({ fields, languageLabel: vars.language, pageTitle, role, links, includeStructure: !usesStructure, extra });
+    userPart + technicalInstructions({ fields, languageLabel: vars.language, pageTitle, role, links, includeStructure: !usesStructure, extra, kit: Boolean(ctx?.kit) });
   return { prompt, system: SYSTEM_PROMPT, vars };
 }
 

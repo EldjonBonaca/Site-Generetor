@@ -2,7 +2,10 @@
 
 A local web app that turns **site data + images + a reusable category template** into ready‑to‑import Elementor files, with the text written by the AI provider you choose (Claude, ChatGPT, Gemini or any OpenAI‑compatible API).
 
-There are no Template Kits to upload: you create **categories** (e.g. *Plumbers*, *Restaurants*), and for each category the AI **generates templates** that you preview, save and reuse in every project of that category.
+The design of a site comes from one of two sources:
+
+- **Category templates**: you create **categories** (e.g. *Plumbers*, *Restaurants*), and for each category the AI **generates templates** that you preview, save and reuse in every project of that category.
+- **Template Kits**: you upload an **Elementor Template Kit** (zip), the AI analyzes it, and the site reuses its design and structure with every text rewritten for the business and every image replaced by the project images (see [Template Kit](#template-kit)).
 
 The site always has **5 pages: Home, About Us, Services, Gallery and Contact**. Services are published as WordPress articles, and the Gallery shows every uploaded photo.
 
@@ -63,6 +66,7 @@ Set the users in `backend/.env`, on one line: `APP_USERS=mz:password1,eb:passwor
 | `ENCRYPTION_KEY` | auto‑generated | 64 hex chars (32 bytes) used for AES‑256‑GCM encryption of API keys. **If you lose or change it, saved API keys can't be decrypted** (just enter them again). |
 | `STORAGE_DIR` | `../storage` | SQLite DB, uploaded images and exports |
 | `MAX_IMAGE_MB` | `15` | Max size of each uploaded image |
+| `MAX_KIT_MB` | `150` | Max size of an uploaded Template Kit zip |
 | `AI_TIMEOUT_MS` | `180000` | Timeout of a single AI request |
 | `DEFAULT_LANGUAGE` | `it` | Site language of new projects (can be changed per project) |
 
@@ -108,6 +112,37 @@ Five templates generated for the same category must not look like copies. The va
 With the offline demo provider, the first 9 templates of a category get 9 different directions, title fonts and palettes, and differ in at least 10 of the 19 look and layout choices (a test checks 5 templates of the same category).
 
 Every text widget is built with a text (the sample copy of the template): an empty one would show the Elementor default ("Lorem ipsum…") and would never be written by the AI. `BUILDER_VERSION` is stored with each generation: a generation made with an older builder must be generated again before exporting.
+
+---
+
+## Template Kit
+
+The **Template Kit** page in the top menu manages uploaded Elementor Template Kits (shared by every project):
+
+1. **Upload** the `.zip` of a Template Kit (Envato / Elementor Template Kit with `manifest.json` + `templates/*.json`, an Elementor *Export Kit* zip, or any zip of Elementor JSON templates; up to `MAX_KIT_MB`, default 150 MB). The zip is extracted safely ([`lib/zip.js`](backend/src/lib/zip.js)) and read by [`kits/read.js`](backend/src/kits/read.js): the templates, their screenshots, the **Global Kit Styles** (colors, fonts, buttons; images removed), the plugins the kit requires and the Elementor Pro widgets it uses.
+2. **AI analysis** ([`kits/analysis.js`](backend/src/kits/analysis.js)), with the provider chosen in the upload form (or later with *Analyze again*): the AI receives every template section by section (widgets, demo texts, number of images) and the global colors / fonts, and returns the industry of the demo, a summary, the visual style, the tone, the **role of each template** (Home, About, Services, Gallery, Contact, header, footer, single post, or not used) and the **type and purpose of every section** (hero, page title banner, services, testimonials, team, pricing, FAQ, client logos…). The answer is validated; whatever the AI leaves out is filled by heuristics, and a kit uploaded without a provider is analyzed by heuristics only.
+3. **Details**: the analysis, the colors, the plugins and every template with its sections. The role of each template can be changed (one template per role).
+4. In a project, the **Template** step switches between *Category template* and *Template Kit*: choosing one replaces the other. *New project* on a kit card creates a project that already uses it. A kit project needs the **industry** (Site data): the AI writes every text for that business category.
+
+How a site is built from a kit ([`kits/site.js`](backend/src/kits/site.js), same output as the template builder, so generation, preview, export and the WordPress plugin work the same way):
+
+| Demo content of the kit | What the site gets |
+|---|---|
+| Every text (titles, paragraphs, buttons, lists, reviews, names, FAQ, prices, counters, texts of HTML widgets) | Written by the AI with the built-in prompt [`sito-template-kit-it.md`](backend/src/db/prompts/sito-template-kit-it.md): each field is described by the section it belongs to, and the demo text only shows its role and length. A text the AI did not write is **emptied** at export (never the demo one) and reported in the checks. |
+| Service cards (in the sections typed *services*) | One card per service on the Services page (cloned or removed), up to the number of services on Home: title = service name, link = its article, image = its image |
+| Page title banner of inner pages | The page title |
+| Texts that are only a phone, an email or a copyright line; `tel:` / `mailto:` links | The site ones |
+| Logo of header / footer (image, Site Logo widget) | The project logo, or the site name without a logo |
+| Menus (Elementor Pro, UAE, ElementsKit…) | The menu of the site; without Elementor Pro the Pro menu becomes the UAE menu widget |
+| Forms (Elementor Pro form, other form plugins) and maps | The Contact Form 7 form of the site; the map of the site address (a form and a map are added to the contact page when missing) |
+| Every image slot | The project images: hero, banner (subheader), service images, then the photos round-robin; galleries get every photo |
+| Photos of demo people (testimonials, team) | Removed |
+| Client / partner logo strips | The section is removed |
+| Videos (widgets, backgrounds, YouTube iframes) | A photo of the project |
+| Images in CSS and page settings, global styles images | Removed |
+| Missing pages | Composed from the kit: the page title banner of an inner page + the matching sections (about, services, gallery, contact). A missing header, footer or single post template (or one without the post content widget) is built by the template builder with the kit colors and fonts. |
+
+The export also writes the **global styles of the kit** into the Elementor site kit (so the global colors the templates refer to exist), and the WordPress plugin installs the **free plugins the kit requires** from wordpress.org. Plugins and widgets that need Elementor Pro are listed in the kit details and in the import guide. A generation must be run again after the kit roles or analysis change.
 
 ---
 
@@ -206,6 +241,10 @@ website-maker/
 │   │   ├── elementor/
 │   │   │   ├── analyze.js    # find text fields + image slots (with exact JSON paths)
 │   │   │   └── apply.js      # write texts, images, contacts back (structure untouched)
+│   │   ├── kits/
+│   │   │   ├── read.js       # uploaded Template Kit: templates, global styles, plugins, outline
+│   │   │   ├── analysis.js   # AI analysis of a kit: roles, section types, design (+ heuristics)
+│   │   │   └── site.js       # kit templates -> Elementor documents of a project (demo content removed)
 │   │   └── generation/
 │   │       ├── plan.js       # project context, page plan, readiness check
 │   │       ├── prompt-builder.js  # {{variables}} + automatic JSON instructions
@@ -235,7 +274,9 @@ These are the tables from the spec, plus a few practical columns:
 - `ai_providers`: also has `key_hint` and `models_json`
 - `generations`: also has `progress`, `log_json`, `config_json` (prompt and template used) and `error`
 
-The schema is plain SQL in [`backend/src/db/schema.sql`](backend/src/db/schema.sql) and can be ported to PostgreSQL easily. Databases created by earlier versions keep their old `kits` / `kit_mappings` tables and `projects.kit_id`: they are no longer used (projects made with a Template Kit must choose a template).
+- `template_kits`: uploaded Template Kits (`info_json` = what was read from the zip, `analysis_json` = the AI analysis, `roles_json` = roles changed by hand); `projects.template_kit_id` is the kit of a project (instead of `template_id`). The files are in `storage/kits/<id>/`.
+
+The schema is plain SQL in [`backend/src/db/schema.sql`](backend/src/db/schema.sql) and can be ported to PostgreSQL easily. Databases created by earlier versions keep their old `kits` / `kit_mappings` tables and `projects.kit_id` (from the first version of the kits): they are no longer used.
 
 ### How the Elementor processing works
 
@@ -339,7 +380,8 @@ Missing strings fall back to English. A partial Italian locale is included as an
 ## Decisions where the spec was open
 
 - **Stack**: Node.js + Express backend, React + Vite + Tailwind frontend, SQLite through Node's built‑in `node:sqlite`. One `npm run dev` starts everything.
-- **Templates instead of Template Kits**: the AI designs a validated *spec* (colors, fonts, layout variants, icons, tone, sample texts) and a deterministic builder produces the Elementor JSON. Asking the AI for whole Elementor documents would be slow, expensive and easy to break; with a spec every saved template always produces valid, consistent pages with exactly the sections of the prompt.
+- **Templates designed as a spec**: the AI designs a validated *spec* (colors, fonts, layout variants, icons, tone, sample texts) and a deterministic builder produces the Elementor JSON. Asking the AI for whole Elementor documents would be slow, expensive and easy to break; with a spec every saved template always produces valid, consistent pages with exactly the sections of the prompt.
+- **Template Kits are never rewritten by the AI as JSON**: the AI analyzes the kit (roles, sections, design) and writes texts only; the generator changes the kit documents itself (cards, forms, menus, images), so the Elementor structure and styles of the kit stay valid.
 - **Contact form**: Contact Form 7, created by the WordPress plugin and inserted through its shortcode.
 - **Header and footer without Elementor Pro**: Ultimate Addons for Elementor (Header Footer Builder) templates shown on the whole site; only if UAE cannot be installed, the generated plugin displays them itself (Hello Elementor hooks).
 - **Images in templates** (manual import): images are referenced by the configurable base URL. When Elementor imports a template, it downloads each referenced image into the Media Library, so the images must be online at that URL first. `INSTRUCTIONS.md` explains this, including the duplicate images it creates.

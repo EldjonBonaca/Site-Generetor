@@ -10,7 +10,7 @@ import { api } from '../api.js';
 import { useT } from '../i18n/index.jsx';
 import { useToast } from './Toast.jsx';
 import { Alert, Badge, Button, EmptyState, Field, Input, Modal, Select, Spinner, Textarea, Toggle } from './ui.jsx';
-import { TemplatePreview, TemplateSwatches } from './TemplatePreview.jsx';
+import { TemplatePreview, TemplateSwatches, featureCount } from './TemplatePreview.jsx';
 
 /** Sections of the Home page after the hero (spec.sections); the first five are always present. */
 export const HOME_SECTION_LABELS = {
@@ -76,9 +76,13 @@ function SectionsEditor({ value, onChange }) {
 export const SECTION_LABELS = {
   header: 'Header',
   hero: 'Hero (Home)',
+  heroButtons: 'Hero buttons',
+  heroHeight: 'Hero height',
+  heroPhrases: 'Under the hero title',
   divider: 'Edge of the hero and banners',
   about: 'About section',
   features: 'Why choose us',
+  featureCount: 'Strengths (why choose us)',
   cta: 'Call to action',
   services: 'Services',
   testimonials: 'Reviews',
@@ -100,6 +104,23 @@ const VARIANT_LABELS = {
   'hero.slideshow': 'Centered text over a slideshow',
   'about.collage': 'Two overlapping photos',
   'features.bento': 'One large tile over a photo + three small',
+  'heroButtons.two': 'Two buttons (contact + call)',
+  'heroButtons.one': 'One button',
+  'heroButtons.link': 'One button + a link to call',
+  'heroHeight.auto': 'As the layout',
+  'heroHeight.full': 'Full screen, with an arrow down',
+  'heroHeight.compact': 'Lower',
+  'about.triptych': 'Text between two photos',
+  'about.stacked': 'Title beside the text, wide photo below',
+  'about.sandwich': 'Text, photo, key points',
+  'heroPhrases.none': 'Nothing more',
+  'heroPhrases.rotating': 'Three phrases taking turns',
+  'features.split': 'List beside a large photo',
+  'features.center': 'Photo in the middle, strengths around it',
+  'featureCount.3': '3 strengths',
+  'featureCount.4': '4 strengths',
+  'featureCount.5': '5 strengths',
+  'featureCount.6': '6 strengths',
   'hero.center': 'Centered text over a photo',
   'hero.left': 'Left text over a photo',
   'hero.split': 'Text beside a photo',
@@ -561,7 +582,7 @@ export function TemplateEditor({ template, onClose, onSaved }) {
             <div>
               <p className="mb-2 text-sm font-medium text-slate-700">{t('Icons of "Why choose us"')}</p>
               <div className="grid grid-cols-2 gap-2">
-                {spec.icons.map((icon, i) => (
+                {spec.icons.slice(0, featureCount(spec.layout)).map((icon, i) => (
                   <Select key={i} value={icon} onChange={(e) => setSpec((s) => ({ ...s, icons: s.icons.map((x, j) => (j === i ? e.target.value : x)) }))} className="py-1.5 text-xs" aria-label={`${t('Icon')} ${i + 1}`}>
                     {options.icons.map((ic) => (
                       <option key={ic} value={ic}>

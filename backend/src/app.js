@@ -17,6 +17,7 @@ import providers from './routes/providers.js';
 import prompts from './routes/prompts.js';
 import generations from './routes/generations.js';
 import library from './routes/library.js';
+import kits from './routes/kits.js';
 
 // Jobs interrupted by a restart can't resume: mark them as failed.
 run("UPDATE generations SET status = 'failed', error = 'Interrupted (server restarted).' WHERE status IN ('queued', 'running')");
@@ -47,7 +48,7 @@ app.post('/api/login', auth.login);
 app.post('/api/logout', auth.logout);
 app.get('/api/me', auth.me);
 
-for (const r of [projects, images, library, templates, providers, prompts, generations]) app.use('/api', r);
+for (const r of [projects, images, library, templates, kits, providers, prompts, generations]) app.use('/api', r);
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
 // Serve the built frontend if present

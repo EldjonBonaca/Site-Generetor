@@ -58,6 +58,12 @@ export function validateValues(parsed, expectedIds, rules = {}) {
       else invalid.push(`${id} (URL "${v}" is not one of the allowed URLs)`);
     }
     if (r.minLength && v.replace(/<[^>]+>/g, '').trim().length < r.minLength) invalid.push(`${id} (shorter than ${r.minLength} characters)`);
+    if (r.number) {
+      // Counters / prices: digits only (thousands separators and a decimal point are tolerated)
+      const digits = v.replace(/[\s.,]/g, '');
+      if (/^\d+$/.test(digits)) res.values[id] = v.replace(/\s/g, '');
+      else invalid.push(`${id} ("${v}" is not a number)`);
+    }
   }
   for (const item of invalid) {
     const id = item.split(' ')[0];
