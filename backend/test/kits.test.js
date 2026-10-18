@@ -19,6 +19,7 @@ const { AdmZip } = await import('../src/lib/zip.js');
 const { prepareDocument } = await import('../src/kits/site.js');
 const { guessSectionType } = await import('../src/kits/analysis.js');
 const { outlineDocument } = await import('../src/kits/read.js');
+const { compareStructure } = await import('../src/kits/structure.js');
 
 let server;
 let base;
@@ -116,24 +117,67 @@ function gymKit() {
   return zip;
 }
 
-const DEMO_STRINGS = ['demo-gymzilla.example.com', 'Gymzilla', 'gymzilla', '555', 'hello@gymzilla-demo.com', 'Jane Cooper', 'Mike Tyson', 'Springfield', 'youtube.com', 'gym-menu', 'CrossFit', 'Train Harder', 'Gold Plan', 'logo-nike', '2500'];
+// Demo content that must not remain. The structure of the kit stays, so its demo videos and the
+// client logos (graphics, kept and reported in the checks) are the only demo content left.
+const DEMO_STRINGS = ['Gymzilla', 'gymzilla', '555', 'hello@gymzilla-demo.com', 'Jane Cooper', 'Mike Tyson', 'Springfield', 'gym-menu', 'CrossFit', 'Train Harder', 'Gold Plan', '2500'];
+const KEPT_DEMO_IMAGE = /^https:\/\/demo-gymzilla\.example\.com\/wp-content\/uploads\/2024\/logo-(nike|adidas|puma|reebok|ua)\.png$/;
 
 test('section types and kit document preparation', () => {
   assert.equal(guessSectionType({ widgets: ['testimonial'], texts: [], images: 1 }, 'home', 3), 'testimonials');
   assert.equal(guessSectionType({ widgets: ['image'], texts: [], images: 5 }, 'home', 4), 'clients');
   assert.equal(guessSectionType({ widgets: ['heading', 'text-editor'], texts: ['About us'], images: 1 }, 'about', 0), 'page_title');
 
-  // Services page: one card per service (cloned), service name + link fixed, card image = service image
+  // Services page: the cards of the kit stay (never cloned or removed); the first ones get the services
   const doc = { content: [banner('Programs'), box([row([card('A', 'a', 'a.jpg'), card('B', 'b', 'b.jpg')])])] };
+  const before = structuredClone(doc);
   const site = { siteName: 'Rossi', phone: '+39 06 1234 5678', email: 'info@rossi.it', address: 'Via Roma 1', copyright: '© Rossi', hasLogo: true, mapEmbed: true, contactShortcode: '[contact-form-7 id="INSERIRE_ID"]', menuSlug: 'main', pages: { services: { title: 'Servizi', url: '/servizi/' } }, services: [1, 2, 3].map((i) => ({ name: `Service ${i}`, url: `/service-${i}/` })) };
-  const { doc: out, marks, sections } = prepareDocument(doc, 'services', [{ type: 'page_title' }, { type: 'services', description: 'program cards' }], site);
+  const { doc: out, marks, sections, notes } = prepareDocument(doc, 'services', [{ type: 'page_title' }, { type: 'services', description: 'program cards' }], site);
   const json = JSON.stringify(out);
-  for (const i of [1, 2, 3]) assert.ok(json.includes(`"Service ${i}"`) && json.includes(`/service-${i}/`), `card of service ${i}`);
+  for (const i of [1, 2]) assert.ok(json.includes(`"Service ${i}"`) && json.includes(`/service-${i}/`), `card of service ${i}`);
+  assert.ok(!json.includes('"Service 3"'), 'no card added for the 3rd service');
+  assert.equal(notes.hiddenServices, 1);
   assert.ok(json.includes('"Servizi"'), 'banner title = page title');
   assert.equal(sections.length, 2);
   const slots = [...marks.values()].filter((m) => m.slot === 'service_list');
-  assert.deepEqual(slots.map((m) => m.service), [0, 1, 2]);
+  assert.deepEqual(slots.map((m) => m.service), [0, 1]);
   assert.equal(outlineDocument(out).length, 2);
+  assert.ok(compareStructure(before, out).ok, 'same structure as the kit');
+
+  // More cards than services: the extra card stays, written by the AI, linked to the services page
+  const two = { content: [box([row([card('A', 'a', 'a.jpg'), card('B', 'b', 'b.jpg'), card('C', 'c', 'c.jpg')])])] };
+  const extra = prepareDocument(two, 'home', [{ type: 'services' }], { ...site, pages: { services: { title: 'Servizi', url: '/servizi/' } }, services: site.services.slice(0, 2) });
+  assert.equal(extra.notes.extraCards, 1);
+  assert.equal(JSON.stringify(extra.doc).match(/"title":"C"/g).length, 1, 'the title of the extra card is left to the AI');
+  assert.ok([...extra.marks.values()].some((m) => /card beyond the listed services/.test(m.hint || '')));
+  assert.ok(JSON.stringify(extra.doc).includes('/servizi/'));
+
+  // Images: transparent PNG / SVG graphics of the design stay; photos are cropped like the demo photo
+  const ornament = DEMO + 'leaf.png';
+  const photo = DEMO + 'spa.jpg';
+  const imgs = { content: [box([w('image', { image: { url: ornament, id: 1 }, image_size: 'medium' }), w('image', { image: { url: photo, id: 2 } }), w('image', { image: { url: photo, id: 3 }, image_size: 'custom', image_custom_dimension: { width: '500', height: '700' } })])] };
+  const demo = { [ornament]: { file: 'a.png', width: 228, height: 288, opaque: false, format: 'png' }, [photo]: { file: 'b.jpg', width: 1920, height: 1080, opaque: true, format: 'jpg' } };
+  const roles = [...prepareDocument(structuredClone(imgs), 'about', [{ type: 'about' }], site, demo).marks.entries()].filter(([k]) => k.includes(':image')).map(([, m]) => m);
+  assert.deepEqual(roles.map((m) => m.slot), ['keep', 'photo', 'photo']);
+  assert.deepEqual(roles[1].crop, { width: 1920, height: 1080 }, 'crop = size of the demo photo');
+  assert.deepEqual(roles[2].crop, { width: 1920, height: 2688 }, 'crop = proportions of the custom size');
+  // Not measured: a PNG shown small is a graphic, a JPG is a photo
+  const guessed = [...prepareDocument(structuredClone(imgs), 'about', [{ type: 'about' }], site).marks.values()].map((m) => m.slot);
+  assert.deepEqual(guessed, ['keep', 'photo', 'photo']);
+
+  // The structure check sees every change that is not a text or an image
+  const kitDoc = { content: [box([heading('Hello'), w('video', { youtube_url: 'x' }), text('<p>a</p>')], { background_color: '#fff' })] };
+  const same = structuredClone(kitDoc);
+  same.content[0].elements[0].settings.title = 'Ciao';
+  assert.ok(compareStructure(kitDoc, same).ok, 'a new text is not a structure change');
+  const broken = structuredClone(kitDoc);
+  broken.content[0].elements[1].widgetType = 'image';
+  broken.content[0].elements.pop();
+  broken.content[0].settings.background_color = '#000';
+  const report = compareStructure(kitDoc, broken);
+  assert.equal(report.ok, false);
+  assert.equal(report.changed.length, 1);
+  assert.equal(report.removed.length, 1);
+  assert.match(report.settings[0], /background_color/);
 });
 
 test('template kits: upload, AI analysis, roles, site generation and export without demo content', async () => {
@@ -234,6 +278,11 @@ test('template kits: upload, AI analysis, roles, site generation and export with
   // 5. Export: no demo content anywhere in the pages of the WordPress plugin
   const exp = await api('POST', `/generations/${gen.id}/export`);
   assert.ok(!exp.checks.some((c) => c.level === 'error'), JSON.stringify(exp.checks));
+  const check = (re) => exp.checks.find((c) => re.test(c.message));
+  assert.match(check(/Kit structure verified/).message, /^\*\*Kit structure verified\*\*: 8 pages and templates/, 'every page compared with its kit template (the composed gallery page with its composition)');
+  assert.equal(check(/demo video/)?.level, 'warning', 'demo video reported');
+  assert.equal(check(/client \/ partner logos/)?.level, 'warning', 'client logos reported');
+  assert.equal(check(/could not be downloaded/)?.level, 'warning', 'graphics not bundled reported');
   const out = new AdmZip(Buffer.from(await (await fetch(base.replace(/\/api$/, '') + exp.pluginDownload)).arrayBuffer()));
   const entries = out.getEntries();
   const read = (suffix) => out.readAsText(entries.find((e) => e.entryName.endsWith(suffix)));
@@ -246,23 +295,67 @@ test('template kits: upload, AI analysis, roles, site generation and export with
   const docs = entries.filter((e) => e.entryName.includes('data/elementor/')).map((e) => [e.entryName, out.readAsText(e)]);
   assert.ok(docs.length >= 12);
   for (const [name, json] of docs) {
-    for (const demo of DEMO_STRINGS) assert.ok(!json.includes(demo), `${name} still contains the demo "${demo}"`);
+    for (const url of json.match(/https:\/\/demo-gymzilla[^"]*/g) || []) assert.match(url, KEPT_DEMO_IMAGE, `${name}: demo photo left`);
+    const content = json.replace(/https:\/\/demo-gymzilla[^"]*/g, '');
+    for (const demo of DEMO_STRINGS) assert.ok(!content.includes(demo), `${name} still contains the demo "${demo}"`);
     assert.ok(!json.includes('kit.invalid'), `${name}: placeholder image left`);
   }
   const doc = (key) => docs.find(([name]) => name.endsWith(`/${key}.json`))[1];
   const servicesDoc = doc('services');
-  for (const s of services) assert.ok(servicesDoc.includes(s.name) && servicesDoc.includes(`/${s.slug}/`), `card of ${s.name}`);
+  // The services page of the kit has 2 cards: the first 2 services (no card is cloned)
+  for (const s of services.slice(0, 2)) assert.ok(servicesDoc.includes(s.name) && servicesDoc.includes(`/${s.slug}/`), `card of ${s.name}`);
+  assert.equal((servicesDoc.match(/"title_text"|"widgetType":"image"/g) || []).length, 2, 'the 2 cards of the kit');
+  assert.equal(check(/fewer cards than services: 2 service/)?.level, 'warning', 'services not in the cards reported');
   assert.equal((doc('home').match(/"title":"(Boiler repair|Bathroom renovation|Leak detection|Water heaters)"/g) || []).length, 3, 'home keeps its 3 cards');
-  assert.ok(doc('contact').includes('INSERIRE_ID') && !doc('contact').includes('"widgetType":"form"'), 'contact form = Contact Form 7');
+  assert.ok(doc('contact').includes('"widgetType":"form"') && doc('contact').includes('"field_label":"'), 'the Elementor Pro form of the kit stays (the plugin swaps it only without Pro)');
+  assert.ok(!doc('contact').includes('"Your name"'), 'texts of the form written by the AI');
   assert.ok(doc('contact').includes('Via Roma 1'), 'map with the site address');
   assert.ok(/"widgetType":"image-gallery"/.test(doc('gallery')) && doc('gallery').includes('esg-image://'), 'gallery page with every photo');
   assert.ok(doc('header').includes('esg-image://') && doc('header').includes('"menu":"main-menu"'), 'logo and menu of the site');
   assert.ok(doc('home').includes('"testimonial_image":{') && /"testimonial_image":\{[^}]*"url":""/.test(doc('home')), 'demo avatar removed');
-  assert.ok(!/"widgetType":"video"/.test(doc('home')), 'demo video replaced by a photo');
+  assert.ok(/"widgetType":"video"/.test(doc('home')), 'the video widget of the kit stays');
+  assert.ok((doc('home').match(/logo-(nike|adidas|puma|reebok|ua)\.png/g) || []).length === 5, 'client logos section kept');
   const post = doc(`post-${services[0].slug}`);
   assert.ok(post.includes('"widgetType":"image"') && post.includes('esg-image://'), 'article: featured image of the service');
 
-  // 6. Switching to a category template removes the kit, deleting the kit frees the projects
+  // 6. Sections of the pages chosen in the project: remove the client logos and the pricing table,
+  //    add the "Our Story" section of the About template after the hero
+  let sections = await api('GET', `/projects/${pid}/kit-sections`);
+  const homeSections = sections.pages.find((pg) => pg.role === 'home');
+  assert.equal(homeSections.sections.length, 8);
+  assert.equal(homeSections.custom, false);
+  const story = sections.templates.find((tp) => tp.title === 'About Us').sections[1];
+  assert.match(story.texts.join(' '), /Our Story/);
+  const chosen = homeSections.sections.filter((s) => !['clients', 'pricing'].includes(s.type)).map(({ template, index }) => ({ template, index }));
+  chosen.splice(1, 0, { template: story.template, index: story.index });
+  sections = await api('PUT', `/projects/${pid}/kit-sections`, { role: 'home', sections: chosen });
+  assert.equal(sections.pages.find((pg) => pg.role === 'home').custom, true);
+  const expectedTypes = homeSections.sections.filter((s) => !['clients', 'pricing'].includes(s.type)).map((s) => s.type);
+  expectedTypes.splice(1, 0, 'about');
+  assert.deepEqual(sections.pages.find((pg) => pg.role === 'home').sections.map((s) => s.type), expectedTypes);
+  assert.equal(expectedTypes.length, 7);
+  await assert.rejects(api('PUT', `/projects/${pid}/kit-sections`, { role: 'home', sections: [{ template: 'nope.json', index: 0 }] }), /only sections of the kit/);
+  await assert.rejects(api('POST', `/generations/${gen.id}/export`), /sections of Home changed/, 'the page must be generated again');
+  // Regenerating the page writes its texts for the new sections (the other pages keep theirs)
+  const aboutBefore = JSON.stringify(gen.pages.find((pg) => pg.key === 'about').fields);
+  await api('POST', `/generations/${gen.id}/pages/home/regenerate`);
+  const regen = await waitFor(await api('GET', `/generations/${gen.id}`));
+  assert.equal(regen.status, 'completed', regen.error || '');
+  assert.equal(JSON.stringify(regen.pages.find((pg) => pg.key === 'about').fields), aboutBefore);
+  assert.match(regen.pages.find((pg) => pg.key === 'home').templateTitle, /sections chosen for this site/);
+  const exp2 = await api('POST', `/generations/${gen.id}/export`);
+  assert.ok(!exp2.checks.some((c) => c.level === 'error'), JSON.stringify(exp2.checks));
+  assert.ok(exp2.checks.some((c) => /Kit structure verified/.test(c.message)));
+  assert.ok(!exp2.checks.some((c) => /client \/ partner logos/.test(c.message)), 'no client logos left');
+  const out2 = new AdmZip(Buffer.from(await (await fetch(base.replace(/\/api$/, '') + exp2.pluginDownload)).arrayBuffer()));
+  const home2 = out2.readAsText(out2.getEntries().find((e) => e.entryName.endsWith('data/elementor/home.json')));
+  assert.ok(!/logo-nike|"widgetType":"price-table"/.test(home2), 'removed sections are not in the page');
+  assert.equal(JSON.parse(home2).content.length, 7);
+  // Back to the sections of the kit
+  sections = await api('PUT', `/projects/${pid}/kit-sections`, { role: 'home', sections: null });
+  assert.equal(sections.pages.find((pg) => pg.role === 'home').custom, false);
+
+  // 7. Switching to a category template removes the kit, deleting the kit frees the projects
   const cat = await api('POST', '/template-categories', { name: 'Plumbers' });
   const draft = await api('POST', `/template-categories/${cat.id}/templates/generate`, { providerId: provider.id, language: 'en' });
   const tplRow = await api('POST', `/template-categories/${cat.id}/templates`, { name: 'Blue', spec: draft.spec });

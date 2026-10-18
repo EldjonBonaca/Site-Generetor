@@ -9,8 +9,9 @@ import { config } from '../config.js';
 import { canUseProvider } from '../lib/owner.js';
 import { analyzeDocument } from '../elementor/analyze.js';
 import { buildSite } from '../templates/builder.js';
-import { buildKitSite } from '../kits/site.js';
+import { buildKitSite, kitLayoutSignatures } from '../kits/site.js';
 import { effectiveRoles } from '../kits/analysis.js';
+import { loadDemoImages } from '../kits/demo-images.js';
 import { sanitizeSpec } from '../templates/spec.js';
 import { isValidEmail, isValidPhone, slugify, telHref } from '../lib/util.js';
 import { galleryPool } from '../lib/images.js';
@@ -96,6 +97,8 @@ export function loadKitRow(id) {
     info,
     analysis,
     roles: effectiveRoles(info, analysis, parseJson(row.roles_json, {})),
+    // Size and transparency of the demo images (null until they are measured)
+    demoImages: loadDemoImages(path.join(config.storageDir, row.dir)),
   };
 }
 
@@ -143,7 +146,8 @@ export function siteInfo(ctx) {
 
 /** The Elementor documents of the project (built once per context), from its template or its Template Kit. */
 export function builtSite(ctx) {
-  if (ctx.kit) ctx.built ||= buildKitSite(ctx.kit, siteInfo(ctx));
+  // Kit: the sections chosen in the project for each page (settings.kitLayout)
+  if (ctx.kit) ctx.built ||= buildKitSite(ctx.kit, siteInfo(ctx), ctx.settings.kitLayout);
   else if (ctx.template) ctx.built ||= buildSite(ctx.template.spec, siteInfo(ctx));
   return ctx.built || null;
 }
@@ -153,13 +157,15 @@ export const hasDesign = (ctx) => Boolean(ctx.template || ctx.kit);
 
 /** What a generation is made with: the export checks that the project still uses the same design. */
 export function designInfo(ctx) {
-  if (ctx.kit) return { kitId: ctx.kit.id, kitName: ctx.kit.name, kitVersion: ctx.kit.version };
+  // Kit: also the sections of each page (a page whose sections change must be generated again)
+  if (ctx.kit) return { kitId: ctx.kit.id, kitName: ctx.kit.name, kitVersion: ctx.kit.version, kitPages: kitLayoutSignatures(ctx.kit, ctx.settings.kitLayout) };
   return ctx.template ? { templateId: ctx.template.id, templateName: ctx.template.name } : {};
 }
 
 /** Where a kit page comes from (shown in the preview). */
 function kitPageTitle(kit, entry) {
   if (entry?.source === 'kit') return `${kit.name} – ${entry.templateTitle}`;
+  if (entry?.source === 'custom') return `${kit.name} – sections chosen for this site`;
   if (entry?.source === 'composed') return `${kit.name} – composed from its sections`;
   return `${kit.name} – built with the kit colors`;
 }
@@ -261,6 +267,9 @@ export function analyzePage(ctx, page) {
     const m = entry.marks.get(s.id) || {};
     slotRoles[s.id] = m.slot || 'photo';
     if (m.service != null) s.service = m.service;
+    // Template Kit: size of the demo photo (crop), demo graphics kept
+    if (m.crop) s.crop = m.crop;
+    if (m.urls) s.urls = m.urls;
   }
   return { doc, ...analysis, slotRoles };
 }
@@ -297,7 +306,9 @@ export function checkReadiness(ctx, user = null) {
   if (!byRole('hero_home').length) add('images', 'warning', 'Home hero image (hero_home) is missing.');
   // The "plain" page banner of a template has no photo
   if (!byRole('subheader').length && ctx.template?.spec?.layout?.subheader !== 'plain') add('images', 'warning', 'Subheader image is missing.');
-  if (!byRole('logo').length) add('images', 'warning', 'Logo is missing: header and footer show the site name instead.');
+  if (!byRole('logo').length) {
+    add('images', 'warning', ctx.kit ? 'Logo is missing: the logo of the kit header and footer stays empty.' : 'Logo is missing: header and footer show the site name instead.');
+  }
   for (const s of ctx.services) {
     if (!ctx.images.some((i) => i.role === 'service' && i.service_id === s.id)) add('images', 'warning', `Service "${s.name || '?'}" has no image.`);
   }

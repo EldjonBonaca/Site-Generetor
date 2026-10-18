@@ -20,8 +20,11 @@ import { requireOwnProvider } from '../lib/owner.js';
 import { createProvider } from '../ai/registry.js';
 import { AIError } from '../ai/AIProvider.js';
 import { readKit, loadKitTemplate, outlineDocument } from '../kits/read.js';
+import { measureDemoImages } from '../kits/demo-images.js';
 import { analyzeKit, heuristicAnalysis, effectiveRoles, describeGlobalStyles, KIT_ROLES, SECTION_TYPES } from '../kits/analysis.js';
 import { touch } from './projects.js';
+import { loadContext, pageTitle } from '../generation/plan.js';
+import { kitLayouts, sectionTemplates, validLayout } from '../kits/site.js';
 
 const router = Router();
 
@@ -159,6 +162,8 @@ router.post('/template-kits', upload.single('file'), async (req, res) => {
     const row = { id, name, dir: path.relative(config.storageDir, extracted).replace(/\\/g, '/') };
     const analysis = heuristicAnalysis(info.templates, outlines(row, info));
     run('UPDATE template_kits SET name = ?, dir = ?, format = ?, info_json = ?, analysis_json = ? WHERE id = ?', name, row.dir, info.format, JSON.stringify(info), JSON.stringify(analysis), id);
+    // Size and transparency of the demo images, in the background (the export waits for it if needed)
+    measureDemoImages({ dir: extracted, info });
   } catch (err) {
     run('DELETE FROM template_kits WHERE id = ?', id);
     fs.rmSync(dir, { recursive: true, force: true });
@@ -242,8 +247,84 @@ router.put('/projects/:id/template-kit', (req, res) => {
   const kitId = req.body?.kit_id ? requireKit(Number(req.body.kit_id)).id : null;
   if (kitId) run('UPDATE projects SET template_kit_id = ?, template_id = NULL WHERE id = ?', kitId, project.id);
   else run('UPDATE projects SET template_kit_id = NULL WHERE id = ?', project.id);
+  // The sections chosen for the pages belong to the previous kit
+  if (kitId !== project.template_kit_id) saveKitLayout(project, null);
   touch(project.id);
   res.json({ template_kit_id: kitId });
+});
+
+// ---------------------------------------------------------------------------- sections of the pages
+
+/** Sections chosen in a project for each kit page (settings.kitLayout); null = back to the kit default. */
+function saveKitLayout(project, layout) {
+  const settings = parseJson(project.settings_json, {});
+  if (layout && Object.keys(layout).length) settings.kitLayout = layout;
+  else delete settings.kitLayout;
+  run("UPDATE projects SET settings_json = ?, updated_at = datetime('now') WHERE id = ?", JSON.stringify(settings), project.id);
+}
+
+/**
+ * The sections of each page of a kit project and every section of the kit that can be added:
+ * { pages: [{ role, title, custom, template, builder, sections: Section[] }], templates: [{ id, title, role, screenshot, sections: Section[] }] }
+ * Section = { template, index, type, label, description, texts (demo texts, to recognize it), images, widgets, templateTitle }
+ */
+function kitSectionsView(projectId) {
+  const ctx = loadContext(projectId);
+  if (!ctx) throw notFound('Project');
+  if (!ctx.kit) throw badRequest('The project does not use a Template Kit.');
+  const kit = ctx.kit;
+  const usable = sectionTemplates(kit);
+  const outlinesOf = new Map();
+  const outline = (id) => {
+    if (!outlinesOf.has(id)) {
+      const doc = loadKitTemplate(kit.dir, id);
+      outlinesOf.set(id, doc ? outlineDocument(doc) : []);
+    }
+    return outlinesOf.get(id);
+  };
+  const describe = ({ template, index }) => {
+    const s = kit.analysis?.templates?.[template]?.sections?.[index] || { type: 'other', description: '' };
+    const o = outline(template)[index] || { texts: [], images: 0, widgets: [] };
+    const widgets = o.widgets.filter((w) => !/^(spacer|divider|heading|text-editor)$/.test(w)).slice(0, 5);
+    return { template, index, type: s.type, label: SECTION_TYPES[s.type] || 'Other', description: s.description || '', texts: o.texts.slice(0, 3), images: o.images, widgets, templateTitle: kit.info.templates.find((t) => t.id === template)?.title || '' };
+  };
+  const layouts = kitLayouts(kit, ctx.settings.kitLayout);
+  return {
+    pages: Object.entries(layouts).map(([role, l]) => ({
+      role,
+      title: pageTitle(ctx.project.language, role),
+      custom: l.custom,
+      template: l.template ? kit.info.templates.find((t) => t.id === l.template)?.title || null : null,
+      builder: !l.sections.length,
+      sections: l.sections.map(describe),
+    })),
+    templates: usable.map((t) => ({ id: t.id, title: t.title, role: kit.roles[t.id], screenshot: t.screenshot, sections: Array.from({ length: t.sections }, (_, index) => describe({ template: t.id, index })) })),
+  };
+}
+
+router.get('/projects/:id/kit-sections', (req, res) => res.json(kitSectionsView(req.params.id)));
+
+/** Sections of one page: { role, sections: [{ template, index }] } (sections null = the sections of the kit). */
+router.put('/projects/:id/kit-sections', (req, res) => {
+  const ctx = loadContext(req.params.id);
+  if (!ctx) throw notFound('Project');
+  if (!ctx.kit) throw badRequest('The project does not use a Template Kit.');
+  const role = String(req.body?.role || '');
+  const layouts = kitLayouts(ctx.kit, ctx.settings.kitLayout);
+  if (!layouts[role]) throw badRequest('Unknown page');
+  const next = { ...(ctx.settings.kitLayout || {}) };
+  if (req.body.sections === null) delete next[role];
+  else {
+    const chosen = validLayout(ctx.kit, req.body.sections);
+    if (!chosen || chosen.length !== (Array.isArray(req.body.sections) ? req.body.sections.length : -1)) throw badRequest('Choose at least one section of the kit (and only sections of the kit).');
+    // The same sections as the kit: nothing to keep
+    const kitDefault = kitLayouts(ctx.kit, {})[role].sections;
+    const same = kitDefault.length === chosen.length && kitDefault.every((s, i) => s.template === chosen[i].template && s.index === chosen[i].index);
+    if (same) delete next[role];
+    else next[role] = chosen;
+  }
+  saveKitLayout(ctx.project, next);
+  res.json(kitSectionsView(ctx.project.id));
 });
 
 export default router;

@@ -3,11 +3,11 @@
  * role of each template, sections, plugins), shared by the Template Kit page and the Template step.
  */
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Check, Package, Pencil, RotateCcw, ScanSearch } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, Check, Package, Pencil, Plus, RotateCcw, ScanSearch, X } from 'lucide-react';
 import { api } from '../api.js';
 import { useT } from '../i18n/index.jsx';
 import { useToast } from './Toast.jsx';
-import { Alert, Badge, Button, Input, Modal, Select, Spinner, cx } from './ui.jsx';
+import { Alert, Badge, Button, Card, IconButton, Input, Modal, Select, Spinner, cx } from './ui.jsx';
 
 /** Role of a kit template in the site (labels are translated with t()). */
 export const KIT_ROLE_LABELS = {
@@ -86,7 +86,7 @@ export function KitRequirements({ kit }) {
       )}
       {kit.pro_widgets.length > 0 && (
         <Alert kind="warning">
-          {t('This kit uses Elementor Pro widgets ({widgets}): without Elementor Pro on the WordPress site those parts are not shown. Forms are replaced by Contact Form 7 and, without Pro, the menu by the Ultimate Addons menu.', {
+          {t('This kit uses Elementor Pro widgets ({widgets}): without Elementor Pro on the WordPress site those parts are not shown, except the form and the menu, replaced by the Contact Form 7 form and the Ultimate Addons menu.', {
             widgets: kit.pro_widgets.join(', '),
           })}
         </Alert>
@@ -268,10 +268,174 @@ export function KitDetailsDialog({ kitId, onClose, onChanged }) {
                 </li>
               ))}
             </ul>
-            <p className="mt-2 text-xs text-slate-500">{t('Client logo strips (struck through) are removed from the site: they show other companies.')}</p>
+            <p className="mt-2 text-xs text-slate-500">{t('Client logo strips (struck through) show the logos of the demo: remove them from the pages of the site in the Template step of the project.')}</p>
           </div>
         </div>
       )}
     </Modal>
+  );
+}
+
+/** One section of the kit: type, purpose (AI analysis) and its demo texts, to recognize it. */
+function KitSectionInfo({ s, n, pageTemplate }) {
+  const { t } = useT();
+  return (
+    <div className="min-w-0 flex-1">
+      <p className="flex flex-wrap items-center gap-1.5 text-sm text-slate-800">
+        {n != null && <span className="w-5 text-xs text-slate-400 tabular-nums">{n}</span>}
+        <span className="font-medium">{t(s.label)}</span>
+        {s.templateTitle && s.templateTitle !== pageTemplate && <Badge color="blue">{t('from {template}', { template: s.templateTitle })}</Badge>}
+        {s.images > 0 && <span className="text-[11px] text-slate-400">{t('{n} images', { n: s.images })}</span>}
+        {s.widgets?.length > 0 && <span className="text-[11px] text-slate-400">· {s.widgets.join(', ')}</span>}
+      </p>
+      {s.description && <p className="mt-0.5 text-xs text-slate-600">{s.description}</p>}
+      {s.texts?.length > 0 && <p className="mt-0.5 truncate text-[11px] italic text-slate-400">{s.texts.map((x) => `“${x}”`).join(' · ')}</p>}
+    </div>
+  );
+}
+
+/**
+ * Sections of each page of a kit project (Template step), like the Home sections of a category
+ * template: remove the ones the site does not need, add sections from any template of the kit,
+ * change their order. Every section stays exactly as in the kit (layout, widgets, styles).
+ */
+export function KitPageSections({ project, kitId }) {
+  const { t } = useT();
+  const toast = useToast();
+  const [view, setView] = useState(null);
+  const [role, setRole] = useState('home');
+  const [adding, setAdding] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setView(null);
+    api.get(`/projects/${project.id}/kit-sections`).then(setView).catch((e) => toast(e.message, 'error'));
+  }, [project.id, kitId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!view) {
+    return (
+      <Card title={t('Sections of the pages')}>
+        <div className="flex justify-center py-6">
+          <Spinner />
+        </div>
+      </Card>
+    );
+  }
+  const page = view.pages.find((p) => p.role === role) || view.pages[0];
+  const save = async (sections) => {
+    setSaving(true);
+    try {
+      setView(await api.put(`/projects/${project.id}/kit-sections`, { role: page.role, sections: sections && sections.map(({ template, index }) => ({ template, index })) }));
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+  const move = (i, d) => {
+    const next = [...page.sections];
+    [next[i], next[i + d]] = [next[i + d], next[i]];
+    save(next);
+  };
+  const add = (s) => {
+    save([...page.sections, s]);
+    toast(t('Section added to {page}', { page: page.title }));
+  };
+  const inPage = (s) => page.sections.some((x) => x.template === s.template && x.index === s.index);
+
+  return (
+    <Card
+      title={t('Sections of the pages')}
+      description={t('Choose the sections of the kit for each page: remove the ones the site does not need, add sections from the other templates of the kit and change their order. Every section stays exactly as in the kit.')}
+      actions={
+        page.custom && (
+          <Button size="sm" icon={RotateCcw} onClick={() => save(null)} disabled={saving}>
+            {t('Sections of the kit')}
+          </Button>
+        )
+      }
+    >
+      <div className="mb-4 flex flex-wrap gap-1.5" role="tablist">
+        {view.pages.map((p) => (
+          <button
+            key={p.role}
+            type="button"
+            role="tab"
+            aria-selected={p.role === page.role}
+            onClick={() => setRole(p.role)}
+            className={cx('rounded-full border px-3 py-1 text-sm', p.role === page.role ? 'border-brand-500 bg-brand-50 font-medium text-brand-800' : 'border-slate-200 text-slate-600 hover:border-slate-300')}
+          >
+            {p.title}
+            <span className="ml-1.5 text-xs text-slate-400">{p.sections.length}</span>
+            {p.custom && <span className="ml-1 text-brand-600">•</span>}
+          </button>
+        ))}
+      </div>
+
+      <p className="mb-2 text-xs text-slate-500">
+        {page.custom
+          ? t('Sections chosen for this site.')
+          : page.template
+            ? t('The sections of the kit template "{template}".', { template: page.template })
+            : page.builder
+              ? t('The kit has no sections for this page: it is built with the kit colors. Add sections of the kit to use them.')
+              : t('The kit has no template for this page: it is composed from sections of the other templates.')}
+      </p>
+
+      {page.sections.length > 0 && (
+        <ol className={cx('divide-y divide-slate-100 rounded-lg border border-slate-200', saving && 'opacity-60')}>
+          {page.sections.map((s, i) => (
+            <li key={`${s.template}#${s.index}#${i}`} className="flex items-start gap-2 px-3 py-2">
+              <KitSectionInfo s={s} n={i + 1} pageTemplate={page.template} />
+              <div className="flex shrink-0 gap-0.5">
+                <IconButton icon={ArrowUp} label={t('Move up')} onClick={() => move(i, -1)} disabled={saving || i === 0} />
+                <IconButton icon={ArrowDown} label={t('Move down')} onClick={() => move(i, 1)} disabled={saving || i === page.sections.length - 1} />
+                <IconButton icon={X} label={t('Remove')} onClick={() => save(page.sections.filter((_, j) => j !== i))} disabled={saving || page.sections.length === 1} className="hover:text-red-600" />
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <Button size="sm" icon={Plus} onClick={() => setAdding(true)} disabled={saving}>
+          {t('Add a section')}
+        </Button>
+        <p className="text-xs text-slate-500">
+          {page.role === 'gallery' && t('The Gallery page always shows every photo: without a gallery section one is added.')}
+          {page.role === 'contact' && t('The Contact page always has the contact form: without a form one is added.')}
+        </p>
+      </div>
+      <Alert kind="info" className="mt-4">
+        {t('After changing the sections of a page, regenerate that page in the Generate step: its texts are written again for the new sections.')}
+      </Alert>
+
+      <Modal open={adding} onClose={() => setAdding(false)} size="xl" title={t('Add a section to {page}', { page: page.title })} footer={<Button onClick={() => setAdding(false)}>{t('Close')}</Button>}>
+        <div className="space-y-5">
+          {view.templates.map((tpl) => (
+            <div key={tpl.id}>
+              <div className="mb-2 flex items-center gap-3">
+                {tpl.screenshot && <img src={kitScreenshotUrl({ id: kitId }, tpl.screenshot)} alt="" loading="lazy" className="h-12 w-20 shrink-0 rounded border border-slate-200 bg-slate-50 object-cover object-top" />}
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">{tpl.title}</p>
+                  <p className="text-xs text-slate-500">{t(KIT_ROLE_LABELS[tpl.role] || 'Not used')}</p>
+                </div>
+              </div>
+              <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+                {tpl.sections.map((s) => (
+                  <li key={s.index} className="flex items-start gap-2 px-3 py-2">
+                    <KitSectionInfo s={{ ...s, templateTitle: null }} n={s.index + 1} />
+                    {inPage(s) && <Badge color="gray">{t('In the page')}</Badge>}
+                    <Button size="sm" icon={Plus} onClick={() => add(s)} disabled={saving}>
+                      {t('Add')}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </Modal>
+    </Card>
   );
 }

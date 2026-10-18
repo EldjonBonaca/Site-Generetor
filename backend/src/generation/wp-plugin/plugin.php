@@ -563,6 +563,16 @@ function prepare_elementor($node, array $r) {
 				array('menu' => $r['menu'], 'layout' => 'horizontal', 'navmenu_align' => 'right')
 			);
 		}
+		// The Elementor Pro form of a Template Kit needs Pro: without it, the contact form of the site in its place
+		if ($node['widgetType'] === 'form' && !empty($r['form_fallback'])) {
+			$node['widgetType'] = 'shortcode';
+			$node['settings'] = array_merge(
+				array_filter($node['settings'], function ($key) {
+					return strpos($key, '_') === 0;
+				}, ARRAY_FILTER_USE_KEY),
+				array('shortcode' => $r['form_fallback'])
+			);
+		}
 		if (preg_match('/nav-menu|mega-menu|navigation-menu/', $node['widgetType'])) {
 			$node['settings']['menu'] = $r['menu'];
 		}
@@ -768,6 +778,7 @@ function import_content() {
 		'images' => $images,
 		'menu' => $menu->slug,
 		'uae_menu' => use_uae(),
+		'form_fallback' => (!defined('ELEMENTOR_PRO_VERSION') && $shortcode) ? $shortcode : '',
 		'strings' => ($shortcode && !empty($data['contactForm']['placeholder'])) ? array($data['contactForm']['placeholder'] => $shortcode) : array(),
 	);
 

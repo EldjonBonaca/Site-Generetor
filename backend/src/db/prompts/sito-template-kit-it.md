@@ -36,8 +36,9 @@ Il kit è nato come **demo per un'altra attività**: nel sito finale **non deve 
 - Ogni testo della demo – titoli, paragrafi, pulsanti, elenchi, recensioni, nomi di persone, membri del team, prezzi, numeri, orari, indirizzi, email, telefoni, marchi, nomi di progetti, date, citazioni – va sostituito con un testo **nuovo** scritto per `{{NOME_SITO}}` e il suo settore `{{SETTORE_CLIENTE}}`.
 - Il "testo demo" indicato per ogni campo serve **solo** a capire la funzione, il tono e la lunghezza del campo: non copiarlo, non tradurlo e non riformularlo.
 - Se una sezione del kit è pensata per un altro settore (es. un kit per palestre usato da un idraulico), mantieni la **funzione** della sezione e adatta il contenuto al settore del cliente (es. "I nostri trainer" → "Il nostro team"; "Programmi di allenamento" → i servizi dell'attività; "Ultimi progetti" → lavori tipici dell'attività).
+- La **struttura del kit non cambia**: ogni sezione, colonna, card e widget resta dov'è, con lo stesso numero di elementi. Scrivi un testo per ogni campo, senza unire, saltare o aggiungere contenuti.
 - Rispetta la lunghezza indicativa di ogni campo, così il design del kit non si rompe: un titolo breve resta breve, un paragrafo resta un paragrafo.
-- Le immagini della demo vengono tutte sostituite dal generatore con le foto di `{{NOME_SITO}}` (sezione 3): non citare né descrivere le foto della demo.
+- Le foto della demo vengono sostituite dal generatore con le foto di `{{NOME_SITO}}` (sezione 3), ritagliate nelle stesse proporzioni; le grafiche decorative del kit restano: non citare né descrivere le immagini della demo.
 
 ---
 
@@ -69,7 +70,7 @@ Ogni campo da compilare indica la sezione a cui appartiene: scrivi un testo coer
 ## 5. Regole per i testi
 
 - Testi professionali, concreti e orientati alla conversione, scritti per i clienti di un'attività del settore `{{SETTORE_CLIENTE}}`, nella sua zona. Mai "lorem ipsum", segnaposto o frasi generiche valide per qualunque azienda.
-- **Servizi**: dove il kit presenta servizi, prodotti o programmi, parla dei servizi reali dell'elenco qui sopra. Nelle card dei servizi il titolo e il collegamento sono già impostati dal generatore: scrivi solo la descrizione breve.
+- **Servizi**: dove il kit presenta servizi, prodotti o programmi, parla dei servizi reali dell'elenco qui sopra. Nelle card dei servizi il titolo e il collegamento sono già impostati dal generatore: scrivi solo la descrizione breve. Se il kit ha più card che servizi, le card in più (indicate nel campo) presentano altri aspetti reali dell'offerta dell'attività (una specialità, un pacchetto, un vantaggio), senza ripetere i servizi dell'elenco.
 - **Pulsanti e collegamenti**: testi brevi d'azione (es. "Richiedi un preventivo", "Scopri i servizi", "Contattaci"); ogni collegamento deve puntare alla pagina giusta del sito.
 - **Contatti**: usa sempre il telefono, l'email e l'indirizzo reali di `{{NOME_SITO}}`, mai quelli della demo.
 - **Recensioni / testimonianze**: credibili e specifiche del settore, con nomi di fantasia generici (nome e iniziale del cognome) e città o tipo di cliente; nessuna foto.

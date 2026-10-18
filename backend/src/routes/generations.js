@@ -12,6 +12,7 @@ import { BUILDER_VERSION } from '../templates/builder.js';
 import { exportGeneration, pluginFile } from '../generation/exporter.js';
 import { buildPagePrompt, estimateTokens } from '../generation/prompt-builder.js';
 import { canUseProvider } from '../lib/owner.js';
+import { kitLayoutSignatures } from '../kits/site.js';
 
 const router = Router();
 
@@ -144,8 +145,25 @@ router.post('/generations/:gid/pages/:key/regenerate', (req, res) => {
   const g = requireGen(req.params.gid);
   if (isRunning(g.id)) throw badRequest('A generation is already running.');
   const output = parseJson(g.output_json, { pages: [] });
-  if (!output.pages.some((p) => p.key === req.params.key)) throw notFound('Page');
+  const index = output.pages.findIndex((p) => p.key === req.params.key);
+  if (index < 0) throw notFound('Page');
   ownProvider(g, req.user);
+  // Template Kit: the sections of the page changed in the Template step -> its texts are made again
+  // for the new sections (the other pages keep theirs)
+  const ctx = loadContext(g.project_id);
+  const genConfig = parseJson(g.config_json, {});
+  const role = output.pages[index].role;
+  if (ctx?.kit && genConfig.kitId === ctx.kit.id && ctx.kit.version === genConfig.kitVersion) {
+    const now = kitLayoutSignatures(ctx.kit, ctx.settings.kitLayout);
+    const before = genConfig.kitPages || kitLayoutSignatures(ctx.kit, {});
+    if (role in now && before[role] !== now[role]) {
+      const fresh = initPages(ctx).find((p) => p.key === req.params.key);
+      if (fresh) {
+        output.pages[index] = { ...fresh, title: output.pages[index].title };
+        run('UPDATE generations SET output_json = ?, config_json = ? WHERE id = ?', JSON.stringify(output), JSON.stringify({ ...genConfig, kitPages: { ...before, [role]: now[role] } }), g.id);
+      }
+    }
+  }
   runGeneration(g.id, { pageKeys: [req.params.key] }).catch((e) => console.error('[generation]', e));
   res.status(202).json({ ok: true });
 });

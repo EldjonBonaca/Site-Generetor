@@ -124,23 +124,31 @@ The **Template Kit** page in the top menu manages uploaded Elementor Template Ki
 3. **Details**: the analysis, the colors, the plugins and every template with its sections. The role of each template can be changed (one template per role).
 4. In a project, the **Template** step switches between *Category template* and *Template Kit*: choosing one replaces the other. *New project* on a kit card creates a project that already uses it. A kit project needs the **industry** (Site data): the AI writes every text for that business category.
 
-How a site is built from a kit ([`kits/site.js`](backend/src/kits/site.js), same output as the template builder, so generation, preview, export and the WordPress plugin work the same way):
+How a site is built from a kit ([`kits/site.js`](backend/src/kits/site.js), same output as the template builder, so generation, preview, export and the WordPress plugin work the same way). **The structure of the kit never changes**: every section, column, card and widget of a kit template stays where it is, with its type, settings, plugins and styles (palette and fonts are the global styles of the kit). Only texts and images change:
 
 | Demo content of the kit | What the site gets |
 |---|---|
 | Every text (titles, paragraphs, buttons, lists, reviews, names, FAQ, prices, counters, texts of HTML widgets) | Written by the AI with the built-in prompt [`sito-template-kit-it.md`](backend/src/db/prompts/sito-template-kit-it.md): each field is described by the section it belongs to, and the demo text only shows its role and length. A text the AI did not write is **emptied** at export (never the demo one) and reported in the checks. |
-| Service cards (in the sections typed *services*) | One card per service on the Services page (cloned or removed), up to the number of services on Home: title = service name, link = its article, image = its image |
+| Service cards (in the sections typed *services*) | Every card of the kit stays, none is cloned or removed: the first ones get the services in order (title = service name, link = its article, image = its image); cards beyond the services are written by the AI about other aspects of the offer and link to the Services page. Both cases are reported in the checks. |
 | Page title banner of inner pages | The page title |
 | Texts that are only a phone, an email or a copyright line; `tel:` / `mailto:` links | The site ones |
-| Logo of header / footer (image, Site Logo widget) | The project logo, or the site name without a logo |
-| Menus (Elementor Pro, UAE, ElementsKit…) | The menu of the site; without Elementor Pro the Pro menu becomes the UAE menu widget |
-| Forms (Elementor Pro form, other form plugins) and maps | The Contact Form 7 form of the site; the map of the site address (a form and a map are added to the contact page when missing) |
-| Every image slot | The project images: hero, banner (subheader), service images, then the photos round-robin; galleries get every photo |
-| Photos of demo people (testimonials, team) | Removed |
-| Client / partner logo strips | The section is removed |
-| Videos (widgets, backgrounds, YouTube iframes) | A photo of the project |
+| Logo of header / footer (Site Logo widget, or the first image) | The same widget with the project logo (empty without a logo) |
+| Menus (Elementor Pro, UAE, ElementsKit, RomethemeKit…) | The menu of the site; only without Elementor Pro the Pro menu becomes the UAE menu widget |
+| Elementor Pro form | Stays (its texts are written by the AI); only without Elementor Pro the WordPress plugin shows the Contact Form 7 form in its place |
+| Forms of form plugins (RomethemeForm, WPForms, Fluent Forms…), form shortcodes, HTML forms | They point to a form that is not in the kit: the Contact Form 7 form of the site, in the same place (reported in the checks) |
+| Maps | The site address |
+| Photos | The project images: hero, banner (subheader), service images, then the photos round-robin; galleries get every photo. Each photo is **cropped to the proportions of the demo photo** it replaces (its Elementor custom size, or the measured demo image), never enlarged; hero and banner use the crop sizes of the project settings. |
+| Graphics of the design (transparent PNG / SVG ornaments, shapes, icons, client / partner logos) | Kept, bundled with the site (`kit-<name>.png`) |
+| Photos in reviews (avatars) | Emptied (the testimonial widget stays) |
+| Videos (widgets, backgrounds, YouTube iframes) | Stay with the demo link, with a project photo as cover: reported in the checks |
 | Images in CSS and page settings, global styles images | Removed |
-| Missing pages | Composed from the kit: the page title banner of an inner page + the matching sections (about, services, gallery, contact). A missing header, footer or single post template (or one without the post content widget) is built by the template builder with the kit colors and fonts. |
+| Missing pages | Composed from the kit: the page title banner of an inner page + the matching sections (about, services, gallery, contact), plus a photo gallery or the contact form when no section of the kit has one. A missing header, footer or single post template (or one without the post content widget) is built by the template builder with the kit colors and fonts. |
+
+**Sections of the pages** (Template step of a kit project, *Sections of the pages*): like the Home sections of a category template, each page can drop the kit sections the site does not need, get sections from any other template of the kit (another Home variant, About, Pricing, FAQ…) and change their order. The choice belongs to the project (`settings.kitLayout`, references to the sections of the kit; *Sections of the kit* goes back to the default), and every section stays exactly as in the kit: the structure check compares it with its kit section. The Gallery page always gets a gallery and the Contact page a form when none of their sections has one. A generation remembers the sections of each page: after a change, *Regenerate page* writes the texts of that page again for its new sections (the export asks for it), the other pages keep theirs.
+
+The **demo images** are linked on the demo site, not in the zip: after the upload (and at the export, for the ones still missing) they are downloaded once into the kit folder and measured ([`kits/demo-images.js`](backend/src/kits/demo-images.js): size, transparent pixels). Without network they are classified by heuristics (SVG / GIF, client logo sections and small or repeated PNGs are graphics) and the photos are not cropped.
+
+**Structure check**: every export compares each page, header and footer with its kit template ([`kits/structure.js`](backend/src/kits/structure.js)): same element ids, types, nesting and order, and the same settings apart from texts, images, links, menus, map address and contact form. The result is in `CONTROLLI.md` / `CHECKS.md` (an error lists every element missing, added, changed, moved or with changed settings).
 
 The export also writes the **global styles of the kit** into the Elementor site kit (so the global colors the templates refer to exist), and the WordPress plugin installs the **free plugins the kit requires** from wordpress.org. Plugins and widgets that need Elementor Pro are listed in the kit details and in the import guide. A generation must be run again after the kit roles or analysis change.
 

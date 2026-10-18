@@ -6,7 +6,7 @@ import { useT } from '../../i18n/index.jsx';
 import { useToast } from '../../components/Toast.jsx';
 import { useAutosave } from '../../hooks/useAutosave.js';
 import { Alert, Badge, Button, Card, EmptyState, Field, Input, SaveStatus, Select, Spinner, Toggle, cx } from '../../components/ui.jsx';
-import { KitCover, KitDetailsDialog, KitRequirements, KitRoles, KitSwatches } from '../../components/KitParts.jsx';
+import { KitCover, KitDetailsDialog, KitPageSections, KitRequirements, KitRoles, KitSwatches } from '../../components/KitParts.jsx';
 import { StepIssues } from '../../components/StepIssues.jsx';
 import { TemplatePreview, TemplateSwatches } from '../../components/TemplatePreview.jsx';
 import { TemplateEditor, TemplateGenerator, SECTION_LABELS, variantLabel } from '../../components/TemplateDialogs.jsx';
@@ -275,7 +275,7 @@ export default function TemplateStep({ project, reload }) {
 
 /**
  * Template Kit of the site: the kit keeps its design and structure; the AI rewrites every text for the
- * business and the project images replace every demo image. Kits are uploaded in the Template Kit page.
+ * business and the project images replace the demo photos (the structure of the kit never changes). Kits are uploaded in the Template Kit page.
  */
 function KitChooser({ project, reload }) {
   const { t } = useT();
@@ -337,12 +337,14 @@ function KitChooser({ project, reload }) {
               </div>
               <KitRequirements kit={current} />
               <p className="text-xs text-slate-500">
-                {t('The site keeps the layout, sections and styles of the kit. The AI rewrites every text for the industry of the project ("{industry}"), and the images of the project replace every demo image.', { industry: project.industry || t('set it in Site data') })}
+                {t('The site keeps the structure, sections, widgets, plugins and palette of the kit. The AI rewrites every text for the industry of the project ("{industry}"), and the images of the project replace the demo photos, cropped to the same proportions (the decorative graphics of the kit stay).', { industry: project.industry || t('set it in Site data') })}
               </p>
             </div>
           </div>
         </Card>
       )}
+      {/* Remount when the kit changes (roles of its templates, analysis) */}
+      {current && !changing && <KitPageSections key={current.updated_at} project={project} kitId={current.id} />}
 
       {(!current || changing) && (
         <Card
@@ -461,9 +463,12 @@ function SiteStructureCard({ project, reload }) {
           )}
         </Field>
       </div>
-      <div className="mt-5">
-        <Toggle checked={s.mapEmbed} onChange={(v) => save({ mapEmbed: v })} label={t('Google Maps on the contact page')} description={t('A map (iframe) with your address is added below the contact form.')} />
-      </div>
+      {/* A Template Kit keeps its own contact page: its map (if any) shows the site address */}
+      {!project.template_kit_id && (
+        <div className="mt-5">
+          <Toggle checked={s.mapEmbed} onChange={(v) => save({ mapEmbed: v })} label={t('Google Maps on the contact page')} description={t('A map (iframe) with your address is added below the contact form.')} />
+        </div>
+      )}
     </Card>
   );
 }

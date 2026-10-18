@@ -22,6 +22,9 @@ import { buildPlugin, PLUGIN_IMAGE_SCHEME } from './wp-plugin.js';
 import { docsText } from './export-docs.js';
 import { fieldValue } from './runner.js';
 import { BUILDER_VERSION, articleDoc } from '../templates/builder.js';
+import { measureDemoImages, loadDemoImages, demoImagePath } from '../kits/demo-images.js';
+import { compareStructure } from '../kits/structure.js';
+import { kitLayoutSignatures } from '../kits/site.js';
 
 const PLACEHOLDER_BASE_URL = 'https://example.com/wp-content/uploads/';
 const TEMPLATE_TYPES = new Set(['page', 'section', 'header', 'footer', 'single', 'single-page', 'single-post', 'archive', 'popup', 'error-404', 'loop-item', 'container']);
@@ -75,6 +78,18 @@ async function exportImages(ctx, destDir) {
 }
 
 const cropKey = (imageId, kind) => `${imageId}:${kind}`;
+/** Template Kit slots: crop kind "<width>x<height>" = size of the demo photo the image replaces. */
+const slotCrop = (slot) => (slot.crop ? `${slot.crop.width}x${slot.crop.height}` : null);
+const kitGraphicKey = (url) => `kit:${url}`;
+
+/** Largest crop with the proportions of the demo photo that fits in the image (never enlarged), at most the demo size. */
+async function demoCropSize(file, kind) {
+  const [w, h] = kind.split('x').map(Number);
+  const meta = await sharp(file, { failOn: 'none' }).metadata();
+  const [sw, sh] = (meta.orientation || 1) >= 5 ? [meta.height, meta.width] : [meta.width, meta.height];
+  const width = Math.max(1, Math.min(w, sw, Math.floor((sh * w) / h)));
+  return { width, height: Math.max(1, Math.min(sh, Math.round((width * h) / w))) };
+}
 
 /** Exact pixel size of the Home hero / page subheader / carousel images (settings.image.hero / .subheader / .carousel). */
 export function cropSize(settings, kind) {
@@ -99,15 +114,42 @@ async function exportCrops(ctx, pages, exported, destDir) {
     const [id, kind] = key.split(':');
     const img = ctx.images.find((i) => i.id === Number(id));
     if (!img || img.mime === 'image/svg+xml') continue;
-    const { width, height } = cropSize(ctx.settings, kind);
+    const src = path.join(config.storageDir, img.file_path);
+    const { width, height } = /^\d+x\d+$/.test(kind) ? await demoCropSize(src, kind) : cropSize(ctx.settings, kind);
     const base = exported.get(img.id);
     const ext = path.extname(base.name);
     const name = `${path.basename(base.name, ext)}-${kind}${ext}`;
-    const pipeline = sharp(path.join(config.storageDir, img.file_path), { failOn: 'none' })
+    const pipeline = sharp(src, { failOn: 'none' })
       .rotate()
       .resize({ width, height, fit: 'cover', position: sharp.strategy.attention });
     await encode(pipeline, ext, ctx.settings.image.quality).toFile(path.join(destDir, name));
     exported.set(key, { name, url: normalizeBaseUrl(ctx.project.image_base_url) + name, alt: base.alt });
+  }
+}
+
+/**
+ * Template Kit: the graphics of the design that stay (ornaments, shapes, client logos) are bundled
+ * with the site (kit-<name>.png), from the copies downloaded when the demo images were measured.
+ * A graphic that could not be downloaded keeps its demo URL (reported in the checks).
+ */
+function exportKitGraphics(ctx, pages, exported, destDir) {
+  if (!ctx.kit) return;
+  const used = new Set([...exported.values()].map((e) => e.name));
+  for (const page of pages.filter((p) => p.templateId)) {
+    const { slots, slotRoles } = analyzePage(ctx, page);
+    for (const slot of slots.filter((s) => slotRoles[s.id] === 'keep')) {
+      for (const url of slot.urls || []) {
+        const file = demoImagePath(ctx.kit.dir, ctx.kit.demoImages?.[url]);
+        if (!file || exported.has(kitGraphicKey(url))) continue;
+        const ext = path.extname(file);
+        const base = `kit-${slugify(path.parse(url.split(/[?#]/)[0]).name) || 'graphic'}`;
+        let name = `${base}${ext}`;
+        for (let n = 2; used.has(name); n++) name = `${base}-${n}${ext}`;
+        used.add(name);
+        fs.copyFileSync(file, path.join(destDir, name));
+        exported.set(kitGraphicKey(url), { name, url: normalizeBaseUrl(ctx.project.image_base_url) + name, alt: '' });
+      }
+    }
   }
 }
 
@@ -119,6 +161,8 @@ async function exportCrops(ctx, pages, exported, destDir) {
  *  - gallery widgets: every photo.
  * Slots whose image is missing get a photo of the archive; without any photo they are emptied.
  * Hero / subheader slots use the cropped version of their image (keys collected in `neededCrops`).
+ * Template Kit: the other photos are cropped to the size of the demo photo they replace (slot.crop),
+ * and the graphics of the design (role 'keep') get their bundled copy.
  */
 export function imageAssignment(ctx, page, slots, slotRoles, exported, neededCrops = null) {
   const ex = (i, crop = null) => {
@@ -156,8 +200,19 @@ export function imageAssignment(ctx, page, slots, slotRoles, exported, neededCro
         assignment[slot.id] = list.map((i) => ex(i, 'hero')).filter(Boolean);
         continue;
       }
+      if (role === 'keep') {
+        const kept = (slot.urls || []).map((u) => exported.get(kitGraphicKey(u)));
+        if (kept.length && kept.every(Boolean)) assignment[slot.id] = kept;
+        continue;
+      }
       // Gallery page: the full photos; Home carousel: the photos cropped to the same size
-      assignment[slot.id] = pool.map((i) => ex(i, role === 'carousel' ? 'carousel' : null));
+      assignment[slot.id] = pool.map((i) => ex(i, role === 'carousel' ? 'carousel' : slotCrop(slot)));
+      continue;
+    }
+    // Graphics of the kit design: the bundled copy (without it the demo image stays)
+    if (role === 'keep') {
+      const kept = exported.get(kitGraphicKey(slot.urls?.[0] || slot.url));
+      if (kept) assignment[slot.id] = kept;
       continue;
     }
     // Photos of demo people (Template Kit testimonials, team): removed, never replaced by an unrelated photo
@@ -171,7 +226,7 @@ export function imageAssignment(ctx, page, slots, slotRoles, exported, neededCro
     else if (role === 'service_list') img = serviceImg(slot.service);
     else if (role === 'logo') img = pick((i) => i.role === 'logo');
     if (!img && role !== 'logo') img = nextFill();
-    assignment[slot.id] = img ? ex(img, role === 'hero' || role === 'subheader' ? role : null) : { remove: true };
+    assignment[slot.id] = img ? ex(img, role === 'hero' || role === 'subheader' ? role : role === 'logo' ? null : slotCrop(slot)) : { remove: true };
   }
   return assignment;
 }
@@ -191,20 +246,24 @@ function buildPageDocs(ctx, pages, exported, links, allPages = pages) {
       const { doc, fields, slots, slotRoles } = analyzePage(ctx, page);
       const stored = new Map(page.fields.map((f) => [f.id, f]));
       const values = {};
+      let missing = 0; // fields of the page that the generation does not have (made with older kit pages)
       for (const f of fields) {
         const s = stored.get(f.id);
         const value = s ? fieldValue(allPages, s) : null;
         if (typeof value === 'string') values[f.id] = value;
         else if (f.format === 'link' && !f.fixed) values[f.id] = fallbackLink(`${f.original} ${s?.hint || ''}`, links);
         // Template Kit: a text the AI did not write is emptied, so no demo text stays on the site (reported in the checks)
-        else if (ctx.kit && !f.fixed && f.format !== 'number') values[f.id] = '';
+        else if (ctx.kit && !f.fixed && f.format !== 'number') {
+          values[f.id] = '';
+          if (!s) missing++;
+        }
       }
       applyFieldValues(doc, fields, values);
       applyImages(doc, slots, imageAssignment(ctx, page, slots, slotRoles, exported));
       // Safety net for AI-written texts: tel:/mailto: links and stray emails become the site's ones
       replaceContacts(doc, { phone: ctx.project.phone, email: ctx.project.email });
       doc.title = page.title;
-      return { page, doc };
+      return { page, doc, missing };
     });
 }
 
@@ -259,8 +318,14 @@ function runChecks(ctx, built, posts, links, baseUrl, T) {
   const items = [];
   const add = (level, message) => items.push({ level, message });
   const allowed = new Set(links.map((l) => normalizeUrl(l.url)));
+  const kitDocs = ctx.kit ? builtSite(ctx).docs : null;
+  const sameStructure = [];
 
-  for (const { page, doc } of built) {
+  for (const { page, doc, missing = 0 } of built) {
+    const entry = kitDocs?.[page.role];
+    // Graphics of the kit design that stay (not demo photos), when they could not be bundled
+    const keptUrls = new Set([...(entry?.marks?.values() || [])].flatMap((m) => (m.slot === 'keep' ? m.urls || [] : [])));
+    const keptRemote = new Set();
     const demoImages = new Set();
     const badLinks = new Set();
     const otherEmails = new Set();
@@ -275,19 +340,34 @@ function runChecks(ctx, built, posts, links, baseUrl, T) {
       if (!v || typeof v !== 'object') return;
       if (typeof v.url === 'string' && v.url) {
         const isLink = 'is_external' in v || 'nofollow' in v;
-        if (!isLink && (IMAGE_URL.test(v.url) || 'id' in v) && !v.url.startsWith(baseUrl)) demoImages.add(v.url);
+        if (!isLink && (IMAGE_URL.test(v.url) || 'id' in v) && !v.url.startsWith(baseUrl)) (keptUrls.has(v.url) ? keptRemote : demoImages).add(v.url);
         if (isLink && !/^(tel:|mailto:)/i.test(v.url) && !allowed.has(normalizeUrl(v.url)) && v.url !== '#') badLinks.add(v.url);
       }
       for (const [k, x] of Object.entries(v)) if (k !== '__globals__' && k !== '__dynamic__') visit(x, k);
     };
     visit(doc, null);
-    const unchanged = page.fields.filter((f) => f.source === 'original' || (f.format !== 'link' && f.source !== 'shared' && f.value == null)).length;
+    const unchanged = missing + page.fields.filter((f) => f.source === 'original' || (f.format !== 'link' && f.source !== 'shared' && f.value == null)).length;
 
     if (demoImages.size) add('error', T.chkDemoImages(page.title, [...demoImages]));
     if (badLinks.size) add('warning', T.chkLinks(page.title, [...badLinks]));
     if (lorem) add('error', T.chkLorem(page.title));
     if (unchanged) add(ctx.kit ? 'error' : 'warning', ctx.kit ? T.chkKitEmptied(page.title, unchanged) : T.chkUnchanged(page.title, unchanged));
     if (otherEmails.size) add('warning', T.chkEmails(page.title, [...otherEmails]));
+
+    // Template Kit: the page must keep the structure of its kit template (only texts and images change)
+    if (entry?.origin) {
+      const report = compareStructure(entry.origin, doc);
+      if (report.ok) sameStructure.push(report);
+      else add('error', T.chkKitStructure(page.title, report));
+      if (report.formSwaps.length) add('info', T.chkKitFormSwap(page.title, entry.notes.formSwaps));
+      const n = entry.notes;
+      if (n.extraCards) add('warning', T.chkKitExtraCards(page.title, n.extraCards));
+      if (n.hiddenServices) add('warning', T.chkKitHiddenServices(page.title, n.hiddenServices));
+      if (n.videos) add('warning', T.chkKitVideos(page.title, n.videos));
+      if (n.clientLogos) add('warning', T.chkKitClientLogos(page.title));
+      if (page.role === 'contact' && !n.forms) add('warning', T.chkKitNoForm(page.title));
+    }
+    if (keptRemote.size) add('warning', T.chkKitRemoteGraphics(page.title, [...keptRemote]));
   }
   for (const p of posts) {
     const len = stripHtml(p.content).length;
@@ -297,7 +377,8 @@ function runChecks(ctx, built, posts, links, baseUrl, T) {
   // Key figures written by the AI: realistic examples, the client must confirm them
   const kitStats = ctx.kit && built.some(({ page }) => builtSite(ctx).docs[page.role]?.sections?.some((s) => s.type === 'stats' || s.type === 'pricing'));
   if (ctx.template?.spec.sections?.includes('stats') || kitStats) add('warning', T.chkStats);
-  if (!items.length) add('ok', T.chkAllGood);
+  if (!items.some((i) => i.level === 'error' || i.level === 'warning')) add('ok', T.chkAllGood);
+  if (sameStructure.length) add('ok', T.chkKitStructureOk(sameStructure.length, sameStructure.reduce((n, r) => n + r.elements, 0)));
   add('info', T.chkResponsive);
   return items;
 }
@@ -420,6 +501,22 @@ export async function exportGeneration(generationId) {
   if (genConfig.builderVersion !== BUILDER_VERSION) {
     throw badRequest('This generation was made with an older version of the templates: run a new generation.');
   }
+  // ...and to the sections of each kit page (chosen in the Template step): a changed page must be regenerated
+  if (ctx.kit) {
+    const now = kitLayoutSignatures(ctx.kit, ctx.settings.kitLayout);
+    const before = genConfig.kitPages || kitLayoutSignatures(ctx.kit, {});
+    const changed = Object.keys(now).filter((role) => before[role] !== now[role]);
+    if (changed.length) {
+      const names = changed.map((role) => pageTitle(ctx.project.language, role)).join(', ');
+      throw badRequest(`The sections of ${names} changed after this generation: regenerate ${changed.length > 1 ? 'these pages' : 'this page'} (Regenerate page) or run a new generation.`);
+    }
+  }
+  // Template Kit: size and transparency of the demo images (photos to crop, graphics to keep)
+  if (ctx.kit) {
+    await measureDemoImages(ctx.kit);
+    ctx.kit.demoImages = loadDemoImages(ctx.kit.dir);
+    ctx.built = null;
+  }
 
   // Pages whose service was deleted after the generation are skipped
   const pages = output.pages
@@ -440,6 +537,7 @@ export async function exportGeneration(generationId) {
 
   const exported = await exportImages(ctx, path.join(outRoot, 'images'));
   await exportCrops(ctx, pages, exported, path.join(outRoot, 'images'));
+  exportKitGraphics(ctx, pages, exported, path.join(outRoot, 'images'));
   const built = buildPageDocs(ctx, pages, exported, links, output.pages);
   const posts = buildPosts(ctx, pages, exported);
 

@@ -520,13 +520,34 @@ export default {
   '{fields} texts · {images} images': '{fields} testi · {images} immagini',
   'Role of {name}': 'Ruolo di {name}',
   'Back to the role suggested by the analysis': "Torna al ruolo suggerito dall'analisi",
-  'Client logo strips (struck through) are removed from the site: they show other companies.': 'Le fasce con i loghi dei clienti (barrate) vengono rimosse dal sito: mostrano altre aziende.',
   'Plugins of the kit': 'Plugin del kit',
   paid: 'a pagamento',
-  'This kit uses Elementor Pro widgets ({widgets}): without Elementor Pro on the WordPress site those parts are not shown. Forms are replaced by Contact Form 7 and, without Pro, the menu by the Ultimate Addons menu.':
-    'Questo kit usa widget di Elementor Pro ({widgets}): senza Elementor Pro sul sito WordPress quelle parti non vengono mostrate. I moduli vengono sostituiti da Contact Form 7 e, senza Pro, il menu da quello di Ultimate Addons.',
+  'This kit uses Elementor Pro widgets ({widgets}): without Elementor Pro on the WordPress site those parts are not shown, except the form and the menu, replaced by the Contact Form 7 form and the Ultimate Addons menu.':
+    'Questo kit usa widget di Elementor Pro ({widgets}): senza Elementor Pro sul sito WordPress quelle parti non vengono mostrate, tranne il modulo e il menu, sostituiti dal modulo Contact Form 7 e dal menu di Ultimate Addons.',
   'built with the kit colors': 'creato con i colori del kit',
   'composed from the kit sections': 'composta con le sezioni del kit',
+  // Sections of the kit pages (Template step)
+  'Sections of the pages': 'Sezioni delle pagine',
+  'Choose the sections of the kit for each page: remove the ones the site does not need, add sections from the other templates of the kit and change their order. Every section stays exactly as in the kit.':
+    "Scegli le sezioni del kit per ogni pagina: togli quelle che non servono al sito, aggiungi sezioni dagli altri template del kit e cambiane l'ordine. Ogni sezione resta esattamente come nel kit.",
+  'Sections of the kit': 'Sezioni del kit',
+  'Sections chosen for this site.': 'Sezioni scelte per questo sito.',
+  'The sections of the kit template "{template}".': 'Le sezioni del template "{template}" del kit.',
+  'The kit has no sections for this page: it is built with the kit colors. Add sections of the kit to use them.':
+    'Il kit non ha sezioni per questa pagina: viene creata con i colori del kit. Aggiungi sezioni del kit per usarle.',
+  'The kit has no template for this page: it is composed from sections of the other templates.': 'Il kit non ha un template per questa pagina: viene composta con sezioni degli altri template.',
+  'Add a section': 'Aggiungi una sezione',
+  'Add a section to {page}': 'Aggiungi una sezione a {page}',
+  'Section added to {page}': 'Sezione aggiunta a {page}',
+  'from {template}': 'da {template}',
+  '{n} images': '{n} immagini',
+  'In the page': 'Già nella pagina',
+  'The Gallery page always shows every photo: without a gallery section one is added.': 'La Galleria mostra sempre tutte le foto: senza una sezione galleria ne viene aggiunta una.',
+  'The Contact page always has the contact form: without a form one is added.': 'La pagina Contatti ha sempre il modulo di contatto: se manca viene aggiunto.',
+  'After changing the sections of a page, regenerate that page in the Generate step: its texts are written again for the new sections.':
+    'Dopo aver cambiato le sezioni di una pagina, rigenera quella pagina nel passo Genera: i suoi testi vengono riscritti per le nuove sezioni.',
+  'Client logo strips (struck through) show the logos of the demo: remove them from the pages of the site in the Template step of the project.':
+    'Le fasce con i loghi dei clienti (barrate) mostrano i loghi della demo: toglile dalle pagine del sito nel passo Template del progetto.',
   Home: 'Home',
   'About Us': 'Chi siamo',
   Contact: 'Contatti',
@@ -550,8 +571,8 @@ export default {
   'Kit details': 'Dettagli del kit',
   'Change kit': 'Cambia kit',
   'Pages of the site': 'Pagine del sito',
-  'The site keeps the layout, sections and styles of the kit. The AI rewrites every text for the industry of the project ("{industry}"), and the images of the project replace every demo image.':
-    "Il sito mantiene layout, sezioni e stili del kit. L'AI riscrive ogni testo per il settore del progetto (\"{industry}\") e le immagini del progetto sostituiscono ogni immagine della demo.",
+  'The site keeps the structure, sections, widgets, plugins and palette of the kit. The AI rewrites every text for the industry of the project ("{industry}"), and the images of the project replace the demo photos, cropped to the same proportions (the decorative graphics of the kit stay).':
+    "Il sito mantiene struttura, sezioni, widget, plugin e palette del kit. L'AI riscrive ogni testo per il settore del progetto (\"{industry}\") e le immagini del progetto sostituiscono le foto della demo, ritagliate nelle stesse proporzioni (le grafiche decorative del kit restano).",
   'set it in Site data': 'impostalo in Dati del sito',
   'Choose a Template Kit': 'Scegli un Template Kit',
   'The site reuses the design and structure of the kit, with texts written by the AI for this business and the images of the project.':
