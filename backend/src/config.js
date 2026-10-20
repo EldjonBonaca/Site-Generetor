@@ -45,6 +45,8 @@ export const config = {
   tmpDir: path.join(storageDir, 'tmp'),
   kitsDir: path.join(storageDir, 'kits'),
   maxImageBytes: Number(process.env.MAX_IMAGE_MB || 15) * 1024 * 1024,
+  // Uploaded images of this size or larger are compressed below it (lib/optimize.js)
+  optimizeImageBytes: Number(process.env.IMAGE_OPTIMIZE_KB || 1000) * 1000,
   maxKitBytes: Number(process.env.MAX_KIT_MB || 150) * 1024 * 1024,
   aiTimeoutMs: Number(process.env.AI_TIMEOUT_MS || 180000),
   frontendDist: path.resolve(BACKEND_ROOT, '../frontend/dist'),

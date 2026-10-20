@@ -263,7 +263,7 @@ function buildPageDocs(ctx, pages, exported, links, allPages = pages) {
       highlightTitles(doc);
       applyImages(doc, slots, imageAssignment(ctx, page, slots, slotRoles, exported));
       // Safety net for AI-written texts: tel:/mailto: links and stray emails become the site's ones
-      replaceContacts(doc, { phone: ctx.project.phone, email: ctx.project.email });
+      replaceContacts(doc, { phone: ctx.project.phone, phone2: ctx.project.phone2, email: ctx.project.email });
       doc.title = page.title;
       return { page, doc, missing };
     });

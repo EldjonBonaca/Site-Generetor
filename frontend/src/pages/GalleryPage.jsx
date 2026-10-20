@@ -4,7 +4,7 @@ import { api } from '../api.js';
 import { useT } from '../i18n/index.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { useAutosave } from '../hooks/useAutosave.js';
-import { Button, Card, Dropzone, EmptyState, IconButton, Input, Modal, PageHeader, Select, Spinner, cx } from '../components/ui.jsx';
+import { Button, Card, Dropzone, EmptyState, IconButton, Input, Modal, PageHeader, Select, Spinner, cx, uploadSummary } from '../components/ui.jsx';
 
 /** Category filter value of an image: its category id, or 'none' when uncategorized. */
 const catKey = (img) => (img.category_id == null ? 'none' : String(img.category_id));
@@ -50,8 +50,9 @@ export default function GalleryPage() {
     try {
       const res = await api.upload('/library/images', fd);
       setImages((list) => [...res.created.slice().reverse(), ...list]);
+      // Partial failure: the errors, then what was uploaded (and compressed)
       if (res.errors.length) toast(res.errors.join(' '), 'error');
-      else toast(t('{n} image(s) uploaded', { n: res.created.length }));
+      if (res.created.length) toast(uploadSummary(t, res));
     } catch (e) {
       toast(e.message, 'error');
     } finally {
@@ -235,7 +236,7 @@ export default function GalleryPage() {
               {categoryOptions}
             </Select>
           </div>
-          <Dropzone accept=".jpg,.jpeg,.png,.webp,.svg,image/jpeg,image/png,image/webp,image/svg+xml" multiple onFiles={upload} busy={uploading} title={t('Drop images here or click to browse')} hint={t('JPG, PNG, WEBP or SVG')} />
+          <Dropzone accept=".jpg,.jpeg,.png,.webp,.svg,image/jpeg,image/png,image/webp,image/svg+xml" multiple onFiles={upload} busy={uploading} title={t('Drop images here or click to browse')} hint={t('JPG, PNG, WEBP or SVG · images of 1 MB or more are compressed automatically')} />
 
           <div className="mt-5">
             {!visible.length ? (

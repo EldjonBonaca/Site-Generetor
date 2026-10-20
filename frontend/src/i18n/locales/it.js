@@ -585,4 +585,25 @@ export default {
     "Il Template Kit non è ancora stato analizzato dall'AI: analizzalo in Template Kit, così i testi si adattano meglio a ogni sezione.",
   'No template of the kit is used as Home page: the Home page is composed from the sections of the kit.':
     'Nessun template del kit è usato come Home: la Home viene composta con le sezioni del kit.',
+  // Second phone, Google Business Profile, notes for the AI
+  'Second phone number': 'Secondo numero di telefono',
+  'Optional: shown next to the first one (contacts, footer, articles).': 'Facoltativo: mostrato accanto al primo (contatti, footer, articoli).',
+  'Google Business Profile link': 'Link della scheda Google Business',
+  'Optional: the link of the business on Google Maps (Share → Copy link), or the code of Share → Embed a map. The map of the Contact page shows this listing.':
+    "Facoltativo: il link dell'attività su Google Maps (Condividi → Copia link), oppure il codice di Condividi → Incorpora una mappa. La mappa della pagina Contatti mostra questa scheda.",
+  'This is not a Google Maps link: the map will show the business name and address.': "Non è un link di Google Maps: la mappa mostrerà il nome e l'indirizzo dell'attività.",
+  'Instructions the AI must follow in every text of the site (and in the templates generated for it): tone of voice, strengths, years of experience, things to avoid… ({n}/{max} characters)':
+    "Istruzioni che l'AI deve seguire in tutti i testi del sito (e nei template generati per il sito): tono di voce, punti di forza, anni di esperienza, cose da evitare… ({n}/{max} caratteri)",
+  'E.g. "elegant, dark colors, serif titles". The notes for the AI of "{site}" are followed too.':
+    'Es. "elegante, colori scuri, titoli con grazie". Vengono seguite anche le note per l\'AI di "{site}".',
+  'this site': 'questo sito',
+  'A map (iframe) of your Google Business Profile listing, or of your address, is added below the contact form.':
+    "Sotto il modulo di contatto viene aggiunta una mappa (iframe) della scheda Google Business dell'attività, o del suo indirizzo.",
+  'The second phone number is not valid.': 'Il secondo numero di telefono non è valido.',
+  'The Google Business Profile link is not a Google Maps link: the map of the Contact page shows the business name and address instead.':
+    "Il link della scheda Google Business non è un link di Google Maps: la mappa della pagina Contatti mostra invece il nome e l'indirizzo dell'attività.",
+  // Upload: images of 1 MB or more compressed
+  '{n} image(s) uploaded': '{n} immagine/i caricata/e',
+  'JPG, PNG, WEBP or SVG · images of 1 MB or more are compressed automatically': 'JPG, PNG, WEBP o SVG · le immagini da 1 MB in su vengono compresse automaticamente',
+  'Compressed under 1 MB with the best quality: {list}': 'Compresse sotto 1 MB con la migliore qualità: {list}',
 };

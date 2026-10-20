@@ -2,7 +2,7 @@
  * Texts of the exported documentation (import guide, menu, final checks) in the site language.
  * Italian and English are provided; other languages use English.
  */
-import { contactForm } from './plan.js';
+import { contactForm, projectMap } from './plan.js';
 
 const ORDER = { header: 0, footer: 1, single_post: 2, home: 3, about: 4, services: 5, gallery: 6, contact: 7 };
 const sortedTemplates = (built) => [...built].sort((a, b) => (ORDER[a.page.role] ?? 9) - (ORDER[b.page.role] ?? 9));
@@ -179,7 +179,11 @@ ${pages.map((b) => `| ${b.page.title} | \`templates/${b.page.key}.json\` | \`/${
    \`${form.placeholder}\`
 3. Sostituiscilo con lo shortcode reale (o metti l'ID corretto al posto di \`INSERIRE_ID\`) → **Aggiorna**.
 
-La mappa Google è già impostata con l'indirizzo: ${ctx.project.address.replace(/\n+/g, ', ')}.
+${
+  projectMap(ctx.project).fromListing
+    ? `La mappa Google è già impostata sulla scheda Google Business dell'attività (${projectMap(ctx.project).query}).`
+    : `La mappa Google è già impostata con l'indirizzo: ${ctx.project.address.replace(/\n+/g, ', ')}.`
+}
 
 ## 8. Stile, menu, SEO e controlli finali
 ${siteCss ? `\n- **Aspetto → Personalizza → CSS aggiuntivo**: incolla tutto il contenuto di \`${IT.cssFile}\` → **Pubblica** (stile dell'header, effetti e dettagli del template su tutte le pagine).` : ''}
@@ -191,9 +195,9 @@ ${siteCss ? `\n- **Aspetto → Personalizza → CSS aggiuntivo**: incolla tutto 
 ## Dati di contatto usati
 
 - Nome: ${ctx.project.site_name}
-- Telefono: ${ctx.project.phone}
+- Telefono: ${ctx.project.phone}${ctx.project.phone2 ? `\n- Secondo telefono: ${ctx.project.phone2}` : ''}
 - Email: ${ctx.project.email}
-- Indirizzo: ${ctx.project.address.replace(/\n+/g, ', ')}
+- Indirizzo: ${ctx.project.address.replace(/\n+/g, ', ')}${ctx.project.google_business_url ? `\n- Scheda Google Business: ${ctx.project.google_business_url}` : ''}
 `;
   },
 };
@@ -326,7 +330,7 @@ ${pages.map((b) => `| ${b.page.title} | \`templates/${b.page.key}.json\` | \`/${
 
 ## 7. Contact form (${form.name})
 
-Create the form in ${form.name} (name, email, phone, message, privacy consent, send button; notifications to ${ctx.project.email}), copy its shortcode, then edit **${contact?.page.title || 'Contact'}** with Elementor: replace the placeholder in the **Shortcode widget** \`${form.placeholder}\` with the real shortcode. The Google map already uses your address.
+Create the form in ${form.name} (name, email, phone, message, privacy consent, send button; notifications to ${ctx.project.email}), copy its shortcode, then edit **${contact?.page.title || 'Contact'}** with Elementor: replace the placeholder in the **Shortcode widget** \`${form.placeholder}\` with the real shortcode. ${projectMap(ctx.project).fromListing ? `The Google map already shows your Google Business Profile listing (${projectMap(ctx.project).query}).` : 'The Google map already uses your address.'}
 
 ## 8. Style, menu, SEO and final checks
 ${siteCss ? `\n- **Appearance → Customize → Additional CSS**: paste the whole content of \`${EN.cssFile}\` → **Publish** (header style, effects and details of the template on every page).` : ''}

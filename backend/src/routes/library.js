@@ -8,7 +8,7 @@ import { Router } from 'express';
 import { all, get, run } from '../db/index.js';
 import { config } from '../config.js';
 import { badRequest, notFound, slugify } from '../lib/util.js';
-import { imageUpload, inspectImage, sendImage, storedName } from '../lib/upload.js';
+import { imageUpload, prepareUpload, sendImage, storedName } from '../lib/upload.js';
 
 const router = Router();
 
@@ -81,24 +81,27 @@ router.post('/library/images', imageUpload.array('files'), async (req, res) => {
   const catId = categoryId(req.body?.category_id);
   const created = [];
   const errors = [];
+  const optimized = [];
   for (const file of req.files) {
     try {
-      const info = await inspectImage(file.buffer, file.originalname);
-      const stored = storedName(info.ext);
-      fs.writeFileSync(path.join(config.libraryDir, stored), file.buffer);
-      const fileName = `${slugify(path.parse(file.originalname).name) || 'image'}${info.ext}`;
+      // Images of 1 MB or more are compressed below 1 MB (lib/optimize.js)
+      const up = await prepareUpload(file);
+      const stored = storedName(up.info.ext);
+      fs.writeFileSync(path.join(config.libraryDir, stored), up.buffer);
+      const fileName = `${slugify(path.parse(file.originalname).name) || 'image'}${up.info.ext}`;
       const { lastInsertRowid } = run(
         `INSERT INTO library_images (category_id, file_path, file_name, original_name, mime, width, height, size)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        catId, `library/${stored}`, fileName, file.originalname.slice(0, 255), info.mime, info.width, info.height, file.size
+        catId, `library/${stored}`, fileName, file.originalname.slice(0, 255), up.info.mime, up.info.width, up.info.height, up.buffer.length
       );
       created.push(requireImage(lastInsertRowid));
+      if (up.optimized) optimized.push(up.optimized);
     } catch (err) {
       errors.push(err.message);
     }
   }
   if (!created.length) throw badRequest(errors.join(' '));
-  res.status(201).json({ created, errors });
+  res.status(201).json({ created, errors, optimized });
 });
 
 router.get('/library/images/:lid/file', (req, res) => sendImage(res, requireImage(req.params.lid)));

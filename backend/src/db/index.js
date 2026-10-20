@@ -29,6 +29,10 @@ addColumn('site_templates', 'owner', 'TEXT');
 addColumn('site_templates', 'shared', 'INTEGER NOT NULL DEFAULT 0');
 // Template Kit used by the project instead of a category template (kits/site.js)
 addColumn('projects', 'template_kit_id', 'INTEGER REFERENCES template_kits(id) ON DELETE SET NULL');
+// Second phone number and Google Business Profile link of the site (lib/maps.js)
+addColumn('projects', 'phone2', "TEXT NOT NULL DEFAULT ''");
+addColumn('projects', 'google_business_url', "TEXT NOT NULL DEFAULT ''");
+addColumn('projects', 'map_resolved_url', "TEXT NOT NULL DEFAULT ''");
 // Databases created before templates replaced the Template Kits keep the old `kits` / `kit_mappings`
 // tables and `projects.kit_id` (SQLite cannot drop a foreign-key column): they are no longer used.
 

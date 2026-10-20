@@ -4,7 +4,7 @@ import { api } from '../../api.js';
 import { useT } from '../../i18n/index.jsx';
 import { useToast } from '../../components/Toast.jsx';
 import { useAutosave } from '../../hooks/useAutosave.js';
-import { Badge, Button, Card, Dropzone, EmptyState, Field, IconButton, Input, Select, Toggle, cx } from '../../components/ui.jsx';
+import { Badge, Button, Card, Dropzone, EmptyState, Field, IconButton, Input, Select, Toggle, cx, uploadSummary } from '../../components/ui.jsx';
 import { StepIssues } from '../../components/StepIssues.jsx';
 import { LibraryPicker } from '../../components/LibraryPicker.jsx';
 
@@ -30,8 +30,9 @@ export default function ImagesStep({ project, setProject, reload }) {
     try {
       const res = await api.upload(`/projects/${project.id}/images`, fd);
       setImages((list) => [...list, ...res.created]);
+      // Partial failure: the errors, then what was uploaded (and compressed)
       if (res.errors.length) toast(res.errors.join(' '), 'error');
-      else toast(t('{n} image(s) uploaded', { n: res.created.length }));
+      if (res.created.length) toast(uploadSummary(t, res));
       reload();
     } catch (e) {
       toast(e.message, 'error');
@@ -123,7 +124,7 @@ export default function ImagesStep({ project, setProject, reload }) {
           }
         >
           <div className="grid gap-3 sm:grid-cols-[1fr_220px]">
-            <Dropzone accept=".jpg,.jpeg,.png,.webp,.svg,image/jpeg,image/png,image/webp,image/svg+xml" multiple onFiles={upload} busy={uploading} title={t('Drop images here or click to browse')} hint={t('JPG, PNG, WEBP or SVG')} />
+            <Dropzone accept=".jpg,.jpeg,.png,.webp,.svg,image/jpeg,image/png,image/webp,image/svg+xml" multiple onFiles={upload} busy={uploading} title={t('Drop images here or click to browse')} hint={t('JPG, PNG, WEBP or SVG · images of 1 MB or more are compressed automatically')} />
             <button
               type="button"
               onClick={() => setPicking(true)}

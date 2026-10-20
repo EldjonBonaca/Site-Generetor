@@ -152,7 +152,8 @@ router.delete('/template-categories/:cid', (req, res) => {
  * fonts, look, layouts and optional sections are chosen to differ as much as possible from the
  * saved templates of the category.
  * Body: { providerId, instructions?, language?, direction? (id, else automatic),
- *         exclude? (directions of discarded drafts), avoidColors? (their primary colors) }
+ *         exclude? (directions of discarded drafts), avoidColors? (their primary colors),
+ *         projectId? (generated from a project: the notes for the AI of the site are followed) }
  * -> { spec, tokens, generated_by, direction: { id, name, summary }, profile, analyzed }
  */
 router.post('/template-categories/:cid/templates/generate', async (req, res) => {
@@ -177,6 +178,8 @@ router.post('/template-categories/:cid/templates/generate', async (req, res) => 
       avoidColors: list(req.body?.avoidColors, 20).filter((c) => /^#[0-9a-f]{6}$/i.test(c)),
       profile,
       library,
+      // Generated from a project: the notes for the AI of that site are followed too (not saved with the template)
+      clientNotes: req.body?.projectId ? get('SELECT notes FROM projects WHERE id = ?', Number(req.body.projectId))?.notes || '' : '',
     });
     res.json({
       spec,

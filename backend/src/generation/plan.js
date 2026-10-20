@@ -15,6 +15,7 @@ import { loadDemoImages } from '../kits/demo-images.js';
 import { sanitizeSpec } from '../templates/spec.js';
 import { isValidEmail, isValidPhone, slugify, telHref } from '../lib/util.js';
 import { galleryPool } from '../lib/images.js';
+import { isGoogleMapsLink, siteMap } from '../lib/maps.js';
 
 /** The only pages of the site. Services are published as articles (role 'post'). */
 export const SITE_PAGE_ROLES = ['home', 'about', 'services', 'gallery', 'contact'];
@@ -132,8 +133,11 @@ export function siteInfo(ctx) {
     lang,
     siteName: project.site_name,
     phone: project.phone,
+    phone2: project.phone2 || '',
     email: project.email,
     address: oneLine(project.address),
+    // Map of the Contact page: the Google Business Profile listing, else the address (lib/maps.js)
+    map: projectMap(project),
     copyright: copyrightText(project),
     hasLogo: ctx.images.some((i) => i.role === 'logo'),
     mapEmbed: ctx.settings.mapEmbed !== false,
@@ -143,6 +147,10 @@ export function siteInfo(ctx) {
     services: ctx.services.map((s) => ({ name: s.name || s.slug, url: `/${s.slug}/` })),
   };
 }
+
+/** Map of the site: { src (iframe link), query (text searched on the map), fromListing }. */
+export const projectMap = (project) =>
+  siteMap({ businessUrl: project.google_business_url, resolvedUrl: project.map_resolved_url, siteName: project.site_name, address: project.address });
 
 /** The Elementor documents of the project (built once per context), from its template or its Template Kit. */
 export function builtSite(ctx) {
@@ -204,6 +212,9 @@ export function siteLinks(ctx, pages = buildPages(ctx)) {
   }
   for (const s of ctx.services) links.push({ url: `/${s.slug}/`, label: s.name, role: 'service', serviceId: s.id });
   if (ctx.project.phone) links.push({ url: `tel:${telHref(ctx.project.phone)}`, label: ctx.project.phone, role: 'phone' });
+  if (ctx.project.phone2 && telHref(ctx.project.phone2) !== telHref(ctx.project.phone)) {
+    links.push({ url: `tel:${telHref(ctx.project.phone2)}`, label: ctx.project.phone2, role: 'phone' });
+  }
   if (ctx.project.email) links.push({ url: `mailto:${ctx.project.email}`, label: ctx.project.email, role: 'email' });
   return links;
 }
@@ -293,7 +304,11 @@ export function checkReadiness(ctx, user = null) {
   if (!p.site_name.trim()) add('site', 'error', 'Site name is required.');
   if (!isValidPhone(p.phone)) add('site', 'error', 'A valid phone number is required.');
   if (!isValidEmail(p.email)) add('site', 'error', 'A valid email is required.');
+  if (p.phone2?.trim() && !isValidPhone(p.phone2)) add('site', 'error', 'The second phone number is not valid.');
   if (!p.address.trim()) add('site', 'error', 'Address is required.');
+  if (p.google_business_url?.trim() && !isGoogleMapsLink(p.google_business_url)) {
+    add('site', 'warning', 'The Google Business Profile link is not a Google Maps link: the map of the Contact page shows the business name and address instead.');
+  }
 
   if (!ctx.services.length) add('services', 'warning', 'No services added: no service articles will be generated.');
   ctx.services.forEach((s, i) => {

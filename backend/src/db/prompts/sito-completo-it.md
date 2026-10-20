@@ -12,9 +12,13 @@ Sei uno sviluppatore WordPress esperto di **Elementor**. Il tuo compito è crear
 | Nome sito | `{{NOME_SITO}}` |
 | Settore / tipo di cliente | `{{SETTORE_CLIENTE}}` |
 | Numero di telefono | `{{TELEFONO}}` |
+| Secondo numero di telefono | `{{TELEFONO_2}}` |
 | Email | `{{EMAIL}}` |
 | Indirizzo | `{{INDIRIZZO}}` |
+| Scheda Google Business | `{{LINK_GOOGLE_BUSINESS}}` |
 | Copyright (footer) | `{{TESTO_COPYRIGHT}}` |
+
+Se il cliente ha scritto delle **istruzioni per l'AI**, sono riportate più sotto: sono **obbligatorie** e vanno seguite in tutti i testi del sito.
 
 ### Servizi
 Elenco dei servizi offerti (nome + eventuale breve nota):
@@ -129,12 +133,12 @@ Le sezioni **Chi siamo, Perché sceglierci, I nostri servizi, Galleria fotografi
 
 ### 5.5 Contatti
 1. Subheader (titolo "Contatti" + `{{IMG_SUBHEADER}}`).
-2. **Dati di contatto** – telefono (link `tel:`), email (link `mailto:`), indirizzo.
+2. **Dati di contatto** – telefono e, se presente, secondo telefono (link `tel:`), email (link `mailto:`), indirizzo.
 3. **Modulo di contatto** – sezione con il form realizzato con **{{PLUGIN_MODULO}}** con campi: nome, email, telefono, messaggio, consenso privacy e pulsante di invio, con stile coerente al template.
-4. **Mappa** – iframe di Google Maps con l'indirizzo `{{INDIRIZZO}}`:
+4. **Mappa** – iframe di Google Maps con la scheda Google Business dell'attività (se indicata), altrimenti con l'indirizzo `{{INDIRIZZO}}`:
 
 ```html
-<iframe src="https://www.google.com/maps?q={{INDIRIZZO_URL_ENCODED}}&output=embed" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+<iframe src="{{URL_MAPPA}}" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
 ```
 
 ### 5.6 Recensioni (generate da te)

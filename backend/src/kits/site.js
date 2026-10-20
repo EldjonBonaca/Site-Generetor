@@ -28,6 +28,7 @@ import { analyzeDocument, getRoot, getAtPath, isGalleryArray, looksLikePhone, EM
 import { buildSite } from '../templates/builder.js';
 import { sanitizeSpec } from '../templates/spec.js';
 import { stripHtml } from '../lib/util.js';
+import { mapIframe, siteMap } from '../lib/maps.js';
 import { loadKitTemplate } from './read.js';
 import { SECTION_TYPES } from './analysis.js';
 
@@ -165,8 +166,8 @@ function fillCard(card, { name, url }) {
 // Demo content: videos, forms, maps, logos, CSS images
 // ---------------------------------------------------------------------------
 
-const mapIframe = (address) =>
-  `<iframe src="https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+// The map of the site: its Google Business Profile listing, else its address (lib/maps.js)
+const mapOf = (site) => site.map || siteMap({ address: site.address });
 const MAP_HTML = /google\.[a-z.]+\/maps|maps\.google|openstreetmap/i;
 const VIDEO_HTML = /<iframe[^>]+(youtube|youtu\.be|vimeo|wistia|dailymotion)/i;
 // Forms of the form plugins (not search / login forms, not contact info boxes). The Elementor Pro
@@ -241,8 +242,8 @@ function prepareForms(doc, info, site) {
         el.widgetType = 'shortcode';
         el.settings = { shortcode: site.contactShortcode, ...Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith('_'))) };
         forms++;
-      } else if (type === 'google_maps') s.address = site.address;
-      else if (type === 'html' && MAP_HTML.test(s.html || '')) s.html = mapIframe(site.address);
+      } else if (type === 'google_maps') s.address = mapOf(site).query;
+      else if (type === 'html' && MAP_HTML.test(s.html || '')) s.html = mapIframe(mapOf(site).src);
     });
   }
   return { forms, swaps };
@@ -495,7 +496,7 @@ export function buildKitSite(kit, site, custom = {}) {
     }
     if (role === 'contact' && !hasContactForm(content)) {
       const added = [widget('kit-cf7', 'shortcode', { shortcode: site.contactShortcode })];
-      if (site.address) added.push(widget('kit-map', 'html', { html: mapIframe(site.address) }));
+      if (mapOf(site).src) added.push(widget('kit-map', 'html', { html: mapIframe(mapOf(site).src) }));
       content.push(wrapper(content, added, 'kit-contact'));
       sections.push({ type: 'contact', description: '' });
     }
@@ -607,7 +608,14 @@ export function prepareDocument(doc, role, sectionInfo, site, demo = null) {
     });
   }
 
-  // 5. Fields: phone / email / copyright only -> the site ones (fixed); the rest is for the AI
+  // 5. Fields: phone / email / copyright only -> the site ones (fixed); the rest is for the AI.
+  // A second demo phone number of the page gets the second phone of the site (when it has one).
+  const demoPhones = [];
+  const sitePhone = (demo) => {
+    const digits = demo.replace(/\D/g, '');
+    if (!demoPhones.includes(digits)) demoPhones.push(digits);
+    return site.phone2 && demoPhones.indexOf(digits) === 1 ? site.phone2 : site.phone;
+  };
   const marks = new Map();
   const analysis = analyzeDocument(doc, KIT_ANALYZE_OPTIONS);
   for (const f of analysis.fields) {
@@ -626,7 +634,7 @@ export function prepareDocument(doc, role, sectionInfo, site, demo = null) {
     if (fixedRefs.has(f.ref)) marks.set(f.ref, { fixed: true });
     else if (COPYRIGHT_RE.test(plain) && plain.length < 200) set(site.copyright);
     else if (site.email && plain.match(EMAIL_IN_TEXT)?.[0] === plain) set(site.email);
-    else if (site.phone && /^[+\d\s().-]+$/.test(plain) && looksLikePhone(plain)) set(site.phone);
+    else if (site.phone && /^[+\d\s().-]+$/.test(plain) && looksLikePhone(plain)) set(sitePhone(plain));
   }
 
   // 6. Hints for the AI: the section each text belongs to

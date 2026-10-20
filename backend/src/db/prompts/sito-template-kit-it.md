@@ -13,10 +13,12 @@ Sei un copywriter e web designer esperto di **Elementor**. Il sito di `{{NOME_SI
 | Settore / tipo di attività | `{{SETTORE_CLIENTE}}` |
 | Città / zona servita | `{{CITTA}}` |
 | Numero di telefono | `{{TELEFONO}}` |
+| Secondo numero di telefono | `{{TELEFONO_2}}` |
 | Email | `{{EMAIL}}` |
 | Indirizzo | `{{INDIRIZZO}}` |
 | Copyright (footer) | `{{TESTO_COPYRIGHT}}` |
-| Note del cliente | {{NOTE}} |
+
+Se il cliente ha scritto delle **istruzioni per l'AI**, sono riportate più sotto: sono **obbligatorie** e vanno seguite in tutti i testi del sito.
 
 ### Servizi
 Elenco dei servizi offerti (nome + eventuale breve nota):

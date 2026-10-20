@@ -29,8 +29,11 @@ CREATE TABLE IF NOT EXISTS projects (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   site_name      TEXT NOT NULL DEFAULT '',
   phone          TEXT NOT NULL DEFAULT '',
+  phone2         TEXT NOT NULL DEFAULT '',   -- second phone number (optional)
   email          TEXT NOT NULL DEFAULT '',
   address        TEXT NOT NULL DEFAULT '',
+  google_business_url TEXT NOT NULL DEFAULT '', -- Google Business Profile link (optional): map of the Contact page
+  map_resolved_url    TEXT NOT NULL DEFAULT '', -- the same link with a short link (maps.app.goo.gl…) expanded
   city           TEXT NOT NULL DEFAULT '',
   industry       TEXT NOT NULL DEFAULT '',
   language       TEXT NOT NULL DEFAULT 'en',

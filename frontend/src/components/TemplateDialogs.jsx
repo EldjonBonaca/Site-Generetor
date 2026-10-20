@@ -270,8 +270,8 @@ const LANGUAGE_OPTIONS = { it: 'Italiano', en: 'English', es: 'Español', fr: 'F
 
 export const variantLabel = (t, section, value) => t(VARIANT_LABELS[`${section}.${value}`] || value);
 
-/** Generate a template for `category` with the AI, then save it. */
-export function TemplateGenerator({ open, onClose, category, onSaved, onAnalyzed }) {
+/** Generate a template for `category` with the AI, then save it. `project`: the site it is generated for (optional). */
+export function TemplateGenerator({ open, onClose, category, onSaved, onAnalyzed, project = null }) {
   const { t } = useT();
   const toast = useToast();
   const [providers, setProviders] = useState(null);
@@ -313,6 +313,8 @@ export function TemplateGenerator({ open, onClose, category, onSaved, onAnalyzed
         direction,
         exclude: direction ? [] : previous.map((d) => d.direction.id),
         avoidColors: previous.map((d) => d.spec.style.colors.primary),
+        // Generated from a project: the AI also follows the notes for the AI of the site
+        ...(project ? { projectId: project.id } : {}),
       });
       setDiscarded(previous);
       setDraft(res);
@@ -381,7 +383,14 @@ export function TemplateGenerator({ open, onClose, category, onSaved, onAnalyzed
                 </Select>
               )}
             </Field>
-            <Field label={t('Style instructions (optional)')} hint={t('E.g. "elegant, dark colors, serif titles" or "bright and friendly".')}>
+            <Field
+              label={t('Style instructions (optional)')}
+              hint={
+                project?.notes?.trim()
+                  ? t('E.g. "elegant, dark colors, serif titles". The notes for the AI of "{site}" are followed too.', { site: project.site_name || t('this site') })
+                  : t('E.g. "elegant, dark colors, serif titles" or "bright and friendly".')
+              }
+            >
               {(id) => <Textarea id={id} rows={3} value={instructions} onChange={(e) => setInstructions(e.target.value)} maxLength={2000} disabled={busy} />}
             </Field>
             <Field label={t('Design direction')} hint={t('Automatic: a style that no other template of this category uses yet, so every template looks different.')}>

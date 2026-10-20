@@ -6,11 +6,12 @@ import { all, get, run, tx, parseJson } from '../db/index.js';
 import { config } from '../config.js';
 import { badRequest, notFound, pick, slugify, LANGUAGES } from '../lib/util.js';
 import { loadContext, checkReadiness, defaultSettings } from '../generation/plan.js';
+import { resolveMapsLink } from '../lib/maps.js';
 
 const router = Router();
 
-const PROJECT_FIELDS = ['site_name', 'phone', 'email', 'address', 'city', 'industry', 'language', 'notes', 'image_base_url', 'copyright'];
-const MAX_LEN = { site_name: 200, phone: 40, email: 200, address: 1000, city: 200, industry: 200, notes: 5000, image_base_url: 500, copyright: 300 };
+const PROJECT_FIELDS = ['site_name', 'phone', 'phone2', 'email', 'address', 'google_business_url', 'city', 'industry', 'language', 'notes', 'image_base_url', 'copyright'];
+const MAX_LEN = { site_name: 200, phone: 40, phone2: 40, email: 200, address: 1000, google_business_url: 2000, city: 200, industry: 200, notes: 5000, image_base_url: 500, copyright: 300 };
 
 export function serializeProject(row) {
   const { settings_json, ...rest } = row;
@@ -63,8 +64,8 @@ router.get('/projects/:id', (req, res) => {
   });
 });
 
-router.patch('/projects/:id', (req, res) => {
-  const row = requireProject(req.params.id);
+router.patch('/projects/:id', async (req, res) => {
+  let row = requireProject(req.params.id);
   const data = pick(req.body, PROJECT_FIELDS);
   for (const [k, v] of Object.entries(data)) {
     if (typeof v !== 'string') throw badRequest(`"${k}" must be a string`);
@@ -72,6 +73,18 @@ router.patch('/projects/:id', (req, res) => {
   }
   if (data.language && !LANGUAGES[data.language]) throw badRequest('Unsupported language');
   if (data.image_base_url && !/^https?:\/\//i.test(data.image_base_url.trim())) throw badRequest('Image base URL must start with http:// or https://');
+
+  // Google Business Profile: a short link is expanded now, so the map knows the place (lib/maps.js)
+  if (data.google_business_url !== undefined && data.google_business_url.trim() !== row.google_business_url) {
+    const before = row.google_business_url;
+    data.map_resolved_url = await resolveMapsLink(data.google_business_url);
+    row = requireProject(req.params.id); // read again: other changes may have been saved meanwhile
+    // A newer link was saved while this one was being expanded: keep the newer one
+    if (row.google_business_url !== before) {
+      delete data.google_business_url;
+      delete data.map_resolved_url;
+    }
+  }
 
   let settings = parseJson(row.settings_json, {});
   if (req.body?.settings && typeof req.body.settings === 'object') {
@@ -100,8 +113,8 @@ router.post('/projects/:id/duplicate', (req, res) => {
   const src = requireProject(req.params.id);
   const newId = tx(() => {
     const { lastInsertRowid: id } = run(
-      `INSERT INTO projects (${PROJECT_FIELDS.join(', ')}, template_id, template_kit_id, settings_json)
-       SELECT ${PROJECT_FIELDS.map((f) => (f === 'site_name' ? "site_name || ' (copy)'" : f)).join(', ')}, template_id, template_kit_id, settings_json FROM projects WHERE id = ?`,
+      `INSERT INTO projects (${PROJECT_FIELDS.join(', ')}, map_resolved_url, template_id, template_kit_id, settings_json)
+       SELECT ${PROJECT_FIELDS.map((f) => (f === 'site_name' ? "site_name || ' (copy)'" : f)).join(', ')}, map_resolved_url, template_id, template_kit_id, settings_json FROM projects WHERE id = ?`,
       src.id
     );
     const serviceMap = new Map();

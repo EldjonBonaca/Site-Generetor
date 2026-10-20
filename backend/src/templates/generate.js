@@ -159,7 +159,7 @@ const LABELS = { it: '(nessuna)', en: '(none)' };
  * Final prompt for a category template.
  * @param {object} p  { category, instructions, language, direction, plan, existing: spec[], avoidColors: string[] }
  */
-export function buildTemplatePrompt({ category, instructions = '', language = 'it', direction = null, plan = null, existing = [], avoidColors = [], profile = null, library = [] }) {
+export function buildTemplatePrompt({ category, instructions = '', language = 'it', direction = null, plan = null, existing = [], avoidColors = [], profile = null, library = [], clientNotes = '' }) {
   const none = LABELS[language] || LABELS.en;
   const languageLabel = languageName(language);
   const vars = {
@@ -170,7 +170,22 @@ export function buildTemplatePrompt({ category, instructions = '', language = 'i
   };
   const body = TEMPLATE_PROMPT.content.replace(/\{\{\s*([A-Z_]+)\s*\}\}/g, (m, name) => (name in vars ? vars[name] : m));
   const design = direction && plan ? directionInstructions(category, direction, plan, existing, avoidColors, profile, library) : '';
-  return { prompt: body + design + technicalInstructions(languageLabel, plan?.sections, plan?.signatures), system: TEMPLATE_SYSTEM_PROMPT };
+  return { prompt: body + design + clientDesignNotes(clientNotes) + technicalInstructions(languageLabel, plan?.sections, plan?.signatures), system: TEMPLATE_SYSTEM_PROMPT };
+}
+
+/**
+ * Template generated from a project: the "Additional notes for the AI" of that site. Only what
+ * concerns the design and the tone applies (the template is reused by other sites of the category).
+ */
+function clientDesignNotes(notes) {
+  const text = String(notes || '').trim();
+  if (!text) return '';
+  return `
+
+=== INSTRUCTIONS OF THE CLIENT THIS TEMPLATE IS DESIGNED FOR (mandatory) ===
+${text}
+=== END OF THE INSTRUCTIONS OF THE CLIENT ===
+Follow every instruction above that concerns the design and the texts of the template: colors, mood, style, tone of voice, strengths and themes to highlight or avoid. They take priority over the palette mood of the direction, but not over the decisions of the generator or the output format. Do not put business names, phone numbers, emails or addresses in the sample texts.`;
 }
 
 /**
@@ -185,13 +200,14 @@ export function buildTemplatePrompt({ category, instructions = '', language = 'i
  *   - avoidColors     primary colors to avoid (same reason)
  *   - profile         industry analysis of the category (industry.js), if any
  *   - library         specs of the templates of the other categories (variety across the library)
- *   - rng             random source (tests)
+ *   - clientNotes     notes for the AI of the site the template is generated for (not saved)
+ *   - rng            random source (tests)
  * @returns {Promise<{ spec, tokens, direction }>}
  */
-export async function generateTemplateSpec(provider, { category, instructions = '', language = 'it', existing = [], direction: requested = '', exclude = [], avoidColors = [], profile = null, library = [], rng = Math.random }) {
+export async function generateTemplateSpec(provider, { category, instructions = '', language = 'it', existing = [], direction: requested = '', exclude = [], avoidColors = [], profile = null, library = [], clientNotes = '', rng = Math.random }) {
   const direction = pickDirection(existing, { requested, exclude, suitable: profile?.directions, library, rng });
   const plan = designPlan(direction, existing, rng, profile, library);
-  const { prompt, system } = buildTemplatePrompt({ category, instructions, language, direction, plan, existing, avoidColors, profile, library });
+  const { prompt, system } = buildTemplatePrompt({ category, instructions, language, direction, plan, existing, avoidColors, profile, library, clientNotes });
   const taken = [...existing.map((s) => s.style.colors.primary), ...avoidColors];
   let tokens = 0;
   let note = '';

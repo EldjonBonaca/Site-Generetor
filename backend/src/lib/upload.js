@@ -6,6 +6,7 @@ import multer from 'multer';
 import sharp from 'sharp';
 import { config } from '../config.js';
 import { badRequest, notFound } from './util.js';
+import { optimizeImage } from './optimize.js';
 
 const ALLOWED_EXT = /\.(jpe?g|png|webp|svg)$/i;
 
@@ -35,6 +36,27 @@ export async function inspectImage(buffer, originalName) {
   const map = { jpeg: ['image/jpeg', '.jpg'], png: ['image/png', '.png'], webp: ['image/webp', '.webp'] };
   if (!map[meta.format]) throw badRequest(`${originalName}: format "${meta.format}" not allowed.`);
   return { mime: map[meta.format][0], ext: map[meta.format][1], width: meta.width, height: meta.height };
+}
+
+/**
+ * An uploaded file ready to be stored: validated, and compressed below 1 MB when it is 1 MB or more.
+ * @returns {Promise<{ buffer: Buffer, info: { mime, ext, width, height }, optimized: null | { name, from, to } }>}
+ */
+export async function prepareUpload(file) {
+  const info = await inspectImage(file.buffer, file.originalname);
+  let out;
+  try {
+    out = await optimizeImage(file.buffer, info);
+  } catch (err) {
+    throw badRequest(`${file.originalname}: the image could not be compressed (${err.message}).`);
+  }
+  if (!out) return { buffer: file.buffer, info, optimized: null };
+  if (out.buffer.length >= config.optimizeImageBytes) throw badRequest(`${file.originalname}: the image could not be compressed under ${+(config.optimizeImageBytes / 1e6).toFixed(2)} MB.`);
+  return {
+    buffer: out.buffer,
+    info: { mime: out.mime, ext: out.ext, width: out.width, height: out.height },
+    optimized: { name: file.originalname, from: file.buffer.length, to: out.buffer.length },
+  };
 }
 
 /** Random stored file name, e.g. "1760000000000-a1b2c3d4.jpg". */

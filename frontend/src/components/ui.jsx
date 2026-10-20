@@ -248,3 +248,14 @@ export function SaveStatus({ status, t }) {
   if (status === 'error') return <span className="inline-flex items-center gap-1.5 text-xs text-red-600"><XCircle className="size-3" />{t('Not saved')}</span>;
   return null;
 }
+
+const mb = (bytes) => `${(bytes / 1e6).toFixed(bytes < 1e7 ? 2 : 1)} MB`;
+
+/** Toast text after an upload: how many images, and the ones compressed below 1 MB (backend/src/lib/optimize.js). */
+export function uploadSummary(t, res) {
+  const done = t('{n} image(s) uploaded', { n: res.created.length });
+  const list = res.optimized || [];
+  if (!list.length) return done;
+  const details = list.map((o) => `${o.name} (${mb(o.from)} → ${mb(o.to)})`).join(', ');
+  return `${done}. ${t('Compressed under 1 MB with the best quality: {list}', { list: details })}`;
+}

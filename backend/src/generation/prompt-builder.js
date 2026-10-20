@@ -4,7 +4,7 @@
  */
 import { LANGUAGES, stripHtml } from '../lib/util.js';
 import { exportNames, galleryPool } from '../lib/images.js';
-import { builtSite, copyrightText } from './plan.js';
+import { builtSite, copyrightText, projectMap } from './plan.js';
 import { DEFAULT_SECTIONS, describeSections, describeSpec } from '../templates/spec.js';
 import { describeKit } from '../kits/analysis.js';
 import { describePageSections } from '../kits/site.js';
@@ -13,9 +13,12 @@ import { describePageSections } from '../kits/site.js';
 export const PROMPT_VARIABLES = [
   { name: 'site_name', alias: 'NOME_SITO', description: 'Site name' },
   { name: 'phone', alias: 'TELEFONO', description: 'Phone number' },
+  { name: 'phone2', alias: 'TELEFONO_2', description: 'Second phone number (optional)' },
   { name: 'email', alias: 'EMAIL', description: 'Email' },
   { name: 'address', alias: 'INDIRIZZO', description: 'Address' },
   { name: 'address_url_encoded', alias: 'INDIRIZZO_URL_ENCODED', description: 'Address encoded for URLs (Google Maps)' },
+  { name: 'google_business_url', alias: 'LINK_GOOGLE_BUSINESS', description: 'Google Business Profile link (optional)' },
+  { name: 'map_url', alias: 'URL_MAPPA', description: 'Google Maps embed link of the Contact page (business listing, else the address)' },
   { name: 'copyright', alias: 'TESTO_COPYRIGHT', description: 'Copyright text (footer)' },
   { name: 'city', alias: 'CITTA', description: 'City / service area' },
   { name: 'industry', alias: 'SETTORE', description: 'Industry' },
@@ -118,9 +121,12 @@ export function buildVariables({ project, services, service, fields, pageTitle, 
   const vars = {
     site_name: project.site_name,
     phone: project.phone,
+    phone2: project.phone2 || none,
     email: project.email,
     address,
     address_url_encoded: encodeURIComponent(address),
+    google_business_url: project.google_business_url || none,
+    map_url: projectMap(project).src || none,
     copyright: copyrightText(project),
     city: project.city || '(not specified)',
     industry: project.industry || '(not specified)',
@@ -184,8 +190,24 @@ const ROLE_DESCRIPTION = {
   single_post: 'template of the single article (shared by all service articles)',
 };
 
+/**
+ * The "Additional notes for the AI" of the site: instructions of the site owner that every text must
+ * follow. Added by the generator to every prompt (also when the prompt has no {{NOTE}} variable),
+ * before the output format, so they always reach the AI with the priority of a requirement.
+ */
+export function clientInstructions(notes) {
+  const text = String(notes || '').trim();
+  if (!text) return '';
+  return `
+
+=== INSTRUCTIONS OF THE CLIENT (written by the site owner — mandatory) ===
+${text}
+=== END OF THE INSTRUCTIONS OF THE CLIENT ===
+Follow every instruction of the client above in the texts you write: tone of voice, facts to mention (years of experience, strengths, areas served, certifications…), words, claims or topics to avoid, and any other request. They take priority over the tone of the template, the demo and sample texts and the general guidelines above; only the output format rules below come first. Never contradict the facts given by the client and never invent different ones.`;
+}
+
 /** Instructions appended after the user prompt so the output is machine-readable. */
-export function technicalInstructions({ fields, languageLabel, pageTitle, role, links = [], includeStructure, extra = '', kit = false }) {
+export function technicalInstructions({ fields, languageLabel, pageTitle, role, links = [], includeStructure, extra = '', kit = false, notes = '' }) {
   const shape = `{\n${fields.map((f) => `  ${JSON.stringify(f.id)}: "..."`).join(',\n')}\n}`;
   const hasLinks = fields.some((f) => f.format === 'link');
   const kitRules = kit
@@ -193,6 +215,7 @@ export function technicalInstructions({ fields, languageLabel, pageTitle, role, 
     : '';
   const numbers = fields.some((f) => f.format === 'number') ? '\n- Fields marked [number] contain only digits (e.g. "250"): no words, units or symbols.' : '';
   const pages = links.filter((l) => !['phone', 'email'].includes(l.role));
+  const client = String(notes || '').trim() ? '\n- Respect the INSTRUCTIONS OF THE CLIENT given above in every field (where they concern this part of the site).' : '';
   return `
 
 === OUTPUT FORMAT (added automatically by the generator — it overrides any output format requested above) ===
@@ -203,7 +226,7 @@ ${pages.length ? `Site structure: ${pages.map((l) => `${l.label} (${l.url})`).jo
 - Values: strings written in ${languageLabel}.
 - Fields marked [html] may use simple HTML only (<p>, <h2>, <h3>, <strong>, <em>, <ul>, <li>, <br>, <a>). Fields marked [text] are plain text without HTML.
 - Stay within the indicated maximum length of each field so the design does not break; respect the minimum length when indicated.
-- Use the real business data (name, phone, email, address) wherever contact details are needed. Never output placeholders like "Lorem ipsum" or "[your phone]".${kitRules}${numbers}${
+- Use the real business data (name, phone numbers, email, address) wherever contact details are needed. Never output placeholders like "Lorem ipsum" or "[your phone]".${client}${kitRules}${numbers}${
     hasLinks
       ? `\n- Fields marked [link]: the value must be exactly one of these URLs (choose the one matching the button/link text): ${links.map((l) => l.url).join(' , ')}`
       : ''
@@ -218,6 +241,8 @@ ${shape}`;
 export const SYSTEM_PROMPT =
   'You are a professional website copywriter working inside an automated site generator. ' +
   'You always answer with a single valid JSON object exactly as requested, without any extra text.';
+/** Added to the system prompt when the site has notes for the AI. */
+export const CLIENT_SYSTEM = 'The request contains instructions of the client (the site owner): they are requirements, follow them in every text you write.';
 
 /**
  * Build the final prompt for (a chunk of) a page.
@@ -227,9 +252,12 @@ export function buildPagePrompt({ promptContent, project, services, service, fie
   const vars = buildVariables({ project, services, service, fields, pageTitle, role, ctx });
   const userPart = renderTemplate(promptContent, vars, services.length);
   const usesStructure = /\{\{\s*(template_structure|STRUTTURA_TEMPLATE)\s*\}\}/i.test(promptContent || '');
+  const notes = project.notes || '';
   const prompt =
-    userPart + technicalInstructions({ fields, languageLabel: vars.language, pageTitle, role, links, includeStructure: !usesStructure, extra, kit: Boolean(ctx?.kit) });
-  return { prompt, system: SYSTEM_PROMPT, vars };
+    userPart +
+    clientInstructions(notes) +
+    technicalInstructions({ fields, languageLabel: vars.language, pageTitle, role, links, includeStructure: !usesStructure, extra, kit: Boolean(ctx?.kit), notes });
+  return { prompt, system: notes.trim() ? `${SYSTEM_PROMPT} ${CLIENT_SYSTEM}` : SYSTEM_PROMPT, vars };
 }
 
 /** Rough token estimate (≈ 4 characters per token for Latin languages). */

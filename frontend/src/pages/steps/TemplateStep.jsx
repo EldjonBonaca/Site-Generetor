@@ -258,6 +258,7 @@ export default function TemplateStep({ project, reload }) {
         open={generating}
         onClose={() => setGenerating(false)}
         category={category}
+        project={project}
         onSaved={onGenerated}
         onAnalyzed={() => api.get('/template-categories').then(setCategories).catch(() => {})}
       />
@@ -466,7 +467,7 @@ function SiteStructureCard({ project, reload }) {
       {/* A Template Kit keeps its own contact page: its map (if any) shows the site address */}
       {!project.template_kit_id && (
         <div className="mt-5">
-          <Toggle checked={s.mapEmbed} onChange={(v) => save({ mapEmbed: v })} label={t('Google Maps on the contact page')} description={t('A map (iframe) with your address is added below the contact form.')} />
+          <Toggle checked={s.mapEmbed} onChange={(v) => save({ mapEmbed: v })} label={t('Google Maps on the contact page')} description={t('A map (iframe) of your Google Business Profile listing, or of your address, is added below the contact form.')} />
         </div>
       )}
     </Card>

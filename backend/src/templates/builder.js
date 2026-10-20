@@ -29,6 +29,7 @@
  */
 import crypto from 'node:crypto';
 import { telHref } from '../lib/util.js';
+import { mapIframe, siteMap } from '../lib/maps.js';
 import { DEFAULT_SECTIONS, featureCount, hueSat, mix, rgba, siteColors, tint } from './spec.js';
 
 /** Image of a template before a project fills it (never left in an exported site). */
@@ -1588,9 +1589,12 @@ function gallery(b, site) {
   return [subheader(b, site, 'gallery'), b.section([el], { bg: b.ink.bg })];
 }
 
+// The second phone number (optional) follows the first one
 function contactItems(site) {
+  const phone2 = site.phone2 && telHref(site.phone2) !== telHref(site.phone) ? site.phone2 : '';
   return [
     { text: site.phone, url: `tel:${telHref(site.phone)}`, icon: 'fas fa-phone-alt', label: 'phone' },
+    { text: phone2, url: `tel:${telHref(phone2)}`, icon: 'fas fa-phone-alt', label: 'phone', key: 'phone2' },
     { text: site.email, url: `mailto:${site.email}`, icon: 'fas fa-envelope', label: 'email' },
     { text: site.address, icon: 'fas fa-map-marker-alt', label: 'address' },
   ].filter((i) => i.text);
@@ -1667,18 +1671,9 @@ function contact(b, site) {
       })
     );
   }
-  if (site.mapEmbed && site.address) {
-    out.push(
-      b.section(
-        [
-          b.html(
-            `<iframe src="https://www.google.com/maps?q=${encodeURIComponent(site.address)}&output=embed" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`
-          ),
-        ],
-        { full: true, gap: 0 }
-      )
-    );
-  }
+  // The map: the listing of the Google Business Profile of the site, else its address (lib/maps.js)
+  const map = site.map || siteMap({ address: site.address });
+  if (site.mapEmbed && map.src) out.push(b.section([b.html(mapIframe(map.src))], { full: true, gap: 0 }));
   return out;
 }
 
@@ -2090,7 +2085,7 @@ function header(b, site) {
   const frame = b.ink.dark || bold ? { borderBottom: b.ink.border } : { shadow: true };
   if (layout.header === 'topbar') {
     out.push(
-      b.section([b.iconList(contactItems(site).slice(0, 2), { inline: true, color: '#FFFFFF', iconColor: b.c.secondary, hover: b.c.secondary, size: 14 })], {
+      b.section([b.iconList(contactItems(site).filter((i) => i.key !== 'phone2').slice(0, 2), { inline: true, color: '#FFFFFF', iconColor: b.c.secondary, hover: b.c.secondary, size: 14 })], {
         row: true,
         bg: b.ink.dark ? '#000000' : b.c.dark,
         padY: 9,
@@ -2228,7 +2223,7 @@ export function globalStyles(spec) {
 /**
  * Build every document of a site.
  * @param {object} spec  sanitized template spec
- * @param {object} site  { lang, siteName, phone, email, address, copyright, hasLogo, mapEmbed, contactShortcode,
+ * @param {object} site  { lang, siteName, phone, phone2, email, address, map, copyright, hasLogo, mapEmbed, contactShortcode,
  *                         pages: { home|about|services|gallery|contact: { title, url } }, services: [{ name, url }] }
  * @returns {{ docs: Record<role, { doc, marks: Map }>, globalStyles }}
  */

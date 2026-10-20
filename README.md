@@ -31,7 +31,7 @@ On first start the backend creates `backend/.env` with a random `ENCRYPTION_KEY`
 1. **AI Providers → Add provider → "Demo (offline mock)"**. It designs a sample template and fills fields with placeholder text, without network calls.
 2. **Templates → New category** (e.g. `Plumbers`) **→ Generate template → Generate → Save template**.
 3. **Projects → New project**: fill in the site data and add 2–3 services.
-4. **Images**: upload a few pictures and assign *Home hero*, *Subheader*, *Logo* and one image per service.
+4. **Images**: upload a few pictures and assign *Home hero*, *Subheader*, *Logo* and one image per service. Images of 1 MB or more are compressed automatically to less than 1 MB (same format and full size whenever a high quality fits; very large photos are reduced, never below 2048 px while the quality stays high).
 5. **Template**: pick the category and click **Use** on the saved template (or generate one right there).
 6. **AI**: pick the demo provider.
 7. **Generate & Preview → Generate**, then edit any text.
@@ -66,6 +66,7 @@ Set the users in `backend/.env`, on one line: `APP_USERS=mz:password1,eb:passwor
 | `ENCRYPTION_KEY` | auto‑generated | 64 hex chars (32 bytes) used for AES‑256‑GCM encryption of API keys. **If you lose or change it, saved API keys can't be decrypted** (just enter them again). |
 | `STORAGE_DIR` | `../storage` | SQLite DB, uploaded images and exports |
 | `MAX_IMAGE_MB` | `15` | Max size of each uploaded image |
+| `IMAGE_OPTIMIZE_KB` | `1000` | Uploaded images of this size or larger are compressed below it, with the best quality that fits ([`lib/optimize.js`](backend/src/lib/optimize.js)) |
 | `MAX_KIT_MB` | `150` | Max size of an uploaded Template Kit zip |
 | `AI_TIMEOUT_MS` | `180000` | Timeout of a single AI request |
 | `DEFAULT_LANGUAGE` | `it` | Site language of new projects (can be changed per project) |

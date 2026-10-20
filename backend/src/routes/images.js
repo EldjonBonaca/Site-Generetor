@@ -9,10 +9,10 @@ import { requireOwnProvider } from '../lib/owner.js';
 import { loadContext } from '../generation/plan.js';
 import { createProvider } from '../ai/registry.js';
 import { extractJson, validateValues } from '../ai/json.js';
-import { languageName, SYSTEM_PROMPT, technicalInstructions } from '../generation/prompt-builder.js';
+import { clientInstructions, CLIENT_SYSTEM, languageName, SYSTEM_PROMPT, technicalInstructions } from '../generation/prompt-builder.js';
 import { touch } from './projects.js';
 import { AdmZip } from '../lib/zip.js';
-import { imageUpload, inspectImage, sendImage, storedName } from '../lib/upload.js';
+import { imageUpload, prepareUpload, sendImage, storedName } from '../lib/upload.js';
 
 const router = Router();
 const ROLES = ['', 'hero_home', 'subheader', 'service', 'logo', 'gallery'];
@@ -36,25 +36,28 @@ router.post('/projects/:id/images', imageUpload.array('files'), async (req, res)
   fs.mkdirSync(dir, { recursive: true });
   const created = [];
   const errors = [];
+  const optimized = [];
   for (const file of req.files) {
     try {
-      const info = await inspectImage(file.buffer, file.originalname);
-      const stored = storedName(info.ext);
-      fs.writeFileSync(path.join(dir, stored), file.buffer);
-      const fileName = `${slugify(path.parse(file.originalname).name) || 'image'}${info.ext}`;
+      // Images of 1 MB or more are compressed below 1 MB (lib/optimize.js)
+      const up = await prepareUpload(file);
+      const stored = storedName(up.info.ext);
+      fs.writeFileSync(path.join(dir, stored), up.buffer);
+      const fileName = `${slugify(path.parse(file.originalname).name) || 'image'}${up.info.ext}`;
       const { lastInsertRowid } = run(
         `INSERT INTO images (project_id, file_path, file_name, original_name, mime, width, height, size)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        project.id, `images/${project.id}/${stored}`, fileName, file.originalname.slice(0, 255), info.mime, info.width, info.height, file.size
+        project.id, `images/${project.id}/${stored}`, fileName, file.originalname.slice(0, 255), up.info.mime, up.info.width, up.info.height, up.buffer.length
       );
       created.push(get('SELECT * FROM images WHERE id = ?', lastInsertRowid));
+      if (up.optimized) optimized.push(up.optimized);
     } catch (err) {
       errors.push(err.message);
     }
   }
   touch(project.id);
   if (!created.length) throw badRequest(errors.join(' '));
-  res.status(201).json({ created, errors });
+  res.status(201).json({ created, errors, optimized });
 });
 
 /** Serve the stored file. */
@@ -238,10 +241,11 @@ router.post('/projects/:id/images/alt-text', async (req, res) => {
   const prompt =
     `Write concise, descriptive ALT texts (max 125 characters, no "image of") for the images of the website of "${p.site_name}", ` +
     `a ${p.industry || 'local'} business in ${p.city || 'its area'}. Include the business type or location only where natural.` +
-    technicalInstructions({ fields, languageLabel: languageName(p.language), pageTitle: 'Image ALT texts', includeStructure: true });
+    clientInstructions(p.notes) +
+    technicalInstructions({ fields, languageLabel: languageName(p.language), pageTitle: 'Image ALT texts', includeStructure: true, notes: p.notes });
 
   const provider = createProvider(providerRow);
-  const out = await provider.generate(prompt, { system: SYSTEM_PROMPT, json: true, fields, context: { site_name: p.site_name, city: p.city } });
+  const out = await provider.generate(prompt, { system: p.notes?.trim() ? `${SYSTEM_PROMPT} ${CLIENT_SYSTEM}` : SYSTEM_PROMPT, json: true, fields, context: { site_name: p.site_name, city: p.city } });
   const { values } = validateValues(extractJson(out.text), fields.map((f) => f.id));
   tx(() => {
     for (const [key, alt] of Object.entries(values)) run('UPDATE images SET alt_text = ? WHERE id = ?', alt.slice(0, 300), Number(key.slice(5)));

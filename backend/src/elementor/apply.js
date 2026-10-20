@@ -88,19 +88,20 @@ export function applyImages(doc, slots, assignment) {
 
 /**
  * Replace contact info everywhere in element settings:
- *  - tel:/mailto: links -> project phone/email
+ *  - tel:/mailto: links -> project phone/email (a link to the second phone number of the project stays)
  *  - literal replacements [{ from, to }] (demo brand, demo phone, demo address...)
  *  - optionally any leftover email address in text -> project email
  */
-export function replaceContacts(doc, { phone, email, replacements = [], replaceAllEmails = true }) {
+export function replaceContacts(doc, { phone, phone2 = '', email, replacements = [], replaceAllEmails = true }) {
   const tel = telHref(phone);
+  const tel2 = telHref(phone2);
   const pairs = replacements
     .filter((r) => r && r.from && r.from.trim() && r.to != null && r.from !== r.to)
     .sort((a, b) => b.from.length - a.from.length); // longest first
 
   const replaceString = (str, key) => {
     let s = str;
-    if (tel) s = s.replace(/tel:[+\d\s().-]+/g, `tel:${tel}`);
+    if (tel) s = s.replace(/tel:[+\d\s().-]+/g, (m) => `tel:${tel2 && telHref(m.slice(4)) === tel2 ? tel2 : tel}`);
     if (email) s = s.replace(/mailto:[^\s"'?<>]+/g, `mailto:${email}`);
     const isHtml = HTML_TAG.test(s);
     for (const { from, to } of pairs) {
