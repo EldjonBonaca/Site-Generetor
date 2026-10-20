@@ -12,7 +12,9 @@ process.env.ENCRYPTION_KEY ||= 'd'.repeat(64);
 
 const { analyzeDocument } = await import('../src/elementor/analyze.js');
 const { sanitizeSpec, DEFAULT_SPEC, FONTS, tint, siteColors: siteColorsOf } = await import('../src/templates/spec.js');
-const { buildSite, DOC_ROLES, TEMPLATE_IMAGE } = await import('../src/templates/builder.js');
+const { buildSite, DOC_ROLES, TEMPLATE_IMAGE, highlightTitles } = await import('../src/templates/builder.js');
+/** Documents of a built site, with the site CSS (Additional CSS of WordPress) as their non-enumerable `css`. */
+const withCss = ({ docs, siteCss }) => Object.defineProperty(docs, 'css', { value: siteCss });
 const { buildTemplatePrompt, generateTemplateSpec } = await import('../src/templates/generate.js');
 const { default: MockProvider } = await import('../src/ai/providers/mock.js');
 
@@ -178,7 +180,7 @@ const count = (s, re) => (s.match(re) || []).length;
 
 test('signature details: highlighted words, decor, scrolling strip', () => {
   const sections = ['highlights', 'about', 'stats', 'features', 'services', 'gallery', 'reviews'];
-  const build = (style, layout = {}) => buildSite(sanitizeSpec({ style, layout: { hero: 'center', about: 'image-left', features: 'icons', ...layout }, sections }), sampleSite()).docs;
+  const build = (style, layout = {}) => withCss(buildSite(sanitizeSpec({ style, layout: { hero: 'center', about: 'image-left', features: 'icons', ...layout }, sections }), sampleSite()));
   const find = (docs, role, pred) => {
     const out = [];
     const walk = (el) => (pred(el) && out.push(el), el.elements.forEach(walk));
@@ -186,17 +188,22 @@ test('signature details: highlighted words, decor, scrolling strip', () => {
     return out;
   };
   const classes = (docs, role, cls) => find(docs, role, (el) => [el.settings._css_classes, el.settings.css_classes].some((v) => String(v || '').split(' ').includes(cls)));
-  const header = (docs) => JSON.stringify(docs.header.doc);
+  const header = (docs) => docs.css;
 
   const plain = build({});
   for (const cls of ['esg-hl', 'esg-grid', 'esg-brackets', 'esg-frame', 'esg-blob', 'esg-dropcap', 'esg-marquee']) assert.equal(classes(plain, 'home', cls).length, 0, `no ${cls} by default`);
-  assert.doesNotMatch(header(plain), /esgHl|esgMq/, 'no signature scripts by default');
+  assert.doesNotMatch(header(plain) + JSON.stringify(plain.header.doc), /esgHl|esgMq|<script/, 'no scripts');
 
   const italic = build({ highlight: 'italic' });
   const [h1] = find(italic, 'home', (el) => el.settings.header_size === 'h1');
   assert.equal(h1.settings._css_classes, 'esg-hl esg-hl-light', 'hero title over a photo: highlighted in the light variant');
   assert.ok(classes(italic, 'home', 'esg-hl').length >= 5, 'section titles highlighted too');
-  assert.match(header(italic), /window\.esgHl/, 'the header wraps the last word at runtime');
+  // The last word is wrapped once the texts are written (exporter), not by a script on the site
+  const title = (text) => highlightTitles({ content: [{ elType: 'widget', widgetType: 'heading', settings: { title: text, _css_classes: 'esg-hl' }, elements: [] }] }).content[0].settings.title;
+  assert.equal(title('Qualità e cura in ogni lavoro'), 'Qualità e cura in ogni <span class="esg-hl-w">lavoro</span>');
+  assert.equal(title('Sempre vicini a te'), 'Sempre vicini <span class="esg-hl-w">a te</span>', 'a short last word goes with the one before');
+  assert.equal(title('Chi siamo'), 'Chi siamo', 'fewer than 3 words: unchanged');
+  assert.equal(title('Già <em>scritto</em> in HTML'), 'Già <em>scritto</em> in HTML', 'HTML: unchanged');
   assert.match(header(italic), /\.esg-hl \.esg-hl-w\{font-style:italic/);
 
   const grid = build({ decor: 'grid' });
@@ -215,14 +222,19 @@ test('signature details: highlighted words, decor, scrolling strip', () => {
 
   const marquee = build({}, { highlights: 'marquee' });
   assert.equal(classes(marquee, 'home', 'esg-marquee').length, 1);
-  assert.match(header(marquee), /window\.esgMq/, 'the header repeats and scrolls the strip');
-  assert.doesNotMatch(header(marquee), /window\.esgHl/, 'no highlight script without a highlight style');
+  // The guarantees repeated 6 times (two equal halves), the copies showing the texts of the first 4, CSS moving the list
+  const [strip] = classes(marquee, 'home', 'esg-marquee');
+  assert.equal(strip.settings.icon_list.length, 24);
+  const shares = strip.settings.icon_list.map((_, i) => marquee.home.marks.get(`${strip.id}:icon_list.${i}.text`).share);
+  assert.deepEqual(shares.slice(0, 4), ['highlight1', 'highlight2', 'highlight3', 'highlight4']);
+  assert.deepEqual(shares.slice(20), shares.slice(0, 4));
+  assert.match(header(marquee), /\.esg-marquee \.elementor-icon-list-items\{flex-wrap:nowrap!important;width:max-content;animation:esg-marquee 54s linear infinite\}/);
 });
 
 test('larger layouts: slideshow hero, transparent header, bento, collage', async () => {
   const { imageAssignment } = await import('../src/generation/exporter.js');
   const sections = ['about', 'features', 'services', 'gallery', 'reviews'];
-  const build = (layout) => buildSite(sanitizeSpec({ layout, sections }), sampleSite()).docs;
+  const build = (layout) => withCss(buildSite(sanitizeSpec({ layout, sections }), sampleSite()));
   const roles = (docs, role) => [...docs[role].marks.values()].map((m) => m.slot).filter(Boolean);
   const json = (docs, role) => JSON.stringify(docs[role].doc);
 
@@ -246,7 +258,8 @@ test('larger layouts: slideshow hero, transparent header, bento, collage', async
   assert.doesNotMatch(Object.keys(plain).map((r) => json(plain, r)).join(), /esg-under/, 'no mark with the other headers');
   const transparent = build({ header: 'transparent', hero: 'center', subheader: 'photo' });
   for (const role of ['home', 'about', 'services', 'gallery', 'contact', 'single_post']) assert.equal(transparent[role].doc.content[0].settings.css_classes, 'esg-under', `${role}: first section under the header`);
-  assert.match(json(transparent, 'header'), /body:has\(\.esg-under\) \.esg-header\{position:absolute!important/);
+  assert.match(transparent.css, /body:has\(\.esg-under\) \.esg-header\{position:absolute!important/);
+  assert.match(transparent.css, /body:has\(\.esg-under\) \.esg-header nav:not\(\.hfe-dropdown\) \.hfe-nav-menu>li>a\.hfe-menu-item\{color:#FFFFFF!important\}/, 'white menu links over the photo');
   assert.doesNotMatch(json(build({ header: 'transparent', subheader: 'plain' }), 'about'), /esg-under/, 'no photo on top: a normal header');
 
   // Bento: one large tile on a photo + three compact cards
@@ -267,7 +280,7 @@ test('larger layouts: slideshow hero, transparent header, bento, collage', async
 
 test('varied structures: hero buttons and height, about triptych / stacked, why us split / center', () => {
   const sections = ['about', 'features', 'services', 'gallery', 'reviews'];
-  const build = (layout) => buildSite(sanitizeSpec({ layout, sections }), sampleSite()).docs;
+  const build = (layout) => withCss(buildSite(sanitizeSpec({ layout, sections }), sampleSite()));
   const json = (x) => JSON.stringify(x);
   const count = (x, re) => (json(x).match(re) || []).length;
 
@@ -293,9 +306,9 @@ test('varied structures: hero buttons and height, about triptych / stacked, why 
   assert.match(json(full.home.doc.content[0]), /"url":"#esg-next"/);
   assert.equal(full.home.doc.content[1].settings._element_id, 'esg-next');
   assert.ok(!analyzeDocument(full.home.doc, { prefix: 'home' }).fields.some((f) => f.value === '#esg-next'));
-  assert.match(json(full.header.doc), /\.elementor-widget\.esg-scroll\{position:absolute/);
+  assert.match(full.css, /\.elementor-widget\.esg-scroll\{position:absolute/);
   for (const docs of [build({}), build({ hero: 'bottom', heroHeight: 'full' }), build({ hero: 'editorial', heroHeight: 'full' })]) {
-    assert.doesNotMatch(json(docs.home.doc) + json(docs.header.doc), /esg-scroll|esg-next/, 'no arrow: normal height, title at the bottom, editorial');
+    assert.doesNotMatch(json(docs.home.doc) + docs.css, /esg-scroll|esg-next/, 'no arrow: normal height, title at the bottom, editorial');
   }
 
   // About between two photos: the second one only on desktop, the text centered
@@ -323,7 +336,7 @@ test('varied structures: hero buttons and height, about triptych / stacked, why 
 
 test('rotating phrases under the hero title, about with text on both sides of the photo', () => {
   const sections = ['about', 'features', 'services', 'gallery', 'reviews'];
-  const build = (layout, copy) => buildSite(sanitizeSpec({ layout, sections, copy }), sampleSite()).docs;
+  const build = (layout, copy) => withCss(buildSite(sanitizeSpec({ layout, sections, copy }), sampleSite()));
   const json = (x) => JSON.stringify(x);
 
   // Three phrases in one box after the H1, each an AI field; the H1 stays the same
@@ -340,10 +353,10 @@ test('rotating phrases under the hero title, about with text on both sides of th
     assert.match(docs.home.marks.get(f.ref).hint, /rotating phrase \d of 3/);
   }
   // CSS only when used, with a still version for reduced motion
-  assert.match(json(docs.header.doc), /\.e-con\.esg-rotate\{display:grid!important\}/);
-  assert.match(json(docs.header.doc), /prefers-reduced-motion:reduce\)\{\.esg-rotate/);
+  assert.match(docs.css, /\.e-con\.esg-rotate\{display:grid!important\}/);
+  assert.match(docs.css, /prefers-reduced-motion:reduce\)\{\.esg-rotate/);
   const plain = build({ hero: 'center' });
-  assert.doesNotMatch(json(plain.home.doc) + json(plain.header.doc), /esg-rotate/);
+  assert.doesNotMatch(json(plain.home.doc) + plain.css, /esg-rotate/);
 
   // Sandwich: title and text | photo | the 3 key points and the button
   const about = build({ about: 'sandwich' }, { aboutPoints: ['A', 'B', 'C'] }).home.doc.content[1];
@@ -456,7 +469,7 @@ test('Home gallery, call to action and reviews: more layouts', () => {
 });
 
 test('header with the logo in the middle, footer opening with an invitation', () => {
-  const build = (layout, site = sampleSite()) => buildSite(sanitizeSpec({ layout }), site).docs;
+  const build = (layout, site = sampleSite()) => withCss(buildSite(sanitizeSpec({ layout }), site));
   const json = (x) => JSON.stringify(x);
 
   // Split header: first pages on the left (desktop only), logo, the others + button on the right; one hamburger with every page
@@ -466,16 +479,15 @@ test('header with the logo in the middle, footer opening with an invitation', ()
   assert.equal(left.settings.css_classes, 'esg-hd-side');
   assert.equal(left.settings.hide_tablet, 'hidden-tablet');
   assert.equal(left.settings.hide_mobile, 'hidden-mobile');
-  const leftHtml = left.elements[0].settings.html;
-  assert.deepEqual([...leftHtml.matchAll(/href="([^"]+)"/g)].map((m) => m[1]), ['/', '/chi-siamo/', '/servizi/']);
-  assert.doesNotMatch(leftHtml, /esg-nav-toggle|id="esg-nav-list"/, 'no second hamburger, no duplicate id');
+  const leftNav = left.elements[0];
+  assert.equal(leftNav.settings.css_classes, 'esg-nav esg-nav-left');
+  assert.deepEqual(leftNav.elements.map((e) => [e.widgetType, e.settings.dropdown]), [['navigation-menu', 'none']], 'the site menu, no second hamburger');
   assert.equal(logo.settings.css_classes, 'esg-hd-brand');
-  assert.deepEqual(right.elements.map((e) => e.settings.css_classes), ['esg-hd-nav', 'esg-hd-cta']);
-  const nav = right.elements[0].elements[0].settings.html;
-  assert.match(nav, /class="esg-nav esg-nav-skip"/);
-  assert.equal((nav.match(/<li><a href=/g) || []).length, 5, 'the whole menu behind the hamburger');
-  assert.match(nav, /@media \(min-width:1025px\)\{\.esg-nav-skip \.esg-nav-list li:nth-child\(-n\+3\)\{display:none\}\}/);
-  assert.doesNotMatch(json(build({}).header.doc), /esg-nav-skip|esg-hd-side/, 'other headers unchanged');
+  assert.deepEqual(right.elements.map((e) => e.settings.css_classes), ['esg-hd-nav esg-nav esg-nav-skip', 'esg-hd-cta']);
+  assert.deepEqual(right.elements[0].elements.map((e) => [e.widgetType, e.settings.dropdown]), [['navigation-menu', 'tablet']], 'the whole menu behind the hamburger');
+  // Desktop: the first 3 items on the left of the logo, the others on the right
+  assert.match(build({ header: 'split' }).css, /@media \(min-width:1025px\)\{\.esg-nav-left \.hfe-nav-menu>li:nth-child\(n\+4\),\.esg-nav-skip \.hfe-nav-menu>li:nth-child\(-n\+3\)\{display:none\}\}/);
+  assert.doesNotMatch(json(build({}).header.doc) + build({}).css, /esg-nav-skip|esg-hd-side/, 'other headers unchanged');
 
   // Footer opening with a large invitation, the phone number and a button (AI texts), then the columns
   const footer = build({ footerCta: 'large' }).footer;
@@ -505,9 +517,9 @@ test('more orders of the Home sections across a category', async () => {
 
 test('photo treatment and ratio, textures, hero on the brand color, amount of color', async () => {
   const sections = ['about', 'features', 'services', 'gallery', 'reviews'];
-  const build = (style, layout) => buildSite(sanitizeSpec({ style, layout, sections }), sampleSite()).docs;
+  const build = (style, layout) => withCss(buildSite(sanitizeSpec({ style, layout, sections }), sampleSite()));
   const json = (x) => JSON.stringify(x);
-  const header = (docs) => json(docs.header.doc);
+  const header = (docs) => docs.css;
   const images = (docs, role) => {
     const out = [];
     const walk = (el) => (el.widgetType === 'image' ? out.push(el.settings) : el.elements.forEach(walk));
@@ -525,11 +537,11 @@ test('photo treatment and ratio, textures, hero on the brand color, amount of co
   assert.ok(images(mono, 'header').every((s) => !/esg-photo/.test(s._css_classes || '')), 'not the logo');
   assert.match(header(mono), /\.esg-photo img,\.elementor-widget-image-carousel \.swiper-slide img,\.elementor-widget-image-gallery \.gallery-item img\{filter:grayscale\(1\)/);
   assert.match(header(mono), /\.esg-photo:hover img[^{]*\{filter:none\}/);
-  // Duotone: an SVG filter from the dark color to a tint of the primary color, in the header of every page
-  const duo = build({ photoTone: 'duotone', colors: { dark: '#000000', primary: '#FFFFFF' } }, {});
-  assert.match(header(duo), /<filter id=\\"esg-duotone\\"/);
-  assert.match(header(duo), /<feFuncR type=\\"table\\" tableValues=\\"0\.000 1\.000\\"\/>/);
-  assert.match(header(duo), /filter:url\(#esg-duotone\)/);
+  // Duotone: black and white tinted with the hue of the primary color (CSS filter only, no SVG on the page)
+  const duo = build({ photoTone: 'duotone', colors: { primary: '#1F4E79' } }, {});
+  assert.match(header(duo), /\{filter:grayscale\(1\) sepia\(1\) hue-rotate\(171deg\) saturate\(1\.6\)/);
+  assert.doesNotMatch(header(duo) + json(duo.header.doc), /<svg|<filter|url\(#/);
+  assert.match(header(build({ photoTone: 'duotone', colors: { primary: '#777777' } }, {})), /\{filter:grayscale\(1\) contrast\(1\.06\);/, 'grey primary: black and white');
   // Faded: no color back under the mouse
   assert.doesNotMatch(header(build({ photoTone: 'faded' }, {})), /\{filter:none\}/);
   // The decor classes stay with the treatment
@@ -564,9 +576,9 @@ test('photo treatment and ratio, textures, hero on the brand color, amount of co
 
 test('signature detail: offered by the planner, chosen by the AI, repeated on every page', async () => {
   const sections = ['about', 'features', 'services', 'gallery', 'reviews'];
-  const build = (style, layout = {}, site = sampleSite()) => buildSite(sanitizeSpec({ style, layout, sections }), site).docs;
+  const build = (style, layout = {}, site = sampleSite()) => withCss(buildSite(sanitizeSpec({ style, layout, sections }), site));
   const json = (x) => JSON.stringify(x);
-  const header = (docs) => json(docs.header.doc);
+  const header = (docs) => docs.css;
   const count = (x, re) => (json(x).match(re) || []).length;
 
   // None by default (templates saved before)
@@ -716,9 +728,9 @@ test('section backgrounds follow the rhythm of the template', async () => {
 
 test('entrance animations, card hover and shaped band edges follow the template', () => {
   const sections = ['about', 'stats', 'features', 'services', 'gallery', 'reviews'];
-  const build = (style, layout = {}) => buildSite(sanitizeSpec({ style, layout: { features: 'icons', testimonials: 'cards', ...layout }, sections }), sampleSite()).docs;
+  const build = (style, layout = {}) => withCss(buildSite(sanitizeSpec({ style, layout: { features: 'icons', testimonials: 'cards', ...layout }, sections }), sampleSite()));
   const home = (docs) => JSON.stringify(docs.home.doc);
-  const css = (docs) => JSON.stringify(docs.header.doc);
+  const css = (docs) => docs.css;
 
   const base = build({});
   assert.match(home(base), /"animation":"fadeInUp"/, 'default: rising cards');
@@ -767,15 +779,18 @@ test('buildSite: structure required by the prompt', () => {
   for (const t of ['"title":"Link"', '"title":"Servizi"', '"title":"Contatti"', 'Servizio 5', '/servizio-5/', '/galleria/', 'mailto:info@ediltest.it', '© 2026 Edil Test']) {
     assert.ok(footer.includes(t), `footer: ${t}`);
   }
-  // Header: logo, menu and button on one line; hamburger menu (HTML widget) below 1025px
+  // Header: logo, menu and button on one line; the site menu in the Navigation Menu widget of UAE (its own hamburger below 1025px), no HTML
   const head = docs.header.doc.content.at(-1);
   assert.equal(head.settings.flex_wrap, 'nowrap', 'header on one line');
-  assert.deepEqual(head.elements.map((e) => e.settings.css_classes), ['esg-hd-brand', 'esg-hd-nav', 'esg-hd-cta']);
-  const nav = head.elements[1].elements[0];
-  assert.equal(nav.widgetType, 'html');
-  assert.ok(docs.header.marks.get(`${nav.id}:html`).fixed, 'the menu is not written by the AI');
-  for (const t of ['href="/chi-siamo/"', 'href="/galleria/"', 'class="esg-nav-toggle"', 'aria-expanded="false"', '@media (max-width:1024px)', 'esg-nav-cta']) assert.ok(nav.settings.html.includes(t), `header menu: ${t}`);
-  assert.doesNotMatch(JSON.stringify(Object.values(docs).map((d) => d.doc)), /nav-menu|uael|ultimate|elementskit|jeg/i, 'only native Elementor widgets');
+  assert.deepEqual(head.elements.map((e) => e.settings.css_classes), ['esg-hd-brand', 'esg-hd-nav esg-nav', 'esg-hd-cta']);
+  const [menu, ...others] = head.elements[1].elements;
+  assert.equal(others.length, 0, 'only the menu widget');
+  assert.equal(menu.widgetType, 'navigation-menu');
+  assert.deepEqual([menu.settings.layout, menu.settings.dropdown, menu.settings.navmenu_align], ['horizontal', 'tablet', 'right']);
+  const named = buildSite(sanitizeSpec({}), { ...sampleSite(), menuSlug: 'menu-principale' }).docs.header.doc.content.at(-1).elements[1].elements[0];
+  assert.equal(named.settings.menu, 'menu-principale', 'the site menu, by its slug');
+  assert.doesNotMatch(JSON.stringify(docs.header.doc), /"widgetType":"html"|<script|<style|<svg/, 'no HTML in the header');
+  assert.doesNotMatch(JSON.stringify(Object.values(docs).map((d) => d.doc)), /"nav-menu"|uael|elementskit|jeg/i, 'no Elementor Pro menu, no other addon');
   // Reviews are shared between Home and About
   const shares = (role) => [...docs[role].marks.values()].map((m) => m.share).filter(Boolean).sort();
   assert.equal(shares('home').length, 9);
@@ -900,7 +915,7 @@ test('the first templates of different categories do not look the same', async (
   const { marks } = buildSite(spec, sampleSite()).docs.home;
   assert.equal([...marks.values()].filter((m) => m.share === 'stat1.value').length, 2);
   // Site-wide finishing CSS travels with the header
-  assert.match(JSON.stringify(buildSite(spec, sampleSite()).docs.header.doc), /esg-card:hover/);
+  assert.match(buildSite(spec, sampleSite()).siteCss, /esg-card:hover/);
 });
 
 test('industry analysis of a category drives directions and sections of its templates', async () => {
@@ -1018,4 +1033,55 @@ test('compare the templates of a category and make one more different', async ()
     assert.notEqual(l.about, 'sandwich');
     assert.ok(['3', '4'].includes(l.featureCount), l.featureCount);
   }
+});
+
+test('no overlapping elements: column titles, large titles on phones, hero arrow and stamp, transparent header', () => {
+  const sections = ['features', 'process', 'faq', 'reviews', 'services', 'gallery', 'about'];
+  const build = (style = {}, layout = {}) => withCss(buildSite(sanitizeSpec({ style, layout, sections }), sampleSite()));
+  const all = (docs, pred) => {
+    const out = [];
+    const walk = (el) => (pred(el) && out.push(el), (el.elements || []).forEach(walk));
+    Object.values(docs).forEach((d) => d.doc.content.forEach(walk));
+    return out;
+  };
+  // A box with a fixed width (px) is never inside a column: it would run over the content beside it
+  const layouts = [
+    { features: 'split', process: 'vertical', faq: 'left', testimonials: 'cards' },
+    { features: 'list', process: 'timeline', faq: 'center', testimonials: 'quote' },
+  ];
+  for (const layout of layouts) {
+    const docs = build({}, layout);
+    const nested = [];
+    const walk = (el, inColumn) => {
+      if (el.elType === 'container' && inColumn && el.settings.width?.unit === 'px') nested.push(el.id);
+      const column = el.elType === 'container' && el.settings.width?.unit === '%' && el.settings.width.size < 100;
+      (el.elements || []).forEach((x) => walk(x, inColumn || column));
+    };
+    Object.values(docs).forEach((d) => d.doc.content.forEach((s) => walk(s, false)));
+    assert.deepEqual(nested, [], `${JSON.stringify(layout)}: fixed width boxes in columns`);
+    // and their titles are smaller there
+    const sizes = all(docs, (el) => el.widgetType === 'heading' && el.settings.header_size === 'h2').map((el) => el.settings.typography_font_size.size);
+    assert.ok(sizes.includes(34), 'column titles at 34px');
+  }
+  // The site CSS keeps nested boxes inside their parent and breaks words longer than the line
+  const plain = build();
+  assert.match(plain.css, /\.e-con \.e-con\{max-width:100%\}/);
+  assert.match(plain.css, /\.elementor-heading-title,[^{]*\{overflow-wrap:break-word;min-width:0\}/);
+  // Phones: titles at most 36px (H1) / 30px
+  for (const h of all(build({ scale: 'xl' }, { hero: 'bottom' }), (el) => el.widgetType === 'heading')) {
+    assert.ok(h.settings.typography_font_size_mobile.size <= (h.settings.header_size === 'h1' ? 36 : 30), `${h.settings.title}: ${h.settings.typography_font_size_mobile.size}px on phones`);
+  }
+  // Full-screen hero: room for the arrow under the content (also on phones), the stamp only on wide screens
+  const full = build({ signature: 'stamp' }, { hero: 'center', heroHeight: 'full', divider: 'curve' });
+  const hero = full.home.doc.content[0];
+  assert.ok(Number(hero.settings.padding.bottom) >= 170 && Number(hero.settings.padding_mobile.bottom) >= 100, 'room for the arrow');
+  assert.match(full.css, /@media \(max-width:1199px\)\{\.elementor-widget\.esg-stamp-w\{display:none\}\}/);
+  // Transparent header: the first section starts below it
+  const over = build({}, { header: 'transparent', hero: 'center', subheader: 'photo' });
+  for (const role of ['home', 'about']) {
+    const first = over[role].doc.content[0].settings;
+    assert.ok(Number(first.padding.top) >= 150 && Number(first.padding_mobile.top) >= 110, `${role}: below the header`);
+  }
+  // Vertical labels never go past their title block
+  assert.match(build({ signature: 'vertical' }).css, /\.elementor-widget\.esg-vlabel\{[^}]*max-height:calc\(100% - 4px\);overflow:hidden/);
 });

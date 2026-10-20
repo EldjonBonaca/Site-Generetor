@@ -21,7 +21,7 @@ import { buildWxr } from './wxr.js';
 import { buildPlugin, PLUGIN_IMAGE_SCHEME } from './wp-plugin.js';
 import { docsText } from './export-docs.js';
 import { fieldValue } from './runner.js';
-import { BUILDER_VERSION, articleDoc } from '../templates/builder.js';
+import { BUILDER_VERSION, articleDoc, highlightTitles } from '../templates/builder.js';
 import { measureDemoImages, loadDemoImages, demoImagePath } from '../kits/demo-images.js';
 import { compareStructure } from '../kits/structure.js';
 import { kitLayoutSignatures } from '../kits/site.js';
@@ -259,6 +259,8 @@ function buildPageDocs(ctx, pages, exported, links, allPages = pages) {
         }
       }
       applyFieldValues(doc, fields, values);
+      // Highlight style of the titles: their last word wrapped now that the texts are written (no script on the site)
+      highlightTitles(doc);
       applyImages(doc, slots, imageAssignment(ctx, page, slots, slotRoles, exported));
       // Safety net for AI-written texts: tel:/mailto: links and stray emails become the site's ones
       replaceContacts(doc, { phone: ctx.project.phone, email: ctx.project.email });
@@ -472,6 +474,8 @@ function pluginInput(ctx, pages, allPages, posts, exported, links, category, ima
     imagesDir,
     category,
     globalStyles: builtSite(ctx).globalStyles,
+    // CSS of the whole site (header, finishing touches of the template): the Additional CSS of WordPress
+    siteCss: builtSite(ctx).siteCss || '',
     // Free plugins the Template Kit needs (installed from wordpress.org by the WordPress plugin)
     requiredPlugins: (ctx.kit?.info.requiredPlugins || []).filter((p) => !p.pro && p.slug !== 'elementor'),
   };
@@ -575,11 +579,12 @@ export async function exportGeneration(generationId) {
 
   const menuItems = sitePages.map((p) => ({ title: p.title, url: p.seo.slug ? `/${p.seo.slug}/` : '/' }));
   const checks = runChecks(ctx, built, posts, links, baseUrl, T);
-  const docInfo = { ctx, pages, built, posts, exported, baseUrl, placeholder: baseUrl === PLACEHOLDER_BASE_URL, category, menuItems, pluginFile: plugin.fileName, imageCount: exported.size, oneLineAddress: oneLine(ctx.project.address) };
+  const docInfo = { ctx, pages, built, posts, exported, baseUrl, placeholder: baseUrl === PLACEHOLDER_BASE_URL, category, menuItems, pluginFile: plugin.fileName, imageCount: exported.size, oneLineAddress: oneLine(ctx.project.address), siteCss: builtSite(ctx).siteCss || '' };
 
   fs.writeFileSync(path.join(outRoot, 'content.md'), contentMarkdown(ctx, pages, output.pages));
   fs.writeFileSync(path.join(outRoot, 'seo.csv'), seoCsv(pages));
   fs.writeFileSync(path.join(outRoot, 'menu.md'), T.menuMd(docInfo));
+  if (docInfo.siteCss) fs.writeFileSync(path.join(outRoot, T.cssFile), docInfo.siteCss);
   fs.writeFileSync(path.join(outRoot, T.instructionsFile), T.instructions(docInfo));
   fs.writeFileSync(path.join(outRoot, T.checksFile), T.checksMd(ctx.project.site_name, checks));
 

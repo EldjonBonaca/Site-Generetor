@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { AdmZip } from '../lib/zip.js';
 import { slugify } from '../lib/util.js';
 import { contactForm } from './plan.js';
+import { LEGAL_PAGES } from '../templates/builder.js';
 
 export const PLUGIN_IMAGE_SCHEME = 'esg-image://';
 const PHP_TEMPLATE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'wp-plugin', 'plugin.php');
@@ -182,10 +183,11 @@ function contactFormInfo(ctx) {
  *   templates: [{ key, role, title, type, doc }], posts: [{ key, title, slug, content, excerpt, image, seo, doc }]
  *   (doc = Elementor document of the article, designed like the single post template),
  *   images: [{ file, alt, photo, logo }], imagesDir, category, globalStyles (template colors and fonts),
- *   requiredPlugins: [{ slug, file, name }] (free plugins a Template Kit needs, installed from wordpress.org)
+ *   requiredPlugins: [{ slug, file, name }] (free plugins a Template Kit needs, installed from wordpress.org),
+ *   siteCss (CSS of the whole site, saved in the Additional CSS of WordPress)
  * @returns {{ fileName: string, buffer: Buffer }}
  */
-export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, category, globalStyles, requiredPlugins = [] }) {
+export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, category, globalStyles, requiredPlugins = [], siteCss = '' }) {
   const { project } = ctx;
   const slug = pluginSlug(project);
   const hash = crypto.createHash('md5').update(`${project.id}:${slug}`).digest('hex').slice(0, 8);
@@ -218,12 +220,17 @@ export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, c
     logo: images.find((i) => i.logo)?.file || null,
     category,
     menu: ctx.menu,
+    // Links that stay site-relative (Cookie / Privacy Policy of the copyright line): every other internal link becomes absolute
+    relativeLinks: LEGAL_PAGES.map((p) => p.url),
     contactForm: contactFormInfo(ctx),
     pages: pages.map((p) => ({ key: p.key, role: p.role, title: p.title, slug: p.slug, seo: p.seo || null, elementor: addDoc(p.key, p.doc) })),
     posts: posts.map(({ doc, ...p }) => ({ ...p, elementor: doc ? addDoc(p.key, doc) : null })),
     templates: templates.map((t) => ({ key: t.key, role: t.role, title: t.title, type: t.type, elementor: addDoc(t.key, t.doc) })),
     globalStyles: globalStyles || null,
+    siteCss: siteCss || '',
     requiredPlugins: requiredPlugins.map(({ slug, file, name }) => ({ slug, file, name })),
+    // The menu of the header is the Navigation Menu widget of UAE: installed also with Elementor Pro
+    uaeWidgets: templates.some((t) => JSON.stringify(t.doc || {}).includes('"widgetType":"navigation-menu"')),
     // Without Elementor Pro the plugin itself displays the header and footer (no other addon needed)
     headerFooter: templates.some((t) => t.role === 'header' || t.role === 'footer'),
   };

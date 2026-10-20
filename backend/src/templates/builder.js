@@ -29,7 +29,7 @@
  */
 import crypto from 'node:crypto';
 import { telHref } from '../lib/util.js';
-import { DEFAULT_SECTIONS, featureCount, mix, rgba, siteColors, tint } from './spec.js';
+import { DEFAULT_SECTIONS, featureCount, hueSat, mix, rgba, siteColors, tint } from './spec.js';
 
 /** Image of a template before a project fills it (never left in an exported site). */
 export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
@@ -38,7 +38,7 @@ export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
  * Version of the generated structure. Field ids depend on it: a generation made with another
  * version cannot be exported (exporter.js), it has to be generated again.
  */
-export const BUILDER_VERSION = 8;
+export const BUILDER_VERSION = 10;
 
 export const DOC_ROLES = ['home', 'about', 'services', 'gallery', 'contact', 'single_post', 'header', 'footer'];
 
@@ -202,6 +202,10 @@ function createDoc(role, spec, site) {
    */
   const section = (elements, o = {}) => {
     const py = o.padY ?? pad;
+    // A section under the transparent header ("esg-under") starts below it, also when its content is taller than the screen
+    const under = String(o.css || '').split(' ').includes('esg-under');
+    const top = under ? Math.max(py, 150) : py;
+    const topMobile = under ? Math.max(Math.round(py * 0.6), 110) : Math.round(py * 0.6);
     const settings = {
       content_width: o.full ? 'full' : 'boxed',
       boxed_width: px(o.width || 1200),
@@ -210,8 +214,8 @@ function createDoc(role, spec, site) {
       flex_gap: gap(o.gap ?? 28),
       flex_align_items: o.align || (o.row ? 'center' : 'stretch'),
       flex_justify_content: o.justify || (o.row ? 'space-between' : 'center'),
-      padding: o.full ? sides(0, 0, 0, 0) : sides(py, 20, o.padBottom ?? py, 20),
-      padding_mobile: o.full ? sides(0, 0, 0, 0) : sides(Math.round(py * 0.6), 16, Math.round((o.padBottom ?? py) * 0.6), 16),
+      padding: o.full ? sides(0, 0, 0, 0) : sides(top, 20, o.padBottom ?? py, 20),
+      padding_mobile: o.full ? sides(0, 0, 0, 0) : sides(topMobile, 16, Math.round((o.padBottom ?? py) * 0.6), 16),
       ...background(o),
     };
     if (o.minHeight) settings.min_height = px(o.minHeight, 'vh');
@@ -337,7 +341,8 @@ function createDoc(role, spec, site) {
       ...(o.url ? { link: link(o.url) } : {}),
       ...typo('', fonts.heading, size, o.weight || headingWeight, {
         typography_font_size_tablet: px(Math.max(18, Math.round(size * 0.82))),
-        typography_font_size_mobile: px(Math.max(18, Math.round(size * (size > 60 ? 0.55 : 0.68)))),
+        // Phones: large titles at most 36px (H1) / 30px, so long words still fit a 360px screen
+        typography_font_size_mobile: px(Math.min(tag === 'h1' ? 36 : 30, Math.max(18, Math.round(size * (size > 60 ? 0.55 : 0.68))))),
         typography_line_height: px(size >= 40 ? 1.12 : 1.3, 'em'),
         ...(upper ? { typography_text_transform: 'uppercase', typography_letter_spacing: px(o.upper ? 2 : 1) } : size >= 40 ? { typography_letter_spacing: px(-0.5) } : {}),
       }),
@@ -469,7 +474,7 @@ function createDoc(role, spec, site) {
       ...(o.css ? { _css_classes: o.css } : {}),
     });
     items.forEach((it, i) => {
-      if (it.hint) field(el, `icon_list.${i}.text`, { hint: it.hint, max: it.max || 40 });
+      if (it.hint) field(el, `icon_list.${i}.text`, { hint: it.hint, max: it.max || 40, share: it.share });
       else mark(el, `icon_list.${i}.text`, { fixed: true });
       if (it.url && !isContactLink(it.url)) mark(el, `icon_list.${i}.link.url`, { fixed: true });
     });
@@ -590,18 +595,23 @@ function createDoc(role, spec, site) {
 /**
  * Title block of a section: small label, title (+ accent line or side bar, per the title style), intro text.
  * parts: { kicker?, title, text? } each { value, hint, max } or { value, fixed }.
- * o: { align (default: the template alignment), light (on a photo / dark band) }
+ * o: { align (default: the template alignment), light (on a photo / dark band), fill (as wide as its column, never wider) }
+ * An explicit left alignment means the block is in a side column (beside cards, steps, a form…): it then
+ * fills that column instead of its fixed width, which would run over the content beside it, and its
+ * title is smaller, so a long one stays a few lines.
  */
 function intro(b, parts, o = {}) {
   const bar = b.st.titles === 'bar';
   const align = bar ? 'left' : o.align || b.st.align;
+  const column = o.fill || o.align === 'left';
   const light = o.light;
   const els = [];
   if (b.st.signature === 'numbers') els.push(sectionNumber(b));
   if (parts.kicker) els.push(b.kicker(parts.kicker.value, { ...parts.kicker, align, color: light ? b.c.secondary : undefined, onDark: light }));
-  els.push(b.heading(parts.title.value, { ...parts.title, align, bar, hl: true, color: light ? '#FFFFFF' : undefined }));
+  els.push(b.heading(parts.title.value, { ...parts.title, align, bar, hl: true, color: light ? '#FFFFFF' : undefined, ...(column ? { size: 34 } : {}) }));
   if (b.st.titles === 'line') els.push(b.line(align));
   if (parts.text) els.push(b.text(parts.text.value, { ...parts.text, align, color: light ? 'rgba(255,255,255,0.86)' : undefined }));
+  if (column) return b.box(els, { gap: 12, align: align === 'center' ? 'center' : 'stretch' });
   return align === 'center' ? b.box(els, { maxWidth: 760, gap: 12, align: 'center' }) : b.box(els, { maxWidth: 820, gap: 12, align: 'stretch' });
 }
 
@@ -835,7 +845,7 @@ function cta(b, site) {
   // Without a phone number the "phone" band is a banner
   const variant = layout.cta === 'phone' && !site.phone ? 'banner' : layout.cta;
   const banner = variant === 'banner';
-  const title = b.heading(copy.ctaTitle, { size: 40, color: '#FFFFFF', align: banner ? 'center' : 'left', hint: 'call to action title: invite to contact the business', max: 80 });
+  const title = b.heading(copy.ctaTitle, { size: 40, color: '#FFFFFF', align: banner ? 'center' : 'left', hint: 'call to action title: invite to contact the business (short, at most 8 words)', max: 70 });
   const body = b.text(copy.ctaText, { color: 'rgba(255,255,255,0.9)', align: banner ? 'center' : 'left', size: 18, hint: 'call to action text (1–2 sentences)', max: 200 });
   const btn = b.button(copy.ctaButton, site.pages.contact.url, { variant: 'secondary', align: banner ? 'center' : variant === 'split' ? 'right' : 'left', hint: 'call to action button text (leads to the contact page)', max: 30 });
   // "phone": a colored band, the invitation on the left, the phone number in large type and the button on the right
@@ -982,6 +992,8 @@ const titleLine = (b) => (b.st.titles === 'line' ? [b.line()] : []);
 const fullHero = (layout) => layout.heroHeight === 'full' && layout.hero !== 'editorial';
 /** The arrow to the next section: full-screen heroes, except "bottom" whose title already sits at the bottom. */
 const hasScrollCue = (layout) => fullHero(layout) && layout.hero !== 'bottom';
+/** Height of the shaped bottom edge of the hero (the arrow stands above it). */
+const heroEdge = (layout) => (layout.hero !== 'split' && layout.divider !== 'none' ? SHAPE_HEIGHT[layout.divider] || 70 : 0);
 /** CSS id of the section after the hero, target of the arrow. */
 const NEXT_ID = 'esg-next';
 
@@ -998,7 +1010,7 @@ function rotatingPhrases(b, align, color) {
 
 /**
  * "stamp" signature: a round stamp with the business name around a dot, slowly turning in the
- * bottom-right corner of the hero (CSS of the header; hidden on phones).
+ * bottom-right corner of the hero (site CSS; only from 1200px wide, where it never reaches the text).
  */
 function heroStamp(b, site, color) {
   const name = String(site.siteName || '').toUpperCase();
@@ -1043,7 +1055,8 @@ function hero(b, site) {
   const onImage = variant === 'center' || variant === 'left' || variant === 'bottom' || variant === 'slideshow' || variant === 'color';
   const align = variant === 'center' || variant === 'editorial' || variant === 'slideshow' ? 'center' : 'left';
   const css = underHeader(b);
-  const size = variant === 'bottom' ? 66 : variant === 'editorial' ? 64 : 58;
+  // Beside the photo ("split", "color") the title has half the width: a smaller size keeps long words inside it
+  const size = variant === 'bottom' ? 66 : variant === 'editorial' ? 64 : variant === 'split' || variant === 'color' ? 50 : 58;
   // Buttons: contact + call ("two"), contact only ("one"), or contact + a text link with a phone icon ("link").
   // Built after the texts (element ids, hence field ids, follow the creation order)
   const buttons = () => {
@@ -1058,7 +1071,7 @@ function hero(b, site) {
   };
   const content = [
     b.kicker(copy.heroKicker, { align, color: onImage ? b.c.secondary : undefined, onDark: onImage, vertical: false, hint: 'short tagline above the main title', max: 50 }),
-    b.heading(copy.heroTitle, { tag: 'h1', size, align, hl: true, color: onImage ? '#FFFFFF' : undefined, hint: 'main title of the site (H1): the promise of the business, with its activity and city', max: 80 }),
+    b.heading(copy.heroTitle, { tag: 'h1', size, align, hl: true, color: onImage ? '#FFFFFF' : undefined, hint: 'main title of the site (H1): the promise of the business, with its activity and city (at most 9 words)', max: 70 }),
     ...(layout.heroPhrases === 'rotating' ? [rotatingPhrases(b, align, onImage ? b.c.secondary : b.ink.kicker)] : []),
     b.text(copy.heroText, { align, color: onImage ? 'rgba(255,255,255,0.9)' : undefined, size: 19, hint: 'hero subtitle (1–2 sentences)', max: 200 }),
     buttons(),
@@ -1071,6 +1084,8 @@ function hero(b, site) {
     ...(hasScrollCue(layout) ? [scrollCue(b, light ? b.ink.heading : '#FFFFFF')] : []),
     ...(b.st.signature === 'stamp' && site.siteName ? [heroStamp(b, site, light ? b.ink.heading : '#FFFFFF')] : []),
   ];
+  // Room for the arrow under the content: when the content is taller than the screen (phones) it would lie on the buttons
+  const cuePad = hasScrollCue(layout) ? { padBottom: Math.max(b.pad, heroEdge(layout) + 100) } : {};
   if (variant === 'editorial') {
     // Magazine opening: big centered title on the page color, a wide photo below
     return b.section(
@@ -1083,6 +1098,7 @@ function hero(b, site) {
       row: true,
       bg: b.ink.alt,
       minHeight: height(80),
+      ...cuePad,
     });
   }
   if (variant === 'color') {
@@ -1091,6 +1107,7 @@ function hero(b, site) {
       row: true,
       ...b.fill(),
       minHeight: height(84),
+      ...cuePad,
       divider: edge,
       css,
     });
@@ -1101,6 +1118,7 @@ function hero(b, site) {
       slot: 'hero',
       overlay: [rgba(b.c.dark, 0.35), rgba(b.c.dark, 0.15), 90],
       minHeight: height(86),
+      ...cuePad,
       align: 'flex-start',
       divider: edge,
       css,
@@ -1125,6 +1143,7 @@ function hero(b, site) {
       slideshow: true,
       overlay: [rgba(b.c.dark, 0.5), rgba(b.c.dark, 0.82), 180],
       minHeight: height(92),
+      ...cuePad,
       align: 'center',
       divider: edge,
       css,
@@ -1134,6 +1153,7 @@ function hero(b, site) {
     slot: 'hero',
     overlay: variant === 'left' ? [rgba(b.c.dark, 0.9), rgba(b.c.dark, 0.3), 90] : [rgba(b.c.dark, 0.55), rgba(b.c.dark, 0.8), 180],
     minHeight: height(88),
+    ...cuePad,
     align: variant === 'left' ? 'flex-start' : 'center',
     divider: edge,
     css,
@@ -1448,13 +1468,14 @@ function faq(b) {
 
 /**
  * Strip of 4 short guarantees: centered on one line ("strip"), or larger and scrolling endlessly
- * across the whole width ("marquee": the header script repeats the items, CSS moves them; without
- * the script it stays a plain strip).
+ * across the whole width ("marquee": the items are repeated MARQUEE_COPIES times, the copies showing
+ * the texts of the first ones, and the CSS moves the list by half its width, so the loop never shows).
  */
 function highlights(b) {
-  const items = b.spec.copy.highlights.map((x, i) => ({ text: x, icon: 'fas fa-check-circle', hint: `short guarantee ${i + 1} of 4 of the business (2–4 words, e.g. free estimate)`, max: 40 }));
+  const items = b.spec.copy.highlights.map((x, i) => ({ text: x, icon: 'fas fa-check-circle', hint: `short guarantee ${i + 1} of 4 of the business (2–4 words, e.g. free estimate)`, max: 40, share: `highlight${i + 1}` }));
   if (b.spec.layout.highlights === 'marquee') {
-    const list = b.iconList(items, { inline: true, align: 'center', color: '#FFFFFF', iconColor: b.c.secondary, hover: '#FFFFFF', size: 19, weight: '700', css: 'esg-marquee' });
+    const copies = Array.from({ length: MARQUEE_COPIES }, () => items).flat();
+    const list = b.iconList(copies, { inline: true, align: 'center', color: '#FFFFFF', iconColor: b.c.secondary, hover: '#FFFFFF', size: 19, weight: '700', css: 'esg-marquee' });
     list.settings.space_between = px(56);
     return b.section([list], { ...b.fill(90), padY: 30, width: 2560, align: 'stretch' });
   }
@@ -1464,6 +1485,9 @@ function highlights(b) {
     align: 'center',
   });
 }
+
+/** Sets of guarantees in a marquee strip: an even number (two equal halves), each half wider than a wide screen. */
+const MARQUEE_COPIES = 6;
 
 const HOME_SECTIONS = { about: aboutTeaser, features, cta, services: featuredServices, gallery: homeGallery, reviews, stats, process: processSteps, faq, highlights };
 
@@ -1593,6 +1617,9 @@ function formCss(b) {
 .esg-form .wpcf7-not-valid-tip{margin-top:4px;font-size:13px}
 .esg-form .wpcf7-response-output{margin:4px 0 0!important;padding:12px 16px!important;border-radius:${field}px}
 .esg-form .wpcf7-spinner{display:block;margin:10px auto 0}
+.esg-contact-info{min-width:0;overflow-wrap:break-word;word-break:break-word}
+.esg-contact-info .e-con,.esg-contact-info .elementor-widget{max-width:100%!important;min-width:0}
+@media (min-width:1025px){.e-con.esg-contact-info{max-width:calc(50% - 14px)!important}}
 </style>`;
 }
 
@@ -1602,7 +1629,7 @@ function contact(b, site) {
   const items = contactItems(site);
   const parts = {
     title: { value: copy.contactTitle, hint: 'title of the contact details section', max: 60 },
-    text: { value: copy.contactText, hint: 'invitation to contact the business (1–2 sentences)', max: 300 },
+    text: { value: copy.contactText, hint: 'invitation to contact the business (1–2 short sentences)', max: 220 },
   };
   const infoBox = (it, o) => b.iconBox(it.icon, b.L[it.label], it.text, { fixed: true, url: it.url, titleSize: 17, ...o });
   // The form card is always light: the Contact Form 7 fields are styled for light backgrounds
@@ -1632,7 +1659,8 @@ function contact(b, site) {
     );
   } else {
     out.push(
-      b.section([b.box([intro(b, parts, { align: 'left' }), ...items.map((it) => infoBox(it, { position: 'left' }))], { width: 42, gap: 22 }), form], {
+      // The details never take more than half of the row: long texts wrap instead of running over the form
+      b.section([b.box([intro(b, parts, { align: 'left' }), ...items.map((it) => infoBox(it, { position: 'left' }))], { width: 42, gap: 22, css: 'esg-contact-info' }), form], {
         row: true,
         bg: b.ink.alt,
         align: 'flex-start',
@@ -1761,9 +1789,57 @@ export function articleDoc(doc, post) {
   return out;
 }
 
-const menuItems = (site) => ['home', 'about', 'services', 'gallery', 'contact'].map((r) => ({ text: site.pages[r].title, url: site.pages[r].url }));
-/** Links of a menu list (HTML). */
-const menuLinks = (items) => items.map((m) => `<li><a href="${escapeAttr(m.url)}">${escapeHtml(m.text)}</a></li>`).join('');
+const MENU_ROLES = ['home', 'about', 'services', 'gallery', 'contact'];
+const menuItems = (site) => MENU_ROLES.map((r) => ({ text: site.pages[r].title, url: site.pages[r].url }));
+
+/**
+ * The site menu of WordPress (Appearance → Menus) in the "Navigation Menu" widget of Ultimate Addons
+ * for Elementor (free), so its pages are managed in WordPress, not written in the header. The widget
+ * finds the menu by its slug; it has its own hamburger and dropdown panel below 1025px
+ * (dropdown 'none': never, for the left side of the "split" header, shown on desktop only).
+ * o: { align, color, hover, dropdown }
+ */
+function uaeMenu(b, site, o) {
+  const { st, c, ink, fonts } = b;
+  const upper = st.titleCase === 'upper';
+  const panel = ink.dark ? ink.card : '#FFFFFF';
+  const panelHover = ink.dark ? rgba(c.secondary, 0.14) : tint(c.primary, 0.92);
+  return b.widget('navigation-menu', {
+    menu: site.menuSlug || '',
+    layout: 'horizontal',
+    navmenu_align: o.align,
+    dropdown: o.dropdown || 'tablet',
+    resp_align: 'right',
+    full_width_dropdown: 'yes',
+    submenu_icon: 'arrow',
+    pointer: 'underline',
+    animation_line: 'fade',
+    padding_horizontal_menu_item: px(0),
+    padding_horizontal_menu_item_tablet: px(20),
+    padding_vertical_menu_item: px(8),
+    padding_vertical_menu_item_tablet: px(14),
+    menu_space_between: px(upper ? 26 : 30),
+    ...b.typo('menu_', fonts.body, upper ? 13 : 15, '600', upper ? { menu_typography_text_transform: 'uppercase', menu_typography_letter_spacing: px(1) } : {}),
+    color_menu_item: o.color,
+    color_menu_item_hover: o.hover,
+    pointer_color_menu_item_hover: o.hover,
+    color_menu_item_active: o.hover,
+    pointer_color_menu_item_active: o.hover,
+    color_dropdown_item: ink.heading,
+    background_color_dropdown_item: panel,
+    color_dropdown_item_hover: ink.heading,
+    background_color_dropdown_item_hover: panelHover,
+    color_dropdown_item_active: ink.heading,
+    background_color_dropdown_item_active: panelHover,
+    ...b.typo('dropdown_', fonts.body, 15, '600'),
+    dropdown_box_shadow_box_shadow_type: 'yes',
+    dropdown_box_shadow_box_shadow: boxShadow(18, 44, 0.2),
+    distance_from_menu: px(16),
+    toggle_color: o.color,
+    toggle_hover_color: o.hover,
+    toggle_size: px(22),
+  });
+}
 
 /** Logo image, or the site name when the project has no logo. */
 function brand(b, site, o = {}) {
@@ -1773,21 +1849,8 @@ function brand(b, site, o = {}) {
 
 const escapeAttr = (s) => escapeHtml(s).replace(/"/g, '&quot;');
 
-/** Script of the hamburger menu (registered once per page): open / close, outside tap, Escape, current page, CTA text. */
-const NAV_SCRIPT = `(function(){if(window.esgNav)return;window.esgNav=1;
-function set(n,open){n.classList.toggle('is-open',open);var t=n.querySelector('.esg-nav-toggle');if(t)t.setAttribute('aria-expanded',open?'true':'false');}
-document.addEventListener('click',function(e){var x=e.target;if(!x.closest)return;
-document.querySelectorAll('.esg-nav.is-open').forEach(function(n){if(!n.contains(x)||x.closest('.esg-nav-list a'))set(n,false);});
-var t=x.closest('.esg-nav-toggle');if(t){var n=t.closest('.esg-nav');set(n,!n.classList.contains('is-open'));}});
-document.addEventListener('keydown',function(e){if(e.key!=='Escape')return;document.querySelectorAll('.esg-nav.is-open').forEach(function(n){set(n,false);var t=n.querySelector('.esg-nav-toggle');if(t)t.focus();});});
-function init(){var here=location.pathname.replace(/\\/+$/,'');
-document.querySelectorAll('.esg-nav-list a').forEach(function(a){if(a.pathname.replace(/\\/+$/,'')===here)a.setAttribute('aria-current','page');});
-var src=document.querySelector('.esg-hd-cta .elementor-button-text');
-document.querySelectorAll('.esg-nav-cta a').forEach(function(a){if(src&&src.textContent.trim())a.textContent=src.textContent.trim();});}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();})();`;
-
 /**
- * Finishing touches of the whole site, in the header (shown on every page, also by UAE): smooth
+ * Finishing touches of the whole site, in the site CSS (Additional CSS of WordPress, on every page): smooth
  * text, selection color, cards rising on hover, photos zooming in their card, buttons, the thin
  * line of the "dash" labels, the service rows and the photo badge. Only classes set by this builder.
  */
@@ -1823,6 +1886,9 @@ ${hover}
 .esg-svc-row:last-child{border-bottom:0;padding-bottom:0}
 .esg-quote-more{padding-top:36px;border-top:1px solid ${ink.border}}
 .esg-badge{box-shadow:0 24px 50px rgba(15,27,45,.25)}
+.e-con .e-con{max-width:100%}
+.elementor-heading-title,.elementor-widget-text-editor,.elementor-icon-box-content,.elementor-image-box-content,.elementor-testimonial-content,.elementor-icon-list-text,.elementor-button-text{overflow-wrap:break-word;min-width:0}
+@media (max-width:767px){.elementor-heading-title{-webkit-hyphens:auto;hyphens:auto}}
 .elementor-widget-image-carousel .swiper-slide{overflow:hidden;border-radius:${b.imgRadius}px}
 .elementor-widget-image-carousel .swiper-slide img{transition:transform .9s ${ease}}
 .elementor-widget-image-carousel .swiper-slide:hover img{transform:scale(1.04)}
@@ -1867,24 +1933,27 @@ function signatureCss(b) {
   }[b.st.decor];
   const marquee = b.spec.layout.highlights === 'marquee' && (b.spec.sections || []).includes('highlights')
     ? `.esg-marquee{overflow:hidden}
-.esg-marquee.is-ready .elementor-icon-list-items{flex-wrap:nowrap!important;width:max-content;animation:esg-marquee 36s linear infinite}
-.esg-marquee.is-ready .elementor-icon-list-item{flex-shrink:0}
+.esg-marquee .elementor-icon-list-items{flex-wrap:nowrap!important;width:max-content;animation:esg-marquee ${MARQUEE_COPIES * 9}s linear infinite}
+.esg-marquee .elementor-icon-list-item{flex-shrink:0}
 .esg-marquee:hover .elementor-icon-list-items{animation-play-state:paused}
 .esg-marquee .elementor-icon-list-text{text-transform:uppercase;letter-spacing:.06em}
 @keyframes esg-marquee{to{transform:translateX(-50%)}}
-@media (prefers-reduced-motion:reduce){.esg-marquee.is-ready .elementor-icon-list-items{animation:none}}`
+@media (prefers-reduced-motion:reduce){.esg-marquee .elementor-icon-list-items{animation:none;flex-wrap:wrap!important;width:auto;justify-content:center}.esg-marquee .elementor-icon-list-item:nth-child(n+${b.spec.copy.highlights.length + 1}){display:none}}`
     : '';
   // "transparent" header: on the pages that open with a photo (marked "esg-under"), the header lies over it,
-  // with white links and logo (pure CSS, so nothing moves once the page is shown)
+  // with white links, hamburger and logo (pure CSS, so nothing moves once the page is shown); the menu panel keeps its colors
   const over = b.spec.layout.header === 'transparent'
     ? `body:has(.esg-under) .esg-header{position:absolute!important;top:0;left:0;right:0;width:100%;background:transparent!important;box-shadow:none!important;border:0!important}
-body:has(.esg-under) .esg-nav{--esg-color:#FFFFFF;--esg-hover:${c.secondary};--esg-line:rgba(255,255,255,.4)}
+body:has(.esg-under) .esg-header nav:not(.hfe-dropdown) .hfe-nav-menu>li>a.hfe-menu-item{color:#FFFFFF!important}
+body:has(.esg-under) .esg-header nav:not(.hfe-dropdown) .hfe-nav-menu>li>a.hfe-menu-item:hover{color:${c.secondary}!important}
+body:has(.esg-under) .esg-header .hfe-nav-menu-icon{color:#FFFFFF!important}
+body:has(.esg-under) .esg-header .hfe-nav-menu-icon svg{fill:#FFFFFF!important}
 body:has(.esg-under) .esg-hd-brand .elementor-heading-title{color:#FFFFFF!important}
 body:has(.esg-under) .esg-hd-brand img{filter:brightness(0) invert(1)}`
     : '';
   // Arrow of a full-screen hero: centered at the bottom, above the shaped edge, gently bobbing
   const layout = b.spec.layout;
-  const edge = layout.hero !== 'split' && layout.divider !== 'none' ? SHAPE_HEIGHT[layout.divider] || 70 : 0;
+  const edge = heroEdge(layout);
   const scroll = hasScrollCue(layout)
     ? `.elementor-widget.esg-scroll{position:absolute!important;left:50%;bottom:${edge + 24}px;transform:translateX(-50%);width:auto!important;margin:0!important;z-index:3}
 .esg-scroll .elementor-icon{animation:esg-bob 2.4s ease-in-out infinite}
@@ -1908,7 +1977,7 @@ body:has(.esg-under) .esg-hd-brand img{filter:brightness(0) invert(1)}`
  * The signature detail of the template, on every page: section numbers (a CSS counter of the page,
  * outlined in the accent color), tilted main photos (alternating from one section to the next,
  * straight under the mouse), vertical labels beside the left-aligned titles (desktop), or the round
- * stamp of the hero (turning slowly; still with reduced motion, hidden on phones).
+ * stamp of the hero (turning slowly; still with reduced motion; hidden below 1200px, where it would cover the text).
  */
 function signatureDetailCss(b) {
   const { c, fonts } = b;
@@ -1924,152 +1993,90 @@ function signatureDetailCss(b) {
 @media (prefers-reduced-motion:reduce){.esg-tilt img{transition:none}}`,
     vertical: `@media (min-width:1025px){
 .e-con:has(> .esg-vlabel){position:relative;padding-left:56px!important}
-.elementor-widget.esg-vlabel{position:absolute!important;left:0;top:4px;width:auto!important;max-width:none!important;margin:0!important;writing-mode:vertical-rl;transform:rotate(180deg)}
+.elementor-widget.esg-vlabel{position:absolute!important;left:0;top:4px;width:auto!important;max-width:none!important;max-height:calc(100% - 4px);overflow:hidden;white-space:nowrap;margin:0!important;writing-mode:vertical-rl;transform:rotate(180deg)}
 }`,
     stamp: `.elementor-widget.esg-stamp-w{position:absolute!important;right:7%;bottom:16%;width:132px!important;max-width:none!important;margin:0!important;z-index:2;pointer-events:none}
 .esg-stamp svg{display:block;animation:esg-spin 26s linear infinite}
 @keyframes esg-spin{to{transform:rotate(360deg)}}
-@media (max-width:1024px){.elementor-widget.esg-stamp-w{width:96px!important;right:4%;bottom:10%}}
-@media (max-width:767px){.elementor-widget.esg-stamp-w{display:none}}
+@media (max-width:1199px){.elementor-widget.esg-stamp-w{display:none}}
 @media (prefers-reduced-motion:reduce){.esg-stamp svg{animation:none}}`,
   }[b.st.signature] || '';
 }
 
 /** Photos of the pages (image widgets, Home carousel, Gallery page), filtered per the photo treatment. */
 const TONED = ['.esg-photo img', '.elementor-widget-image-carousel .swiper-slide img', '.elementor-widget-image-gallery .gallery-item img'];
-const PHOTO_FILTERS = { mono: 'grayscale(1) contrast(1.06)', duotone: 'url(#esg-duotone)', faded: 'saturate(.68) contrast(.9) brightness(1.05)' };
+const PHOTO_FILTERS = { mono: () => 'grayscale(1) contrast(1.06)', duotone: duotoneFilter, faded: () => 'saturate(.68) contrast(.9) brightness(1.05)' };
 
 /**
- * Photo treatment of the template: black and white, duotone (the SVG filter of the header maps the
- * dark tones to the dark color and the light ones to a tint of the primary color) or faded. Black
- * and white and duotone photos show their real colors under the mouse. The photos behind texts
- * (hero, bands) keep their colors under the overlays of the template.
+ * "Duotone" photos with a CSS filter only (no SVG on the page): black and white, then tinted with
+ * the hue of the primary color (sepia turned to that hue); plain black and white for a grey primary.
+ */
+function duotoneFilter(b) {
+  const { hue, sat } = hueSat(b.c.primary);
+  if (sat < 0.15) return 'grayscale(1) contrast(1.06)';
+  return `grayscale(1) sepia(1) hue-rotate(${Math.round((hue - 38 + 360) % 360)}deg) saturate(1.6) brightness(.94) contrast(1.06)`;
+}
+
+/**
+ * Photo treatment of the template: black and white, duotone (tinted with the primary color) or
+ * faded. Black and white and duotone photos show their real colors under the mouse. The photos
+ * behind texts (hero, bands) keep their colors under the overlays of the template.
  */
 function photoToneCss(b) {
-  const filter = PHOTO_FILTERS[b.st.photoTone];
+  const filter = PHOTO_FILTERS[b.st.photoTone]?.(b);
   if (!filter) return '';
   const hover = ['.esg-zoom:hover .esg-photo img', '.esg-photo:hover img', '.elementor-widget-image-carousel .swiper-slide:hover img', '.elementor-widget-image-gallery .gallery-item:hover img'];
   const reveal = b.st.photoTone === 'faded' ? '' : `\n${hover.join(',')}{filter:none}`;
   return `${TONED.join(',')}{filter:${filter};transition:filter .6s ease}${reveal}`;
 }
 
-/** SVG duotone filter (in the header, so on every page): luminance -> from the dark color to a light tint of the primary color. */
-function duotoneSvg(b) {
-  if (b.st.photoTone !== 'duotone') return '';
-  const channels = (hex) => [1, 3, 5].map((i) => (parseInt(hex.slice(i, i + 2), 16) / 255).toFixed(3));
-  const [dark, light] = [channels(b.c.dark), channels(tint(b.c.primary, 0.78))];
-  const func = (n, i) => `<feFunc${n} type="table" tableValues="${dark[i]} ${light[i]}"/>`;
-  return (
-    '<svg aria-hidden="true" focusable="false" width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden">' +
-    '<filter id="esg-duotone" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values=".2126 .7152 .0722 0 0 .2126 .7152 .0722 0 0 .2126 .7152 .0722 0 0 0 0 0 1 0"/>' +
-    `<feComponentTransfer>${['R', 'G', 'B'].map(func).join('')}</feComponentTransfer></filter></svg>`
-  );
-}
-
 /**
- * Scripts of the signature details (registered once per page): wrap the last word of the marked
- * titles ("esg-hl") so the highlight style can reach it; repeat the items of a marquee strip until
- * they fill twice its width, then start the scroll. Without them the page stays plain and readable.
+ * Style of the header, part of the site CSS: logo and button take their width, the menu the rest, on one
+ * line; below 1025px the menu (its hamburger) moves to the end, on phones the header button is hidden
+ * (the contact page is in the menu). "split" header (skip: the number of pages on the left of the logo):
+ * the same WordPress menu on both sides, the left one shows the first pages, the right one the others.
+ * The last rules style the "WordPress Menu" widget the WordPress plugin puts in place of the UAE menu
+ * when UAE could not be installed.
  */
-const HIGHLIGHT_SCRIPT = `(function(){if(window.esgHl)return;window.esgHl=1;
-function hl(){document.querySelectorAll('.esg-hl .elementor-heading-title').forEach(function(h){if(h.children.length)return;var w=h.textContent.trim().split(/\\s+/);if(w.length<3)return;
-var k=w.length>3&&w[w.length-1].length<4?2:1;var s=document.createElement('span');s.className='esg-hl-w';s.textContent=w.slice(-k).join(' ');h.textContent=w.slice(0,-k).join(' ')+' ';h.appendChild(s);});}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',hl);else hl();})();`;
-const MARQUEE_SCRIPT = `(function(){if(window.esgMq)return;window.esgMq=1;
-function mq(){document.querySelectorAll('.esg-marquee').forEach(function(m){var u=m.querySelector('.elementor-icon-list-items');if(!u||m.classList.contains('is-ready'))return;m.classList.add('is-ready');
-var items=[].slice.call(u.children),box=m.offsetWidth||1200,n=0;
-function add(list){list.forEach(function(li){var c=li.cloneNode(true);c.setAttribute('aria-hidden','true');u.appendChild(c);});}
-while(u.scrollWidth<box&&n++<12)add(items);add([].slice.call(u.children));});}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mq);else mq();})();`;
-
-/** Scripts the header carries for the template: the menu, then the signature details it uses. */
-function headerScripts(b) {
-  return [
-    NAV_SCRIPT,
-    b.st.highlight && b.st.highlight !== 'none' && HIGHLIGHT_SCRIPT,
-    b.spec.layout.highlights === 'marquee' && (b.spec.sections || []).includes('highlights') && MARQUEE_SCRIPT,
-  ]
-    .filter(Boolean)
-    .join('\n');
-}
-
-/**
- * Navigation of the header (Elementor HTML widget, no Pro or addon needed): the 5 pages in a row on
- * desktop; below 1025px a hamburger button opening a dropdown panel (with the call to action on
- * phones, where the header button is hidden). The style also keeps the header on one line:
- * logo and button take their width, the menu the rest.
- * o: { justify ('flex-end' | 'center' | 'flex-start'), color, hover, button: { text, url },
- *      skip: on desktop, the first pages are left out (shown by another menu on the left of the logo: "split" header) }
- */
-function navMenu(b, site, o) {
-  const { st, c, ink, fonts } = b;
-  const upper = st.titleCase === 'upper';
-  const radius = st.buttons === 'pill' ? 50 : st.buttons === 'square' ? 0 : b.radius;
-  const panelBg = ink.dark ? ink.card : '#FFFFFF';
-  const ctaBg = ink.dark ? c.secondary : c.primary;
-  const vars = {
-    '--esg-justify': o.justify,
-    '--esg-color': o.color,
-    '--esg-hover': o.hover,
-    '--esg-panel': panelBg,
-    '--esg-panel-color': ink.heading,
-    '--esg-panel-hover': ink.dark ? rgba(c.secondary, 0.14) : tint(c.primary, 0.92),
-    '--esg-line': ink.border,
-    '--esg-cta-bg': ctaBg,
-    '--esg-cta-color': ink.dark ? c.onSecondary : c.onPrimary,
-    '--esg-radius': `${Math.min(radius, 12)}px`,
-  };
-  const style = Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(';');
-  const items = menuLinks(menuItems(site));
-  const css = `.esg-header{position:relative;z-index:100}
+function headerCss(b) {
+  const layout = b.spec.layout;
+  const skip = layout.header === 'split' ? splitCut() : 0;
+  const color = layout.header === 'bold' ? b.c.onPrimary : b.ink.heading;
+  return `.esg-header{position:relative;z-index:100}
 .esg-header .esg-hd-brand,.esg-header .esg-hd-cta{flex:0 0 auto!important;width:auto!important;max-width:none}
 .esg-header .esg-hd-nav{flex:1 1 auto!important;width:auto!important;min-width:0}
-.esg-nav{position:relative;display:flex;justify-content:var(--esg-justify);align-items:center;font-family:"${fonts.body}",sans-serif}
-.esg-nav-list{list-style:none;margin:0;padding:0;display:flex;flex-wrap:nowrap;align-items:center;gap:6px ${upper ? 26 : 30}px}
-.esg-nav-list li{margin:0;padding:0}
-.esg-nav-list a{position:relative;display:block;padding:8px 0;color:var(--esg-color);font-size:${upper ? 13 : 15}px;font-weight:600;line-height:1.3;${upper ? 'text-transform:uppercase;letter-spacing:1px;' : ''}text-decoration:none;white-space:nowrap;transition:color .2s}
-.esg-nav-list a::after{content:"";position:absolute;left:0;right:0;bottom:2px;height:2px;background:var(--esg-hover);transform:scaleX(0);transform-origin:left;transition:transform .25s}
-.esg-nav-list a:hover,.esg-nav-list a:focus-visible,.esg-nav-list a[aria-current=page]{color:var(--esg-hover)}
-.esg-nav-list a:hover::after,.esg-nav-list a:focus-visible::after,.esg-nav-list a[aria-current=page]::after{transform:scaleX(1)}
-.esg-nav-toggle,.esg-nav-list .esg-nav-cta{display:none}
+.esg-nav .hfe-nav-menu__layout-horizontal .hfe-nav-menu{flex-wrap:nowrap}
+.esg-nav a.hfe-menu-item{white-space:nowrap}
 @media (max-width:1024px){
 .esg-header .esg-hd-nav{flex:0 0 auto!important;order:3}
 .esg-header .esg-hd-cta{margin-left:auto}
-.esg-nav-toggle{display:inline-flex;align-items:center;justify-content:center;width:46px;height:46px;padding:0;margin:0;border:1px solid var(--esg-line);border-radius:var(--esg-radius);background:transparent;color:var(--esg-color);cursor:pointer;-webkit-tap-highlight-color:transparent}
-.esg-nav-toggle:hover,.esg-nav-toggle:focus{background:transparent;color:var(--esg-color)}
-.esg-nav-toggle:focus-visible{outline:2px solid var(--esg-hover);outline-offset:2px}
-.esg-nav-bars{position:relative;display:block;width:22px;height:16px}
-.esg-nav-bars span{position:absolute;left:0;width:100%;height:2px;border-radius:2px;background:currentColor;transition:transform .25s,opacity .2s,top .25s}
-.esg-nav-bars span:nth-child(1){top:0}.esg-nav-bars span:nth-child(2){top:7px}.esg-nav-bars span:nth-child(3){top:14px}
-.esg-nav.is-open .esg-nav-bars span:nth-child(1){top:7px;transform:rotate(45deg)}
-.esg-nav.is-open .esg-nav-bars span:nth-child(2){opacity:0}
-.esg-nav.is-open .esg-nav-bars span:nth-child(3){top:7px;transform:rotate(-45deg)}
-.esg-nav-list{position:absolute;top:calc(100% + 14px);right:0;z-index:9999;width:min(320px,calc(100vw - 32px));flex-direction:column;align-items:stretch;gap:2px;padding:10px;background:var(--esg-panel);border:1px solid var(--esg-line);border-radius:var(--esg-radius);box-shadow:0 18px 44px rgba(15,27,45,.2);opacity:0;visibility:hidden;transform:translateY(-8px);transition:opacity .2s,transform .2s,visibility .2s}
-.esg-nav.is-open .esg-nav-list{opacity:1;visibility:visible;transform:none}
-.esg-nav-list a{padding:12px 14px;color:var(--esg-panel-color);border-radius:var(--esg-radius);white-space:normal}
-.esg-nav-list a::after{display:none}
-.esg-nav-list a:hover,.esg-nav-list a:focus-visible,.esg-nav-list a[aria-current=page]{color:var(--esg-panel-color);background:var(--esg-panel-hover)}
+.esg-nav a.hfe-menu-item{white-space:normal}
 }
 @media (max-width:767px){
 .esg-header .esg-hd-cta{display:none!important}
 .esg-header .esg-hd-nav{margin-left:auto}
-.esg-nav-list .esg-nav-cta{display:block;margin-top:8px}
-.esg-nav-list .esg-nav-cta a,.esg-nav-list .esg-nav-cta a:hover{background:var(--esg-cta-bg);color:var(--esg-cta-color);text-align:center}
 }${
-    o.skip
+    skip
       ? `
 .esg-header .esg-hd-side{flex:1 1 0!important;width:auto!important;min-width:0;flex-wrap:nowrap!important}
-@media (min-width:1025px){.esg-nav-skip .esg-nav-list li:nth-child(-n+${o.skip}){display:none}}`
+@media (min-width:1025px){.esg-nav-left .hfe-nav-menu>li:nth-child(n+${skip + 1}),.esg-nav-skip .hfe-nav-menu>li:nth-child(-n+${skip}){display:none}}`
       : ''
-  }`;
-  const html =
-    `<nav class="esg-nav${o.skip ? ' esg-nav-skip' : ''}" style="${style}" aria-label="${escapeAttr(b.L.menu)}">` +
-    `<button type="button" class="esg-nav-toggle" aria-expanded="false" aria-controls="esg-nav-list" aria-label="${escapeAttr(b.L.menu)}"><span class="esg-nav-bars" aria-hidden="true"><span></span><span></span><span></span></span></button>` +
-    `<ul id="esg-nav-list" class="esg-nav-list">${items}<li class="esg-nav-cta"><a href="${escapeAttr(o.button.url)}">${escapeHtml(o.button.text)}</a></li></ul>` +
-    `</nav>${duotoneSvg(b)}\n<style>\n${css}\n${finishCss(b)}\n</style>\n<script>\n${headerScripts(b)}\n</script>`;
-  const el = b.html(html);
-  b.mark(el, 'html', { fixed: true });
-  return el;
+  }
+.esg-nav .menu{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px 24px;font-family:"${b.fonts.body}",sans-serif}
+.esg-nav .menu a{color:${color};font-weight:600;text-decoration:none}`;
+}
+
+/** Pages on the left of the logo in the "split" header. */
+const splitCut = () => Math.ceil(MENU_ROLES.length / 2);
+
+/**
+ * Menu of the header: the site menu of WordPress (Appearance → Menus) in the free "Navigation Menu"
+ * widget of Ultimate Addons for Elementor, with its own hamburger below 1025px, styled in its settings.
+ * o: { align ('left' | 'center' | 'right'), color, hover, box (width options of its container),
+ *      skip: on desktop, the first pages are left out (shown on the left of the logo: "split" header) }
+ */
+function navMenu(b, site, o) {
+  return b.box([uaeMenu(b, site, { align: o.align, color: o.color, hover: o.hover })], { ...o.box, css: `esg-hd-nav esg-nav${o.skip ? ' esg-nav-skip' : ''}` });
 }
 
 function header(b, site) {
@@ -2096,11 +2103,8 @@ function header(b, site) {
   // "split": the logo in the middle of two equal sides, the first pages on the left, the others and the button on the
   // right; below 1025px the left side is hidden and the logo, the button and the whole menu are as in the other headers
   if (layout.header === 'split') {
-    const pages = menuItems(site);
-    const cut = Math.ceil(pages.length / 2);
-    const vars = `--esg-justify:flex-end;--esg-color:${menuColor};--esg-hover:${hover}`;
-    const left = b.html(`<nav class="esg-nav" style="${vars}" aria-label="${escapeAttr(b.L.menu)}"><ul class="esg-nav-list">${menuLinks(pages.slice(0, cut))}</ul></nav>`);
-    b.mark(left, 'html', { fixed: true });
+    // The same WordPress menu on both sides: the left one shows its first items, the right one the others (headerCss)
+    const left = b.box([uaeMenu(b, site, { align: 'right', color: menuColor, hover, dropdown: 'none' })], { css: 'esg-nav esg-nav-left' });
     out.push(
       b.section(
         [
@@ -2108,7 +2112,7 @@ function header(b, site) {
           b.box([brand(b, site, { align: 'center', mobileWidth: 140 })], { css: 'esg-hd-brand' }),
           b.box(
             [
-              b.box([navMenu(b, site, { justify: 'flex-start', color: menuColor, hover, button, skip: cut })], { css: 'esg-hd-nav' }),
+              navMenu(b, site, { align: 'left', color: menuColor, hover, skip: splitCut() }),
               b.box([b.button(button.text, button.url, { variant: 'main', align: 'right', hint: 'header button leading to the contact page', max: 25 })], { align: 'flex-end', css: 'esg-hd-cta' }),
             ],
             { row: true, gap: 20, css: 'esg-hd-side' }
@@ -2123,7 +2127,7 @@ function header(b, site) {
     b.section(
       [
         b.box([brand(b, site, { color: bold ? b.c.onPrimary : undefined, mobileWidth: 140 })], { width: 20, tablet: 30, mobile: 60, css: 'esg-hd-brand' }),
-        b.box([navMenu(b, site, { justify: layout.header === 'centered' ? 'center' : 'flex-end', color: menuColor, hover, button })], { width: 56, tablet: 15, mobile: 30, css: 'esg-hd-nav' }),
+        navMenu(b, site, { align: layout.header === 'centered' ? 'center' : 'right', color: menuColor, hover, box: { width: 56, tablet: 15, mobile: 30 } }),
         b.box([b.button(button.text, button.url, { variant: bold ? 'secondary' : 'main', align: 'right', hint: 'header button leading to the contact page', max: 25 })], { width: 20, tablet: 40, align: 'flex-end', css: 'esg-hd-cta' }),
       ],
       { row: true, wrap: false, bg, padY: 16, gap: 20, ...frame, css: 'esg-header' }
@@ -2134,11 +2138,14 @@ function header(b, site) {
 
 /**
  * Legal links after the copyright. The Cookie Policy and Privacy Policy pages are created by the
- * site owner afterwards with these slugs, so the links work as soon as the pages exist.
+ * site owner afterwards with these slugs, so the links work as soon as the pages exist. They stay
+ * relative ("/cookie-policy", never "https://domain/cookie-policy/"): the WordPress plugin leaves them as they are.
  */
-const LEGAL_LINKS =
-  ' | <a href="/cookie-policy/" style="color:inherit">Cookie Policy</a>' +
-  ' | <a href="/informativa-sul-trattamento-dei-dati-personali/" style="color:inherit">Privacy Policy</a>';
+export const LEGAL_PAGES = [
+  { text: 'Cookie Policy', url: '/cookie-policy' },
+  { text: 'Privacy Policy', url: '/informativa-sul-trattamento-dei-dati-personali' },
+];
+const LEGAL_LINKS = LEGAL_PAGES.map((p) => ` | <a href="${p.url}" style="color:inherit">${p.text}</a>`).join('');
 
 function footer(b, site) {
   const variant = b.spec.layout.footer;
@@ -2175,7 +2182,7 @@ function footer(b, site) {
     invite.push(
       b.section(
         [
-          b.box([b.heading(copy.footerTitle, { size: 50, color: titleColor, hl: true, hint: 'large invitation to get in touch at the top of the footer, shown on every page (one short sentence)', max: 80 })], { width: 62 }),
+          b.box([b.heading(copy.footerTitle, { size: 50, color: titleColor, hl: true, hint: 'large invitation to get in touch at the top of the footer, shown on every page (one short sentence, at most 7 words)', max: 60 })], { width: 62 }),
           b.box(contact, { width: 32, gap: 16, align: 'flex-start' }),
         ],
         { row: true, ...style, padY: Math.round(b.pad * 0.8), borderBottom: light ? b.ink.border : 'rgba(255,255,255,0.12)' }
@@ -2236,5 +2243,38 @@ export function buildSite(spec, site) {
       marks: b.marks,
     };
   }
-  return { docs, globalStyles: globalStyles(spec) };
+  return { docs, globalStyles: globalStyles(spec), siteCss: siteCss(spec, site) };
+}
+
+/**
+ * CSS of the whole site (Appearance → Customize → Additional CSS, written by the WordPress plugin):
+ * the header layout, then the finishing touches and signature details of the template.
+ */
+export function siteCss(spec, site) {
+  const b = createDoc('site', spec, site);
+  b.spec = spec;
+  return `${headerCss(b)}\n${finishCss(b)}\n`;
+}
+
+/**
+ * Highlight style of the titles ("esg-hl"): their last word (the last two when it is a short one)
+ * wrapped in <span class="esg-hl-w">, once the texts are written. Titles of fewer than 3 words or
+ * already holding HTML stay as they are.
+ */
+export function highlightTitles(doc) {
+  const visit = (el) => {
+    if (!el || typeof el !== 'object') return;
+    if (Array.isArray(el)) return el.forEach(visit);
+    const s = el.settings;
+    if (el.widgetType === 'heading' && s && /(^|\s)esg-hl(\s|$)/.test(s._css_classes || '') && typeof s.title === 'string' && !/[<>]/.test(s.title)) {
+      const w = s.title.trim().split(/\s+/);
+      if (w.length >= 3) {
+        const k = w.length > 3 && w[w.length - 1].length < 4 ? 2 : 1;
+        s.title = `${w.slice(0, -k).join(' ')} <span class="esg-hl-w">${w.slice(-k).join(' ')}</span>`;
+      }
+    }
+    visit(el.elements);
+  };
+  visit(doc.content);
+  return doc;
 }

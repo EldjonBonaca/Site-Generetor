@@ -182,7 +182,7 @@ test('Italian full site: template, articles, gallery, reviews, contact form, men
   // Header (top bar with phone and email) + footer in 4 columns with the copyright
   const header = read('templates/header.json');
   assert.match(header, /"text":"\+39 02 1234 567"/);
-  assert.match(header, /href=\\"\/chi-siamo\/\\"/);
+  assert.match(header, /"widgetType":"navigation-menu","settings":{"menu":"menu-principale"/, 'the WordPress menu of the site');
   const footer = read('templates/footer.json');
   for (const t of ['"title":"Link"', '"title":"Servizi"', '"title":"Contatti"', '"text":"Pavimenti"', '"url":"/pavimenti/"', 'Via Milano 10, 20100 Milano', '© 2026 Edil Bianchi S.r.l. – P.IVA 01234567890']) {
     assert.ok(footer.includes(t), `footer: ${t}`);

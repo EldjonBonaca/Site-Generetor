@@ -21,8 +21,8 @@ function designText(ctx, form, lang) {
   const it = lang === 'it';
   if (!ctx.kit) {
     return it
-      ? `Questo pacchetto usa il template **${ctx.template.name}** (categoria *${ctx.template.category.name}*). Nulla è stato pubblicato.\n\nPlugin necessari: **Elementor** e **${form.name}** (modulo di contatto). Le pagine usano solo widget nativi di Elementor. Senza Elementor Pro, header e footer sono template di **Ultimate Addons for Elementor (UAE)** (gratuito, installato dal plugin). Elementor Pro è facoltativo.`
-      : `This package uses the template **${ctx.template.name}** (category *${ctx.template.category.name}*). Nothing has been published.\n\nRequired plugins: **Elementor** and **${form.name}** (contact form). The pages only use native Elementor widgets. Without Elementor Pro, the header and footer are **Ultimate Addons for Elementor (UAE)** templates (free, installed by the plugin). Elementor Pro is optional.`;
+      ? `Questo pacchetto usa il template **${ctx.template.name}** (categoria *${ctx.template.category.name}*). Nulla è stato pubblicato.\n\nPlugin necessari: **Elementor** e **${form.name}** (modulo di contatto). Le pagine usano solo widget nativi di Elementor. Il menu dell'header è il widget **Navigation Menu** di **Ultimate Addons for Elementor (UAE)** (gratuito, installato dal plugin, serve anche con Elementor Pro); senza Elementor Pro anche header e footer sono template di UAE. Elementor Pro è facoltativo.`
+      : `This package uses the template **${ctx.template.name}** (category *${ctx.template.category.name}*). Nothing has been published.\n\nRequired plugins: **Elementor** and **${form.name}** (contact form). The pages only use native Elementor widgets. The header menu is the **Navigation Menu** widget of **Ultimate Addons for Elementor (UAE)** (free, installed by the plugin, needed also with Elementor Pro); without Elementor Pro the header and footer are UAE templates too. Elementor Pro is optional.`;
   }
   const plugins = ctx.kit.info.requiredPlugins || [];
   const free = plugins.filter((p) => !p.pro && p.slug !== 'elementor');
@@ -45,6 +45,7 @@ function designText(ctx, form, lang) {
 // ---------------------------------------------------------------------------- IT
 const IT = {
   instructionsFile: 'ISTRUZIONI.md',
+  cssFile: 'css-aggiuntivo.css',
   checksFile: 'CONTROLLI.md',
 
   chkDemoImages: (p, urls) => `**${p}**: immagini segnaposto del template ancora presenti (${urls.length}):\n${list(urls.slice(0, 8))}`,
@@ -76,11 +77,11 @@ const IT = {
   },
 
   menuMd: ({ ctx, menuItems }) =>
-    `# Menu di navigazione — "${ctx.menu.name}"\n\nCreato automaticamente dal plugin o dal file \`wordpress-import.xml\` (slug \`${ctx.menu.slug}\`). L'header e il footer del template contengono già i link alle pagine.\n\n| # | Voce | Link |\n|---|---|---|\n${menuItems
+    `# Menu di navigazione — "${ctx.menu.name}"\n\nCreato automaticamente dal plugin o dal file \`wordpress-import.xml\` (slug \`${ctx.menu.slug}\`). Il menu dell'header è questo menu di WordPress: aggiungi, togli o riordina le voci da **Aspetto → Menu**. Il footer contiene già i link alle pagine.\n\n| # | Voce | Link |\n|---|---|---|\n${menuItems
       .map((m, i) => `| ${i + 1} | ${m.title} | \`${m.url}\` |`)
       .join('\n')}\n`,
 
-  instructions: ({ ctx, built, posts, baseUrl, placeholder, category, menuItems, pluginFile, imageCount }) => {
+  instructions: ({ ctx, built, posts, baseUrl, placeholder, category, menuItems, pluginFile, imageCount, siteCss }) => {
     const templates = sortedTemplates(built);
     const parts = templates.filter((b) => PARTS.includes(b.page.role));
     const pages = templates.filter((b) => !PARTS.includes(b.page.role));
@@ -100,7 +101,7 @@ ${designText(ctx, form, 'it')}
    - crea le 5 pagine ${menuItems.map((m) => `**${m.title}**`).join(', ')} con Elementor (la Galleria mostra tutte le foto);
    - crea ${posts.length} articoli, uno per servizio, nella categoria **"${category.name}"** con immagine in evidenza, già impaginati con Elementor (hero con l'immagine, testo, barra laterale con **"Altri servizi"** e contatti) e con i **commenti disattivati**;
    - crea il modulo di contatto in ${form.name} (i messaggi arrivano a ${ctx.project.email}) e lo inserisce nella pagina **${contact?.page.title || 'Contatti'}**;
-   - crea il menu **"${ctx.menu.name}"**, header e footer e applica i colori e i font del template. Con Elementor Pro usa il Theme Builder; **senza Pro crea header e footer come template di UAE** (Aspetto → UAE → Header Footer Builder), che restano sul sito anche dopo aver eliminato il plugin;
+   - crea il menu **"${ctx.menu.name}"**, header e footer e applica i colori e i font del template. Con Elementor Pro usa il Theme Builder; **senza Pro crea header e footer come template di UAE** (Aspetto → UAE → Header Footer Builder), che restano sul sito anche dopo aver eliminato il plugin;${siteCss ? '\n   - salva lo stile del template (header, effetti, dettagli) in **Aspetto → Personalizza → CSS aggiuntivo**, dove resta anche dopo aver eliminato il plugin;' : ''}
    - imposta la Home come pagina iniziale e i permalink "Nome articolo".
 4. Leggi i messaggi finali e controlla il sito su desktop, tablet e mobile (vedi \`CONTROLLI.md\`).
 
@@ -115,7 +116,7 @@ Segui i passaggi **in quest'ordine**.
 ## 0. Requisiti
 
 - WordPress con **Elementor** attivo e **Elementor Pro** (Theme Builder per header, footer e articolo singolo), tema **Hello Elementor** consigliato.
-- Plugin **${form.name}** (modulo contatti) e **WordPress Importer** (Strumenti → Importa → WordPress → Installa ora).
+- Plugin **${form.name}** (modulo contatti) e **WordPress Importer** (Strumenti → Importa → WordPress → Installa ora).${siteCss ? '\n- Plugin **Ultimate Addons for Elementor** (gratuito): il menu dell\'header è il suo widget Navigation Menu.' : ''}
 - **Impostazioni → Permalink → "Nome articolo"**: i link del sito usano indirizzi come \`/chi-siamo/\` e \`/${posts[0]?.slug || 'nome-servizio'}/\`.
 
 ## 1. Carica prima le immagini
@@ -180,9 +181,9 @@ ${pages.map((b) => `| ${b.page.title} | \`templates/${b.page.key}.json\` | \`/${
 
 La mappa Google è già impostata con l'indirizzo: ${ctx.project.address.replace(/\n+/g, ', ')}.
 
-## 8. Menu, SEO e controlli finali
-
-- **Aspetto → Menu**: verifica il menu "${ctx.menu.name}".
+## 8. Stile, menu, SEO e controlli finali
+${siteCss ? `\n- **Aspetto → Personalizza → CSS aggiuntivo**: incolla tutto il contenuto di \`${IT.cssFile}\` → **Pubblica** (stile dell'header, effetti e dettagli del template su tutte le pagine).` : ''}
+- **Aspetto → Menu**: verifica il menu "${ctx.menu.name}" (nell'header è nel widget Navigation Menu: se non è selezionato, sceglilo nelle sue impostazioni).
 - **SEO**: \`seo.csv\` contiene titolo, meta description e slug di ogni pagina e articolo (Yoast, Rank Math…).
 - **Controlli**: leggi \`CONTROLLI.md\` e verifica il layout su desktop, tablet e mobile.
 - Tutti i testi generati sono in \`content.md\`.
@@ -200,6 +201,7 @@ La mappa Google è già impostata con l'indirizzo: ${ctx.project.address.replace
 // ---------------------------------------------------------------------------- EN
 const EN = {
   instructionsFile: 'INSTRUCTIONS.md',
+  cssFile: 'additional-css.css',
   checksFile: 'CHECKS.md',
 
   chkDemoImages: (p, urls) => `**${p}**: template placeholder images still present (${urls.length}):\n${list(urls.slice(0, 8))}`,
@@ -231,11 +233,11 @@ const EN = {
   },
 
   menuMd: ({ ctx, menuItems }) =>
-    `# Navigation menu — "${ctx.menu.name}"\n\nCreated by the plugin or by \`wordpress-import.xml\` (slug \`${ctx.menu.slug}\`). The header and footer of the template already link to the pages.\n\n| # | Item | Link |\n|---|---|---|\n${menuItems
+    `# Navigation menu — "${ctx.menu.name}"\n\nCreated by the plugin or by \`wordpress-import.xml\` (slug \`${ctx.menu.slug}\`). The header menu is this WordPress menu: add, remove or reorder its items in **Appearance → Menus**. The footer already links to the pages.\n\n| # | Item | Link |\n|---|---|---|\n${menuItems
       .map((m, i) => `| ${i + 1} | ${m.title} | \`${m.url}\` |`)
       .join('\n')}\n`,
 
-  instructions: ({ ctx, built, posts, baseUrl, placeholder, category, menuItems, pluginFile, imageCount }) => {
+  instructions: ({ ctx, built, posts, baseUrl, placeholder, category, menuItems, pluginFile, imageCount, siteCss }) => {
     const templates = sortedTemplates(built);
     const parts = templates.filter((b) => PARTS.includes(b.page.role));
     const pages = templates.filter((b) => !PARTS.includes(b.page.role));
@@ -255,7 +257,7 @@ ${designText(ctx, form, 'en')}
    - creates the 5 pages ${menuItems.map((m) => `**${m.title}**`).join(', ')} with Elementor (the Gallery shows every photo);
    - creates ${posts.length} articles, one per service, in the category **"${category.name}"** with a featured image, already designed with Elementor (hero with the image, text, sidebar with **"Other services"** and contacts) and with **comments disabled**;
    - creates the contact form in ${form.name} (messages are sent to ${ctx.project.email}) and puts it on the **${contact?.page.title || 'Contact'}** page;
-   - creates the menu **"${ctx.menu.name}"**, the header and footer and applies the template colors and fonts. With Elementor Pro it uses the Theme Builder; **without Pro it creates the header and footer as UAE templates** (Appearance → UAE → Header Footer Builder), which stay on the site after the plugin is deleted;
+   - creates the menu **"${ctx.menu.name}"**, the header and footer and applies the template colors and fonts. With Elementor Pro it uses the Theme Builder; **without Pro it creates the header and footer as UAE templates** (Appearance → UAE → Header Footer Builder), which stay on the site after the plugin is deleted;${siteCss ? '\n   - saves the style of the template (header, effects, details) in **Appearance → Customize → Additional CSS**, where it stays after the plugin is deleted;' : ''}
    - sets Home as the front page and "Post name" permalinks.
 4. Read the final messages and check the site on desktop, tablet and mobile (see \`CHECKS.md\`).
 
@@ -270,7 +272,7 @@ Follow the steps **in this order**.
 ## 0. Requirements
 
 - WordPress with **Elementor** and **Elementor Pro** (Theme Builder for header, footer and single post); the **Hello Elementor** theme is recommended.
-- **${form.name}** and the **WordPress Importer** (Tools → Import → WordPress → Install now).
+- **${form.name}** and the **WordPress Importer** (Tools → Import → WordPress → Install now).${siteCss ? '\n- **Ultimate Addons for Elementor** (free): the header menu is its Navigation Menu widget.' : ''}
 - **Settings → Permalinks → "Post name"**: site links use addresses such as \`/${posts[0]?.slug || 'service-name'}/\`.
 
 ## 1. Upload the images first
@@ -326,9 +328,9 @@ ${pages.map((b) => `| ${b.page.title} | \`templates/${b.page.key}.json\` | \`/${
 
 Create the form in ${form.name} (name, email, phone, message, privacy consent, send button; notifications to ${ctx.project.email}), copy its shortcode, then edit **${contact?.page.title || 'Contact'}** with Elementor: replace the placeholder in the **Shortcode widget** \`${form.placeholder}\` with the real shortcode. The Google map already uses your address.
 
-## 8. Menu, SEO and final checks
-
-- **Appearance → Menus**: check "${ctx.menu.name}".
+## 8. Style, menu, SEO and final checks
+${siteCss ? `\n- **Appearance → Customize → Additional CSS**: paste the whole content of \`${EN.cssFile}\` → **Publish** (header style, effects and details of the template on every page).` : ''}
+- **Appearance → Menus**: check "${ctx.menu.name}" (in the header it is in the Navigation Menu widget: if it is not selected, choose it in its settings).
 - \`seo.csv\`: title, meta description and slug of every page and article.
 - Read \`CHECKS.md\` and check the layout on desktop, tablet and mobile. All texts are in \`content.md\`.
 `;

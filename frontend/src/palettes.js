@@ -64,4 +64,4 @@ export function palettes(base, shift = 0) {
 }
 
 /** Do two color sets match on every key? */
-export const samePalette = (a, b) => Object.keys(a).every((k) => a[k]?.toUpperCase() === b[k]?.toUpperCase());
+export const samePalette = (a, b) => !!a && !!b && Object.keys(a).every((k) => a[k]?.toUpperCase() === b[k]?.toUpperCase());

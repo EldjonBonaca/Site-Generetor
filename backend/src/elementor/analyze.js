@@ -51,7 +51,7 @@ const KNOWN_REPEATER_KEYS = {
 
 /** Widgets whose strings are code/config, never copy. */
 const SKIP_WIDGETS = new Set([
-  'html', 'shortcode', 'nav-menu', 'theme-site-logo', 'site-logo', 'template', 'global',
+  'html', 'shortcode', 'nav-menu', 'wp-widget-nav_menu', 'theme-site-logo', 'site-logo', 'template', 'global',
   'sidebar', 'menu-anchor', 'google_maps', 'video', 'audio', 'spacer', 'code-highlight', 'lottie',
 ]);
 

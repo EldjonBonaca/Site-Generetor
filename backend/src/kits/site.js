@@ -539,7 +539,9 @@ export function buildKitSite(kit, site, custom = {}) {
     docs[role] = { ...prepareDocument(doc, role, sections, site, kit.demoImages), origin, source, templateTitle: id ? titleOf(id) : null };
     delete docs[role].doc._role;
   }
-  return { docs, globalStyles: kit.info.globalStyles || null, analyzeOptions: KIT_ANALYZE_OPTIONS };
+  // A header made by the template builder (the kit has none) needs the site CSS of the builder
+  const siteCss = docs.header?.source === 'builder' ? builder.siteCss : null;
+  return { docs, globalStyles: kit.info.globalStyles || null, siteCss, analyzeOptions: KIT_ANALYZE_OPTIONS };
 }
 
 /**

@@ -10,10 +10,12 @@
  *
  * Generated file. On activation it opens Tools → {{MENU_TITLE}}, which creates the website:
  *  1. setup: Hello Elementor theme (replacing a block theme, or any theme without Elementor Pro),
- *     Contact Form 7 and, without Elementor Pro, Ultimate Addons for Elementor (UAE);
+ *     Contact Form 7 and, without Elementor Pro or when the header menu is its Navigation Menu widget,
+ *     Ultimate Addons for Elementor (UAE);
  *  2. images (Media Library), a few per request;
  *  3. the 5 pages (Home, About, Services, Gallery, Contact) built with Elementor, one article per
- *     service, the menu, the contact form, header/footer/single post templates and the template colors.
+ *     service, the menu, the contact form, header/footer/single post templates, the template colors
+ *     and the CSS of the whole site (Additional CSS of the theme).
  * Header and footer: Elementor Pro Theme Builder templates; without Pro, UAE Header Footer Builder
  * templates shown on the whole site, which keep working after this plugin is deleted. Only when UAE
  * cannot be installed this plugin displays them itself (Hello Elementor hooks).
@@ -404,11 +406,12 @@ function setup_dependencies() {
 		ensure_plugin(CF7, $messages);
 	}
 	ensure_plugin(YOAST, $messages);
-	if (!defined('ELEMENTOR_PRO_VERSION') && has_header_footer()) {
+	$data = data();
+	// UAE: header and footer without Elementor Pro, and the Navigation Menu widget of the header (also with Pro)
+	if ((!defined('ELEMENTOR_PRO_VERSION') && has_header_footer()) || !empty($data['uaeWidgets'])) {
 		ensure_plugin(UAE, $messages);
 	}
 	// Free plugins needed by the widgets of the Template Kit the site is made with
-	$data = data();
 	$required = isset($data['requiredPlugins']) && is_array($data['requiredPlugins']) ? $data['requiredPlugins'] : array();
 	foreach ($required as $plugin) {
 		if (!empty($plugin['slug']) && !empty($plugin['file']) && preg_match('/^[a-z0-9-]+$/i', $plugin['slug'])) {
@@ -416,6 +419,12 @@ function setup_dependencies() {
 		}
 	}
 	return array('done' => true, 'messages' => $messages);
+}
+
+/** The widgets of Ultimate Addons for Elementor are available (its Navigation Menu is the menu of the header). */
+function uae_active() {
+	require_once ABSPATH . 'wp-admin/includes/plugin.php';
+	return is_plugin_active(UAE['file']);
 }
 
 /** Ultimate Addons for Elementor is active: header and footer are saved as its templates. */
@@ -526,8 +535,8 @@ function replace_string($text, array $r) {
 	if (strpos($text, 'href=') !== false) {
 		$text = preg_replace_callback(
 			'#(href=["\'])(/(?!/)[^"\']*)#',
-			function ($m) {
-				return $m[1] . home_url($m[2]);
+			function ($m) use ($r) {
+				return in_array($m[2], $r['relative'], true) ? $m[0] : $m[1] . home_url($m[2]);
 			},
 			$text
 		);
@@ -537,7 +546,8 @@ function replace_string($text, array $r) {
 
 /**
  * Walk Elementor data: bundled images ("esg-image://file") -> Media Library id + URL,
- * nav menus -> the site menu, internal links -> absolute URLs, contact form placeholder -> real form.
+ * nav menus -> the site menu, internal links -> absolute URLs (except the relative links of the data),
+ * contact form placeholder -> real form.
  */
 function prepare_elementor($node, array $r) {
 	if (is_string($node)) {
@@ -575,6 +585,22 @@ function prepare_elementor($node, array $r) {
 		}
 		if (preg_match('/nav-menu|mega-menu|navigation-menu/', $node['widgetType'])) {
 			$node['settings']['menu'] = $r['menu'];
+		}
+		// Menu of a generated header (UAE Navigation Menu) when UAE could not be installed: the site menu in the
+		// "WordPress Menu" widget of free Elementor instead, so the header still has its pages (without hamburger)
+		if ($node['widgetType'] === 'navigation-menu' && empty($r['uae_widgets'])) {
+			$node['widgetType'] = 'wp-widget-nav_menu';
+			$node['settings'] = array_merge(
+				array_filter($node['settings'], function ($key) {
+					return strpos($key, '_') === 0;
+				}, ARRAY_FILTER_USE_KEY),
+				array('wp' => array('title' => ''))
+			);
+		}
+		// "WordPress Menu" widget: the site menu (Appearance -> Menus); the id also selects it in the Elementor editor
+		if ($node['widgetType'] === 'wp-widget-nav_menu') {
+			$wp = isset($node['settings']['wp']) && is_array($node['settings']['wp']) ? $node['settings']['wp'] : array();
+			$node['settings']['wp'] = array_merge($wp, array('nav_menu' => (string) $r['menu_id']));
 		}
 	}
 	$is_link = isset($node['url']) && (array_key_exists('is_external', $node) || array_key_exists('nofollow', $node));
@@ -777,7 +803,10 @@ function import_content() {
 	$r = array(
 		'images' => $images,
 		'menu' => $menu->slug,
+		'menu_id' => (int) $menu->term_id,
 		'uae_menu' => use_uae(),
+		'uae_widgets' => uae_active(),
+		'relative' => isset($data['relativeLinks']) ? (array) $data['relativeLinks'] : array(),
 		'form_fallback' => (!defined('ELEMENTOR_PRO_VERSION') && $shortcode) ? $shortcode : '',
 		'strings' => ($shortcode && !empty($data['contactForm']['placeholder'])) ? array($data['contactForm']['placeholder'] => $shortcode) : array(),
 	);
@@ -911,6 +940,7 @@ function import_content() {
 	}
 
 	apply_global_styles($data['globalStyles'], $messages);
+	apply_site_css(isset($data['siteCss']) ? $data['siteCss'] : '');
 
 	// Site settings: name, logo, static front page, "Post name" permalinks
 	update_option('blogname', $data['site']['name']);
@@ -1019,6 +1049,23 @@ function regenerate_theme_conditions(array &$messages) {
 		// reported below
 	}
 	$messages[] = array('level' => 'warning', 'text' => t('conditions'));
+}
+
+/**
+ * CSS of the whole site (header layout, finishing touches of the template) -> Appearance -> Customize ->
+ * Additional CSS of the active theme, between markers: running again replaces it, the CSS the site
+ * owner adds there stays. It keeps working after this plugin is deleted.
+ */
+function apply_site_css($css) {
+	if (!is_string($css) || trim($css) === '' || !function_exists('wp_update_custom_css_post')) {
+		return;
+	}
+	$start = '/* ' . PAGE . ':start */';
+	$end = '/* ' . PAGE . ':end */';
+	$pattern = '#\s*' . preg_quote($start, '#') . '.*?' . preg_quote($end, '#') . '\s*#s';
+	$own = trim(preg_replace($pattern, "\n", wp_get_custom_css()));
+	$block = $start . "\n" . trim($css) . "\n" . $end;
+	wp_update_custom_css_post($own === '' ? $block : $own . "\n\n" . $block);
 }
 
 /** Colors and fonts of the template -> the global colors / fonts of the active Elementor kit. */

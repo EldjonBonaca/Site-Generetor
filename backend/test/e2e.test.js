@@ -253,7 +253,7 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.equal(homeDoc.content[0].settings.background_image.url, `${baseUrl}plumber-roma-home-hero.webp`);
   const aboutDoc = JSON.parse(zip.readAsText(root + 'templates/about.json'));
   assert.equal(aboutDoc.content[0].settings.background_image.url, `${baseUrl}plumber-roma-banner-subheader.webp`);
-  assert.match(homeJson, /Idraulico a Roma 24\/7/);
+  assert.match(homeJson, /Idraulico a Roma <span class=\\"esg-hl-w\\">24\/7<\/span>/, 'hero title with its last word highlighted (no script on the site)');
   assert.match(homeJson, /tel:\+390612345678/);
   assert.match(homeJson, /plumber-roma-riparazione-caldaie\.webp/, 'service card uses the service image');
   for (const f of names.filter((n) => n.startsWith(root + 'templates/'))) {
@@ -264,16 +264,20 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   const reviewsOf = (doc) => JSON.stringify(doc).match(/"testimonial_(content|name|job)":"[^"]*"/g);
   assert.deepEqual(reviewsOf(aboutDoc), reviewsOf(homeDoc));
   assert.match(JSON.stringify(aboutDoc), /"testimonial_name":"Anna Neri"/);
-  // Header: logo + menu of the 5 pages; footer: services + contacts + copyright
+  // Header: logo + the WordPress menu of the site; footer: services + contacts + copyright
   const header = zip.readAsText(root + 'templates/header.json');
   assert.equal(JSON.parse(header).type, 'header');
   assert.match(header, /rossi-idraulica-logo\.webp/);
-  for (const url of ['/about-us/', '/services/', '/gallery/', '/contact/']) assert.ok(header.includes(`href=\\"${url}\\"`), `header menu: ${url}`);
+  assert.match(JSON.stringify(JSON.parse(header)), /"widgetType":"navigation-menu","settings":\{"menu":"main-menu"/, 'header menu: the WordPress menu (UAE Navigation Menu), not HTML links');
+  assert.doesNotMatch(header, /<script|<style/, 'no code in the header');
+  // The CSS of the whole site: a file for the manual import, the Additional CSS with the plugin
+  assert.match(zip.readAsText(root + 'additional-css.css'), /\.esg-header\{position:relative;z-index:100\}/);
+  assert.doesNotMatch(header, /<li><a href=/, 'no menu written in HTML');
   const footer = zip.readAsText(root + 'templates/footer.json');
   for (const t of ['Riparazione caldaie', '/bagni-su-misura/', 'mailto:info@rossi-idraulica.it', `© ${new Date().getFullYear()} Rossi Idraulica. All rights reserved.`]) assert.ok(footer.includes(t), `footer: ${t}`);
   // Legal pages created later by the site owner
-  assert.ok(footer.includes('<a href=\\"/cookie-policy/\\"'), 'footer: Cookie Policy link');
-  assert.ok(footer.includes('<a href=\\"/informativa-sul-trattamento-dei-dati-personali/\\"'), 'footer: Privacy Policy link');
+  assert.ok(footer.includes('<a href=\\"/cookie-policy\\"'), 'footer: Cookie Policy link');
+  assert.ok(footer.includes('<a href=\\"/informativa-sul-trattamento-dei-dati-personali\\"'), 'footer: Privacy Policy link');
   const contact = zip.readAsText(root + 'templates/contact.json');
   assert.ok(contact.includes('[contact-form-7 id=\\"INSERIRE_ID\\" title=\\"Contact form\\"]'));
   assert.match(contact, /"css_classes":\s*"esg-form"/, 'Contact Form 7 styled by the template');
@@ -301,6 +305,15 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.ok(php.includes("array('rule' => array('basic-global')"), 'shown on the entire site');
   assert.ok(!php.includes("'metform") && !php.includes('metform-form') && !php.includes('[metform'), 'Contact Form 7 only');
   const site = JSON.parse(plugin.readAsText(pr + 'data/site.json'));
+  // The legal links of the copyright stay relative
+  assert.deepEqual(site.relativeLinks, ['/cookie-policy', '/informativa-sul-trattamento-dei-dati-personali']);
+  assert.ok(php.includes("in_array($m[2], $r['relative'], true)"), 'relative legal links');
+  // Header menu = UAE Navigation Menu: UAE installed also with Elementor Pro, the WordPress Menu widget if UAE is missing
+  assert.equal(site.uaeWidgets, true);
+  assert.ok(php.includes("!empty($data['uaeWidgets'])") && php.includes("$node['widgetType'] === 'navigation-menu' && empty($r['uae_widgets'])"), 'UAE for the menu, fallback without it');
+  // The CSS of the whole site goes to the Additional CSS of the theme, between markers (the owner's CSS stays)
+  assert.match(site.siteCss, /\.esg-header\{position:relative;z-index:100\}/);
+  assert.ok(php.includes('wp_update_custom_css_post(') && php.includes("':start */'"), 'Additional CSS');
   assert.deepEqual(site.pages.map((x) => [x.role, x.title, x.slug]), [
     ['home', 'Home', 'home'],
     ['about', 'About Us', 'about-us'],
@@ -351,7 +364,7 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   const pluginHome = plugin.readAsText(pr + 'data/elementor/home.json');
   assert.match(pluginHome, /"url":"esg-image:\/\/plumber-roma-home[^"]*\.webp"/, 'images point to the bundled files');
   assert.doesNotMatch(pluginHome, /rossi-idraulica\.it\/wp-content|template\.invalid/, 'no base URL / placeholder image in the plugin');
-  assert.match(pluginHome, /Idraulico a Roma 24\/7/);
+  assert.match(pluginHome, /Idraulico a Roma <span class=\\"esg-hl-w\\">24\/7<\/span>/);
 
   // 9. Another template: the old generation cannot be exported with it
   const other = await api('POST', `/template-categories/${cat.id}/templates`, { name: 'Other', spec: draft.spec });

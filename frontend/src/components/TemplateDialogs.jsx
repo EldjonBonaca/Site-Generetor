@@ -574,7 +574,7 @@ export function TemplateEditor({ template, onClose, onSaved, diversifyOnOpen = f
                 </button>
               </div>
               <div className="mb-3 grid grid-cols-3 gap-2">
-                {[{ id: 'original', colors: original }, ...choices].map((p) => {
+                {[...(original ? [{ id: 'original', colors: original }] : []), ...choices].map((p) => {
                   const active = samePalette(p.colors, spec.style.colors);
                   return (
                     <button
