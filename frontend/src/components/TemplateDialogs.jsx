@@ -362,9 +362,9 @@ export function TemplateGenerator({ open, onClose, category, onSaved, onAnalyzed
           }
         />
       ) : (
-        <div className={draft ? 'grid gap-6 lg:grid-cols-[1fr_360px]' : ''}>
+        <div className={draft ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]' : ''}>
           {draft && (
-            <div className="order-2 lg:order-1">
+            <div className="order-2 min-w-0 lg:order-1">
               <TemplatePreview spec={draft.spec} />
             </div>
           )}
@@ -557,8 +557,8 @@ export function TemplateEditor({ template, onClose, onSaved, diversifyOnOpen = f
           <Spinner />
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-          <div className="order-2 lg:order-1">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="order-2 min-w-0 lg:order-1">
             {newDirection && (
               <p className="mb-2 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-800">
                 {t('New design in the "{direction}" direction: palette, texts and sections are the same. Save to keep it.', { direction: t(newDirection) })}

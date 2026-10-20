@@ -139,7 +139,7 @@ export default function TemplateStep({ project, reload }) {
               </>
             }
           >
-            <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
               <TemplatePreview spec={current.spec} />
               <div className="space-y-4 text-sm">
                 <TemplateSwatches spec={current.spec} direction={current.direction_name && t(current.direction_name)} />
