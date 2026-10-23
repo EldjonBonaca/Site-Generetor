@@ -13,6 +13,7 @@ import { clientInstructions, CLIENT_SYSTEM, languageName, SYSTEM_PROMPT, technic
 import { touch } from './projects.js';
 import { AdmZip } from '../lib/zip.js';
 import { imageUpload, prepareUpload, sendImage, storedName } from '../lib/upload.js';
+import { clientNamer } from '../lib/images.js';
 
 const router = Router();
 const ROLES = ['', 'hero_home', 'subheader', 'service', 'logo', 'gallery'];
@@ -37,13 +38,15 @@ router.post('/projects/:id/images', imageUpload.array('files'), async (req, res)
   const created = [];
   const errors = [];
   const optimized = [];
+  // Named after the client (site name + city), not with the name of the file on the computer
+  const nameFor = clientNamer(project, all('SELECT file_name FROM images WHERE project_id = ?', project.id).map((r) => r.file_name));
   for (const file of req.files) {
     try {
       // Images of 1 MB or more are compressed below 1 MB (lib/optimize.js)
       const up = await prepareUpload(file);
       const stored = storedName(up.info.ext);
       fs.writeFileSync(path.join(dir, stored), up.buffer);
-      const fileName = `${slugify(path.parse(file.originalname).name) || 'image'}${up.info.ext}`;
+      const fileName = nameFor(up.info.ext, slugify(path.parse(file.originalname).name));
       const { lastInsertRowid } = run(
         `INSERT INTO images (project_id, file_path, file_name, original_name, mime, width, height, size)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -65,10 +68,11 @@ router.get('/images/:iid/file', (req, res) => sendImage(res, requireImage(req.pa
 
 /**
  * Add images of the Gallery library to the project. The files are copied, so the project keeps
- * them even if they are later deleted from the Gallery. Images already added are skipped.
+ * them even if they are later deleted from the Gallery, and named after the client
+ * ("<site>-<city>-1.jpg"…). Images already added are skipped.
  */
 router.post('/projects/:id/images/from-library', (req, res) => {
-  const project = get('SELECT id FROM projects WHERE id = ?', req.params.id);
+  const project = get('SELECT id, site_name, city FROM projects WHERE id = ?', req.params.id);
   if (!project) throw notFound('Project');
   const ids = [...new Set((Array.isArray(req.body?.ids) ? req.body.ids : []).map(Number).filter(Number.isInteger))];
   if (!ids.length) throw badRequest('Select at least one image of the Gallery.');
@@ -77,6 +81,8 @@ router.post('/projects/:id/images/from-library', (req, res) => {
   fs.mkdirSync(dir, { recursive: true });
   const created = [];
   let skipped = 0;
+  // The photo gets the name of this client (the same Gallery photo has another name in every project)
+  const nameFor = clientNamer(project, all('SELECT file_name FROM images WHERE project_id = ?', project.id).map((r) => r.file_name));
   for (const id of ids) {
     const lib = get('SELECT * FROM library_images WHERE id = ?', id);
     const from = lib && path.join(config.storageDir, lib.file_path);
@@ -89,7 +95,7 @@ router.post('/projects/:id/images/from-library', (req, res) => {
     const { lastInsertRowid } = run(
       `INSERT INTO images (project_id, file_path, file_name, original_name, mime, width, height, size, alt_text, library_image_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      project.id, `images/${project.id}/${stored}`, lib.file_name, lib.original_name, lib.mime, lib.width, lib.height, lib.size, lib.alt_text, lib.id
+      project.id, `images/${project.id}/${stored}`, nameFor(path.extname(lib.file_name || lib.file_path).toLowerCase(), slugify(path.parse(lib.file_name || '').name)), lib.original_name, lib.mime, lib.width, lib.height, lib.size, lib.alt_text, lib.id
     );
     already.add(lib.id);
     created.push(get('SELECT * FROM images WHERE id = ?', lastInsertRowid));

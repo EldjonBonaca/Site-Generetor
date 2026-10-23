@@ -24,6 +24,28 @@ export function exportNames(images, imageSettings) {
 }
 
 /**
+ * Names of the images added to a project (uploaded, or picked from the Gallery library), after the
+ * client: "edil-rossi-roma-1.jpg", "edil-rossi-roma-2.webp"… (site name + city), continuing the
+ * numbers already used in the project. Without a site name yet, the original name is kept.
+ * @param {object} project  { site_name, city }
+ * @param {string[]} existing  file names already in the project
+ * @returns {(ext: string, fallback: string) => string}
+ */
+export function clientNamer(project, existing) {
+  const base = slugify([project.site_name, project.city].filter((s) => s && s.trim()).join(' '), 60);
+  const used = new Set(existing.map((n) => path.parse(n || '').name));
+  let n = 0;
+  return (ext, fallback) => {
+    if (!base) return `${fallback || 'image'}${ext}`;
+    let name;
+    do name = `${base}-${++n}`;
+    while (used.has(name));
+    used.add(name);
+    return `${name}${ext}`;
+  };
+}
+
+/**
  * Photos of the site: every uploaded image except the logo. The Gallery page shows all of them,
  * and they also fill the free image slots of every other page.
  */

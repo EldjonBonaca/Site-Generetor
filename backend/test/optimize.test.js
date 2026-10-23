@@ -156,7 +156,8 @@ test('API: project and Gallery uploads store the compressed file', async () => {
     assert.equal(body.created.length, 2);
     const [img, kept] = body.created;
     assert.equal(img.mime, 'image/jpeg', 'opaque PNG photo -> JPEG');
-    assert.equal(img.file_name, 'foto-grande.jpg');
+    // In a project the photo is named after the client; the Gallery keeps the original name
+    assert.equal(img.file_name, url.startsWith('/library') ? 'foto-grande.jpg' : 'rossi-1.jpg');
     assert.ok(img.size < LIMIT);
     assert.deepEqual(body.optimized.map((o) => [o.name, o.from, o.to]), [['Foto Grande.png', big.length, img.size]]);
     const file = await fetch(`${base}${url.startsWith('/library') ? `/library/images/${img.id}` : `/images/${img.id}`}/file`);

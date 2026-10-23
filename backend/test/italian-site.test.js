@@ -84,7 +84,7 @@ test('Italian full site: template, articles, gallery, reviews, contact form, men
   assert.match(preview.prompt, /\| Immagine in evidenza Servizio 4 – `Cartongesso` \| `[^`]*cartongesso[^`]*\.webp/, 'table row expanded with image file name');
   assert.match(preview.prompt, /unico archivio condiviso\*\* \(`[^`]*Cantiere[^`]*pavimenti\.webp[^`]*Squadra al lavoro[^`]*`\)/, '{{ELENCO_IMMAGINI}}: every photo');
   assert.doesNotMatch(preview.prompt.match(/unico archivio condiviso[^\n]*/)[0], /logo/, 'the logo is not in the archive');
-  assert.match(preview.prompt, /\| Altre immagini \| `foto-8\.webp \(ALT: Squadra al lavoro\), foto-9\.webp` \|/);
+  assert.match(preview.prompt, /\| Altre immagini \| `edil-bianchi-9\.webp \(ALT: Squadra al lavoro\), edil-bianchi-10\.webp` \|/);
   assert.match(preview.prompt, /dal template Elementor `Edilizia moderna` della categoria `Edilizia`/);
   assert.match(preview.prompt, /Via%20Milano%2010%2C%2020100%20Milano/);
   assert.match(preview.prompt, /\/chi-siamo\//);

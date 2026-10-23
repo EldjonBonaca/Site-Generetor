@@ -203,7 +203,7 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.match(preview.prompt, /template Elementor `Plumber blue` della categoria `Idraulici`/);
   assert.match(preview.prompt, new RegExp(`Font: ${spec.style.fonts.heading} \\(titoli\\)`), 'template style described');
   assert.match(preview.prompt, /realizzato con \*\*Contact Form 7\*\*/);
-  assert.match(preview.prompt, /\| Altre immagini \| `team\.webp` \|/, 'images without a specific use');
+  assert.match(preview.prompt, /\| Altre immagini \| `rossi-idraulica-roma-6\.webp` \|/, 'images without a specific use, named after the client');
   assert.doesNotMatch(preview.prompt, /\{\{[A-Z_]+\}\}/, 'no unresolved variable');
   assert.doesNotMatch(preview.prompt, /Template Kit/);
   assert.match(preview.prompt, /OUTPUT FORMAT/);
@@ -467,11 +467,13 @@ test('Gallery library: categories, upload, pick images in a project', async () =
   const ids = [k.created[0].id, moved.id];
   const added = await api('POST', `/projects/${p.id}/images/from-library`, { ids });
   assert.equal(added.created.length, 2);
+  assert.deepEqual(added.created.map((i) => i.file_name), ['library-test-1.png', 'library-test-2.png'], 'Gallery photos renamed after the client');
   assert.equal(added.created[1].alt_text, 'Modern bathroom');
   assert.equal(added.created[1].library_image_id, moved.id);
   assert.equal(added.created[0].width, 2400);
   const again = await api('POST', `/projects/${p.id}/images/from-library`, { ids: [...ids, k.created[1].id] });
   assert.deepEqual([again.created.length, again.skipped], [1, 2]);
+  assert.equal(again.created[0].file_name, 'library-test-3.png', 'numbering continues');
 
   // Deleting from the Gallery (or a category) leaves the project's copy intact
   await api('DELETE', `/library/images/${moved.id}`);
