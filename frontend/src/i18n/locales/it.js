@@ -606,6 +606,13 @@ export default {
   '{n} image(s) uploaded': '{n} immagine/i caricata/e',
   'JPG, PNG, WEBP or SVG · images of 1 MB or more are compressed automatically': 'JPG, PNG, WEBP o SVG · le immagini da 1 MB in su vengono compresse automaticamente',
   'Compressed under 1 MB with the best quality: {list}': 'Compresse sotto 1 MB con la migliore qualità: {list}',
+  // WhatsApp button
+  'WhatsApp button': 'Pulsante WhatsApp',
+  'Optional: the WordPress plugin installs and activates Joinchat with this number (green WhatsApp button on every page).': 'Facoltativo: il plugin WordPress installa e attiva Joinchat con questo numero (pulsante verde di WhatsApp su ogni pagina).',
+  'WhatsApp number': 'Numero WhatsApp',
+  'With the country code, e.g. +39 333 123 4567 (without it, the code of the site language is added).': 'Con il prefisso internazionale, es. +39 333 123 4567 (senza, viene aggiunto quello della lingua del sito).',
+  'Enter the WhatsApp number, with the country code (e.g. +39 333 123 4567)': 'Inserisci il numero WhatsApp, con il prefisso internazionale (es. +39 333 123 4567)',
+  'Joinchat (WhatsApp, if on)': 'Joinchat (WhatsApp, se attivo)',
   // Copyright and P.IVA
   'VAT number (P.IVA)': 'Partita IVA',
   'Shown in the copyright line of the footer. Until it is filled in the footer shows "P.IVA 123456".': 'Compare nella riga di copyright del footer. Finché non la compili, il footer mostra "P.IVA 123456".',

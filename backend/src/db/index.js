@@ -33,6 +33,9 @@ addColumn('projects', 'template_kit_id', 'INTEGER REFERENCES template_kits(id) O
 addColumn('projects', 'phone2', "TEXT NOT NULL DEFAULT ''");
 addColumn('projects', 'google_business_url', "TEXT NOT NULL DEFAULT ''");
 addColumn('projects', 'map_resolved_url', "TEXT NOT NULL DEFAULT ''");
+// WhatsApp button (Joinchat plugin installed by the WordPress plugin): '1' = on, and its number
+addColumn('projects', 'whatsapp_enabled', "TEXT NOT NULL DEFAULT ''");
+addColumn('projects', 'whatsapp_number', "TEXT NOT NULL DEFAULT ''");
 // P.IVA of the business: in the default copyright line of the footer
 addColumn('projects', 'vat_number', "TEXT NOT NULL DEFAULT ''");
 // Social networks of the site, all optional (lib/socials.js)

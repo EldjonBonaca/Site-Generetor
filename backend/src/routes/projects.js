@@ -11,8 +11,8 @@ import { SOCIAL_KEYS } from '../lib/socials.js';
 
 const router = Router();
 
-const PROJECT_FIELDS = ['site_name', 'phone', 'phone2', 'email', 'address', 'google_business_url', 'city', 'industry', 'language', 'notes', 'image_base_url', 'copyright', 'vat_number', ...SOCIAL_KEYS];
-const MAX_LEN = { site_name: 200, phone: 40, phone2: 40, email: 200, address: 1000, google_business_url: 2000, city: 200, industry: 200, notes: 5000, image_base_url: 500, copyright: 600, vat_number: 40, ...Object.fromEntries(SOCIAL_KEYS.map((k) => [k, 500])) };
+const PROJECT_FIELDS = ['site_name', 'phone', 'phone2', 'email', 'address', 'google_business_url', 'city', 'industry', 'language', 'notes', 'image_base_url', 'copyright', 'vat_number', 'whatsapp_enabled', 'whatsapp_number', ...SOCIAL_KEYS];
+const MAX_LEN = { site_name: 200, phone: 40, phone2: 40, email: 200, address: 1000, google_business_url: 2000, city: 200, industry: 200, notes: 5000, image_base_url: 500, copyright: 600, vat_number: 40, whatsapp_enabled: 1, whatsapp_number: 40, ...Object.fromEntries(SOCIAL_KEYS.map((k) => [k, 500])) };
 
 export function serializeProject(row) {
   const { settings_json, ...rest } = row;
@@ -73,6 +73,7 @@ router.patch('/projects/:id', async (req, res) => {
     if (v.length > MAX_LEN[k]) throw badRequest(`"${k}" is too long (max ${MAX_LEN[k]})`);
   }
   if (data.language && !LANGUAGES[data.language]) throw badRequest('Unsupported language');
+  if (data.whatsapp_enabled !== undefined && !['', '1'].includes(data.whatsapp_enabled)) throw badRequest('"whatsapp_enabled" must be "1" or ""');
   if (data.image_base_url && !/^https?:\/\//i.test(data.image_base_url.trim())) throw badRequest('Image base URL must start with http:// or https://');
 
   // Google Business Profile: a short link is expanded now, so the map knows the place (lib/maps.js)

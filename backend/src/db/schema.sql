@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS projects (
   google_business_url TEXT NOT NULL DEFAULT '', -- Google Business Profile link (optional): map of the Contact page
   map_resolved_url    TEXT NOT NULL DEFAULT '', -- the same link with a short link (maps.app.goo.gl…) expanded
   vat_number     TEXT NOT NULL DEFAULT '',   -- P.IVA (default copyright line)
+  whatsapp_enabled TEXT NOT NULL DEFAULT '', -- '1': WhatsApp button (Joinchat) on the site
+  whatsapp_number  TEXT NOT NULL DEFAULT '', -- its number
   facebook_url   TEXT NOT NULL DEFAULT '',   -- social networks (optional, lib/socials.js)
   instagram_url  TEXT NOT NULL DEFAULT '',
   linkedin_url   TEXT NOT NULL DEFAULT '',

@@ -168,3 +168,15 @@ test('copyright line: agency credit by default, links only in the one typed by t
     'By <a href="https://x.it/" target="_blank" rel="noopener">X</a> alert(1)© 2026 A&amp;B bad'
   );
 });
+
+test('WhatsApp number for Joinchat: digits with the country code, only when the button is on', async () => {
+  const { whatsappNumber } = await import('../src/generation/plan.js');
+  const p = (whatsapp_number, language = 'it', whatsapp_enabled = '1') => whatsappNumber({ whatsapp_enabled, whatsapp_number, language });
+  assert.equal(p('+39 333 123 4567'), '393331234567');
+  assert.equal(p('0039 333 1234567'), '393331234567');
+  assert.equal(p('333 123 4567'), '393331234567', 'Italian site: +39 added');
+  assert.equal(p('06 1234 5678'), '390612345678', 'landline keeps its 0');
+  assert.equal(p('+44 7700 900123', 'en'), '447700900123');
+  assert.equal(p('333 123 4567', 'it', ''), null, 'button off');
+  assert.equal(p('abc'), null, 'not a number');
+});

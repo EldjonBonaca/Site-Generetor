@@ -117,6 +117,23 @@ export function loadContext(projectId) {
   return { project, settings, services, images, template, kit, menu: { name: menuName, slug: slugify(menuName) } };
 }
 
+/** Country code added to a WhatsApp number written without one (by site language). */
+const COUNTRY_CODE = { it: '39', es: '34', fr: '33', de: '49', pt: '351' };
+
+/**
+ * Number of the WhatsApp button (Joinchat wants digits only, with the country code), or null when
+ * the button is off or the number is not valid: "+39 333 123 4567" / "0039…" / "333 123 4567" (Italian site) -> "393331234567".
+ */
+export function whatsappNumber(project) {
+  if (project.whatsapp_enabled !== '1' || !isValidPhone(project.whatsapp_number)) return null;
+  const raw = String(project.whatsapp_number).trim();
+  const digits = raw.replace(/\D/g, '');
+  if (raw.startsWith('+')) return digits;
+  if (digits.startsWith('00')) return digits.slice(2);
+  const code = COUNTRY_CODE[project.language];
+  return code && !digits.startsWith(code) ? code + digits : digits;
+}
+
 /** Credit of the agency at the start of the default copyright line. */
 const CREDIT = '<a href="https://localweb.it/" target="_blank" title="Local Web – Agenzia Web Marketing Milano">Local Web – Agenzia Web Marketing Milano</a>';
 const CREATED_BY = { it: 'Creato da', en: 'Created by', es: 'Creado por', fr: 'Créé par', de: 'Erstellt von', pt: 'Criado por' };
@@ -355,6 +372,7 @@ export function checkReadiness(ctx, user = null) {
   if (p.phone2?.trim() && !isValidPhone(p.phone2)) add('site', 'error', 'The second phone number is not valid.');
   if (!p.address.trim()) add('site', 'error', 'Address is required.');
   for (const s of SOCIALS) if (p[s.key]?.trim() && !isSocialUrl(p[s.key])) add('site', 'error', `The ${s.name} link is not valid: it must start with https://`);
+  if (p.whatsapp_enabled === '1' && !isValidPhone(p.whatsapp_number)) add('site', 'error', 'The WhatsApp button is on: enter a valid WhatsApp number (with the country code, e.g. +39).');
   if (!p.copyright?.trim() && !p.vat_number?.trim()) add('site', 'warning', `No P.IVA: the copyright of the footer shows "P.IVA ${VAT_PLACEHOLDER}". Add it in Site data.`);
   if (p.google_business_url?.trim() && !isGoogleMapsLink(p.google_business_url)) {
     add('site', 'warning', 'The Google Business Profile link is not a Google Maps link: the map of the Contact page shows the business name and address instead.');

@@ -50,6 +50,8 @@ const SITE_PLUGINS = array(
 	array('slug' => 'wp-fastest-cache', 'file' => 'wp-fastest-cache/wpFastestCache.php', 'name' => 'WP Fastest Cache'),
 	array('slug' => 'really-simple-ssl', 'file' => 'really-simple-ssl/rlrsssl-really-simple-ssl.php', 'name' => 'Really Simple SSL'),
 );
+// WhatsApp button, only when the project has it on (its number is in data/site.json)
+const JOINCHAT = array('slug' => 'creame-whatsapp-me', 'file' => 'creame-whatsapp-me/joinchat.php', 'name' => 'Joinchat');
 
 register_activation_hook(__FILE__, __NAMESPACE__ . '\\activate');
 register_uninstall_hook(__FILE__, __NAMESPACE__ . '\\uninstall');
@@ -529,6 +531,14 @@ function setup_extras() {
 	$data = data();
 	foreach (SITE_PLUGINS as $plugin) {
 		ensure_plugin($plugin, $messages);
+	}
+	// WhatsApp button: Joinchat with the number of the site (digits with the country code), shown on every page
+	if (!empty($data['whatsapp']) && preg_match('/^\d{6,20}$/', $data['whatsapp']) && ensure_plugin(JOINCHAT, $messages)) {
+		$joinchat = get_option('joinchat', array());
+		$joinchat = is_array($joinchat) ? $joinchat : array();
+		$joinchat['telephone'] = $data['whatsapp'];
+		update_option('joinchat', $joinchat);
+		$messages[] = array('level' => 'info', 'text' => t('whatsappReady', array('number' => $data['whatsapp'])));
 	}
 	// Premium plugins uploaded in the app (e.g. WP Fastest Cache Premium), after the free plugins they extend
 	$bundled = isset($data['bundledPlugins']) && is_array($data['bundledPlugins']) ? $data['bundledPlugins'] : array();

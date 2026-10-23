@@ -12,7 +12,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { AdmZip } from '../lib/zip.js';
 import { slugify } from '../lib/util.js';
-import { contactForm } from './plan.js';
+import { contactForm, whatsappNumber } from './plan.js';
 import { LEGAL_PAGES } from '../templates/builder.js';
 import { listBundledPlugins, bundledPluginPath } from '../lib/bundled-plugins.js';
 import { socialLinks } from '../lib/socials.js';
@@ -62,6 +62,7 @@ const UI = {
     permalinks: 'Permalink impostati su "Nome articolo".',
     globalStyles: 'Colori e font del template applicati al kit Elementor del sito.',
     themesRemoved: 'Temi non usati eliminati: {names}. Resta solo Hello Elementor.',
+    whatsappReady: 'Pulsante WhatsApp attivo (Joinchat) con il numero +{number}.',
     noElementor: 'Elementor non è attivo: installalo e attivalo da Plugin → Aggiungi nuovo, poi clicca "Crea il sito".',
     themeRemoveFailed: 'Impossibile eliminare il tema "{name}" ({error}): eliminalo da Aspetto → Temi.',
     faviconSet: 'Logo impostato come icona del sito (favicon).',
@@ -113,6 +114,7 @@ const UI = {
     permalinks: 'Permalinks set to "Post name".',
     globalStyles: 'Colors and fonts of the template applied to the Elementor site kit.',
     themesRemoved: 'Unused themes deleted: {names}. Only Hello Elementor is left.',
+    whatsappReady: 'WhatsApp button on (Joinchat) with the number +{number}.',
     noElementor: 'Elementor is not active: install and activate it from Plugins → Add New Plugin, then click "Create the website".',
     themeRemoveFailed: 'Could not delete the theme "{name}" ({error}): delete it from Appearance → Themes.',
     faviconSet: 'Logo set as the site icon (favicon).',
@@ -261,6 +263,8 @@ export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, c
       add(`plugins/${p.zip}`, fs.readFileSync(bundledPluginPath(p.zip)));
       return { zip: p.zip, file: p.file, name: p.name };
     }),
+    // WhatsApp button: Joinchat installed and activated with this number (digits, with the country code)
+    whatsapp: whatsappNumber(project),
     // Social networks of the business: Yoast SEO organization profiles
     socials: socialLinks(project).map((s) => ({ key: s.key, url: s.url })),
     // The menu of the header is the Navigation Menu widget of UAE: installed also with Elementor Pro

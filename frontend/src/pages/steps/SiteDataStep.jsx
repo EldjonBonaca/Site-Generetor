@@ -3,7 +3,7 @@ import { api } from '../../api.js';
 import { useT } from '../../i18n/index.jsx';
 import { useAutosave } from '../../hooks/useAutosave.js';
 import { useToast } from '../../components/Toast.jsx';
-import { Card, Field, Input, SaveStatus, Select, Textarea } from '../../components/ui.jsx';
+import { Card, Field, Input, SaveStatus, Select, Textarea, Toggle } from '../../components/ui.jsx';
 import { StepIssues } from '../../components/StepIssues.jsx';
 
 export const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v || '').trim());
@@ -42,7 +42,7 @@ const isUrl = (v) => {
     return false;
   }
 };
-const FIELDS = ['site_name', 'phone', 'phone2', 'email', 'address', 'google_business_url', 'city', 'industry', 'language', 'notes', 'copyright', 'vat_number', ...SOCIALS.map((s) => s.key)];
+const FIELDS = ['site_name', 'phone', 'phone2', 'email', 'address', 'google_business_url', 'city', 'industry', 'language', 'notes', 'copyright', 'vat_number', 'whatsapp_enabled', 'whatsapp_number', ...SOCIALS.map((s) => s.key)];
 
 export default function SiteDataStep({ project, setProject }) {
   const { t } = useT();
@@ -76,6 +76,7 @@ export default function SiteDataStep({ project, setProject }) {
     phone: !isPhone(form.phone) && t('Enter a valid phone number (digits, spaces, + ( ) - allowed)'),
     // Optional fields: checked only when filled in
     phone2: form.phone2.trim() && !isPhone(form.phone2) && t('Enter a valid phone number (digits, spaces, + ( ) - allowed)'),
+    whatsapp_number: form.whatsapp_enabled === '1' && !isPhone(form.whatsapp_number) && t('Enter the WhatsApp number, with the country code (e.g. +39 333 123 4567)'),
     email: !isEmail(form.email) && t('Enter a valid email address'),
     address: !form.address.trim() && t('Required'),
     google_business_url: form.google_business_url.trim() && !isGoogleMapsLink(form.google_business_url) && t('This is not a Google Maps link: the map will show the business name and address.'),
@@ -108,6 +109,24 @@ export default function SiteDataStep({ project, setProject }) {
           <Field label={t('Second phone number')} hint={t('Optional: shown next to the first one (contacts, footer, articles).')} error={err('phone2')}>
             {(id) => <Input id={id} type="tel" value={form.phone2} onChange={set('phone2')} onBlur={blur('phone2')} placeholder="+44 7700 900123" invalid={!!err('phone2')} />}
           </Field>
+          <div className="space-y-3 rounded-lg border border-slate-200 p-4 sm:col-span-2">
+            <Toggle
+              checked={form.whatsapp_enabled === '1'}
+              onChange={(on) => {
+                // The first time, the number is the phone of the business
+                const patch = { whatsapp_enabled: on ? '1' : '', ...(on && !form.whatsapp_number.trim() && form.phone.trim() ? { whatsapp_number: form.phone } : {}) };
+                setForm((f) => ({ ...f, ...patch }));
+                schedule(patch);
+              }}
+              label={t('WhatsApp button')}
+              description={t('Optional: the WordPress plugin installs and activates Joinchat with this number (green WhatsApp button on every page).')}
+            />
+            {form.whatsapp_enabled === '1' && (
+              <Field label={t('WhatsApp number')} hint={t('With the country code, e.g. +39 333 123 4567 (without it, the code of the site language is added).')} error={err('whatsapp_number')}>
+                {(id) => <Input id={id} type="tel" value={form.whatsapp_number} onChange={set('whatsapp_number')} onBlur={blur('whatsapp_number')} placeholder="+39 333 123 4567" invalid={!!err('whatsapp_number')} />}
+              </Field>
+            )}
+          </div>
           <Field label={t('Email')} required error={err('email')}>
             {(id) => <Input id={id} type="email" value={form.email} onChange={set('email')} onBlur={blur('email')} placeholder="info@example.com" invalid={!!err('email')} />}
           </Field>

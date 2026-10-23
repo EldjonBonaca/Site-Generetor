@@ -112,10 +112,14 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
     facebook_url: 'https://www.facebook.com/rossi.idraulica',
     instagram_url: 'https://www.instagram.com/rossi_idraulica',
     x_url: 'not a link',
+    whatsapp_enabled: '1',
+    whatsapp_number: '',
   });
+  assert.ok(p.readiness.items.some((i) => /WhatsApp number/.test(i.message)), 'WhatsApp on needs a number');
   assert.equal(p.readiness.ready, false, 'no template/provider yet');
   assert.ok(p.readiness.items.some((i) => i.step === 'site' && /X \(Twitter\) link is not valid/.test(i.message)), 'a social link must be a URL');
-  p = await api('PATCH', `/projects/${pid}`, { x_url: '' });
+  p = await api('PATCH', `/projects/${pid}`, { x_url: '', whatsapp_number: '+39 333 123 4567' });
+  assert.ok(!p.readiness.items.some((i) => /WhatsApp number/.test(i.message)));
   assert.ok(!p.readiness.items.some((i) => /link is not valid/.test(i.message)));
 
   // Premium plugin uploaded once: bundled in every exported WordPress plugin (a zip without a plugin is refused)
@@ -342,6 +346,10 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.match(php, /function remove_self\(\)[\s\S]*deactivate_plugins\(\$basename, true\)[\s\S]*delete_plugins/);
   // Social networks: icons in the footer, profiles for Yoast
   assert.deepEqual(site.socials.map((s) => s.key), ['facebook_url', 'instagram_url']);
+  // WhatsApp button: Joinchat with the number
+  assert.equal(site.whatsapp, '393331234567');
+  assert.ok(php.includes("'slug' => 'creame-whatsapp-me', 'file' => 'creame-whatsapp-me/joinchat.php'"));
+  assert.ok(php.includes("$joinchat['telephone'] = $data['whatsapp'];"));
   const footerDoc = plugin.readAsText(pr + 'data/' + site.templates.find((t) => t.role === 'footer').elementor);
   assert.match(footerDoc, /"widgetType":"social-icons"/);
   assert.match(footerDoc, /"url":"https:\/\/www\.facebook\.com\/rossi\.idraulica"/);
