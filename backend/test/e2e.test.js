@@ -329,7 +329,7 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.ok(!php.includes("'metform") && !php.includes('metform-form') && !php.includes('[metform'), 'Contact Form 7 only');
   const site = JSON.parse(plugin.readAsText(pr + 'data/site.json'));
   // Login protection, cache, SSL; the premium plugin from the bundled zip; only Hello Elementor; favicon; self-removal
-  for (const slug of ['loginizer', 'wp-fastest-cache', 'really-simple-ssl']) assert.ok(php.includes(`'slug' => '${slug}'`), slug);
+  for (const slug of ['lw-all-in-one', 'loginizer', 'wp-fastest-cache', 'really-simple-ssl']) assert.ok(php.includes(`'slug' => '${slug}'`), slug);
   assert.deepEqual(site.bundledPlugins, [{ zip: 'wp-fastest-cache-premium.zip', file: 'wp-fastest-cache-premium/wpFastestCachePremium.php', name: 'WP Fastest Cache Premium' }]);
   assert.ok(plugin.getEntry(pr + 'plugins/wp-fastest-cache-premium.zip'), 'premium zip bundled');
   assert.match(php, /function remove_other_themes/);

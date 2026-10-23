@@ -10,7 +10,7 @@
  *
  * Generated file. On activation it opens Tools → {{MENU_TITLE}}, which creates the website:
  *  1. setup: Hello Elementor theme (the other themes are deleted), Contact Form 7, Yoast SEO,
- *     Loginizer, WP Fastest Cache, Really Simple SSL, the premium plugins bundled in plugins/ and,
+ *     LocalWeb All In One, Loginizer, WP Fastest Cache, Really Simple SSL, the premium plugins bundled in plugins/ and,
  *     without Elementor Pro or when the header menu is its Navigation Menu widget, Ultimate Addons
  *     for Elementor (UAE);
  *  2. images (Media Library), a few per request;
@@ -42,8 +42,9 @@ const CF7 = array('slug' => 'contact-form-7', 'file' => 'contact-form-7/wp-conta
 const UAE = array('slug' => 'header-footer-elementor', 'file' => 'header-footer-elementor/header-footer-elementor.php', 'name' => 'Ultimate Addons for Elementor');
 // SEO: the focus keyphrase, SEO title and meta description of every page and article are filled in
 const YOAST = array('slug' => 'wordpress-seo', 'file' => 'wordpress-seo/wp-seo.php', 'name' => 'Yoast SEO');
-// Security (login protection), cache and SSL: installed and activated on every site
+// LocalWeb All In One, security (login protection), cache and SSL: installed and activated on every site
 const SITE_PLUGINS = array(
+	array('slug' => 'lw-all-in-one', 'file' => 'lw-all-in-one/lw-all-in-one.php', 'name' => 'LocalWeb All In One'),
 	array('slug' => 'loginizer', 'file' => 'loginizer/loginizer.php', 'name' => 'Loginizer'),
 	array('slug' => 'wp-fastest-cache', 'file' => 'wp-fastest-cache/wpFastestCache.php', 'name' => 'WP Fastest Cache'),
 	array('slug' => 'really-simple-ssl', 'file' => 'really-simple-ssl/rlrsssl-really-simple-ssl.php', 'name' => 'Really Simple SSL'),
