@@ -659,9 +659,11 @@ export function prepareDocument(doc, role, sectionInfo, site, demo = null) {
   for (const f of analysis.fields) {
     const plain = stripHtml(f.original).trim();
     // The value replaces the demo one, inside the same HTML wrapper when there is one
-    const set = (value) => {
+    // asHtml: the value is already HTML (the copyright line, with its link); in a plain text field it loses its tags
+    const set = (value, asHtml = false) => {
       const html = /<[a-z]/i.test(f.original);
-      const v = !html ? value : plain && f.original.includes(plain) ? f.original.replace(plain, escapeHtml(value)) : `<p>${escapeHtml(value)}</p>`;
+      const inner = asHtml ? value : escapeHtml(value);
+      const v = !html ? (asHtml ? stripHtml(value) : value) : plain && f.original.includes(plain) ? f.original.replace(plain, inner) : `<p>${inner}</p>`;
       setValue(doc, f.path, v);
       marks.set(f.ref, { fixed: true });
     };
@@ -670,7 +672,7 @@ export function prepareDocument(doc, role, sectionInfo, site, demo = null) {
       continue;
     }
     if (fixedRefs.has(f.ref)) marks.set(f.ref, { fixed: true });
-    else if (COPYRIGHT_RE.test(plain) && plain.length < 200) set(site.copyright);
+    else if (COPYRIGHT_RE.test(plain) && plain.length < 200) set(site.copyright, true);
     else if (site.email && plain.match(EMAIL_IN_TEXT)?.[0] === plain) set(site.email);
     else if (site.phone && /^[+\d\s().-]+$/.test(plain) && looksLikePhone(plain)) set(sitePhone(plain));
   }

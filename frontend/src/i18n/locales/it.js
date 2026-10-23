@@ -606,6 +606,11 @@ export default {
   '{n} image(s) uploaded': '{n} immagine/i caricata/e',
   'JPG, PNG, WEBP or SVG · images of 1 MB or more are compressed automatically': 'JPG, PNG, WEBP o SVG · le immagini da 1 MB in su vengono compresse automaticamente',
   'Compressed under 1 MB with the best quality: {list}': 'Compresse sotto 1 MB con la migliore qualità: {list}',
+  // Copyright and P.IVA
+  'VAT number (P.IVA)': 'Partita IVA',
+  'Shown in the copyright line of the footer. Until it is filled in the footer shows "P.IVA 123456".': 'Compare nella riga di copyright del footer. Finché non la compili, il footer mostra "P.IVA 123456".',
+  'Leave empty for the default line: "Creato da Local Web – Agenzia Web Marketing Milano Copyrights © {year} {name} - P.IVA {vat} | Tutti i diritti riservati." (with the link to localweb.it). Links (<a href="https://…">) are allowed.':
+    'Lascia vuoto per la riga predefinita: "Creato da Local Web – Agenzia Web Marketing Milano Copyrights © {year} {name} - P.IVA {vat} | Tutti i diritti riservati." (con il link a localweb.it). Sono ammessi i link (<a href="https://…">).',
   // Social networks of the site
   'Social networks': 'Social network',
   'Optional: fill in only the ones the business has. They are shown as icons in the footer of the site (and given to Yoast SEO).': "Facoltativi: compila solo quelli che l'attività ha. Vengono mostrati come icone nel footer del sito (e passati a Yoast SEO).",

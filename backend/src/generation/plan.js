@@ -117,10 +117,54 @@ export function loadContext(projectId) {
   return { project, settings, services, images, template, kit, menu: { name: menuName, slug: slugify(menuName) } };
 }
 
-/** Copyright line: the one set by the user, or "© <year> <site>. All rights reserved." in the site language. */
+/** Credit of the agency at the start of the default copyright line. */
+const CREDIT = '<a href="https://localweb.it/" target="_blank" title="Local Web – Agenzia Web Marketing Milano">Local Web – Agenzia Web Marketing Milano</a>';
+const CREATED_BY = { it: 'Creato da', en: 'Created by', es: 'Creado por', fr: 'Créé par', de: 'Erstellt von', pt: 'Criado por' };
+const VAT = { it: 'P.IVA', en: 'VAT', es: 'NIF', fr: 'TVA', de: 'USt-IdNr.', pt: 'NIF' };
+/** P.IVA shown while the project has none: easy to spot and replace. */
+export const VAT_PLACEHOLDER = '123456';
+
+const escapeText = (s) => String(s).replace(/&(?!#?\w+;)/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/**
+ * Copyright typed by the user, as HTML: plain text plus links (<a href="https://…">, with target and
+ * title); any other tag is removed, so the footer can show it as it is.
+ */
+export function sanitizeCopyright(text) {
+  let open = false;
+  return String(text)
+    .split(/(<\/?a\b[^>]*>)/i)
+    .map((part) => {
+      if (/^<\/a/i.test(part)) {
+        const out = open ? '</a>' : '';
+        open = false;
+        return out;
+      }
+      if (/^<a\b/i.test(part)) {
+        const attr = (name) => part.match(new RegExp(`\\s${name}\\s*=\\s*("([^"]*)"|'([^']*)')`, 'i'))?.slice(2).find((v) => v !== undefined);
+        const href = attr('href');
+        if (open || !href || !/^https?:\/\//i.test(href)) return '';
+        open = true;
+        const title = attr('title');
+        return `<a href="${escapeText(href).replace(/"/g, '&quot;')}"${attr('target') === '_blank' ? ' target="_blank" rel="noopener"' : ''}${title ? ` title="${escapeText(title).replace(/"/g, '&quot;')}"` : ''}>`;
+      }
+      return escapeText(part.replace(/<[^>]*>/g, ''));
+    })
+    .join('')
+    .concat(open ? '</a>' : '')
+    .trim();
+}
+
+/**
+ * Copyright line (HTML): the one set by the user, or "Creato da Local Web… Copyrights © <year>
+ * <site> - P.IVA <vat> | Tutti i diritti riservati." in the site language.
+ */
 export function copyrightText(project) {
-  if (project.copyright?.trim()) return project.copyright.trim();
-  return `© ${new Date().getFullYear()} ${project.site_name}. ${RIGHTS[project.language] || RIGHTS.en}`;
+  if (project.copyright?.trim()) return sanitizeCopyright(project.copyright.trim());
+  const lang = project.language;
+  const name = escapeText(project.site_name || '');
+  const vat = escapeText(project.vat_number?.trim() || VAT_PLACEHOLDER);
+  return `${CREATED_BY[lang] || CREATED_BY.en} ${CREDIT} ${lang === 'it' ? 'Copyrights' : 'Copyright'} © ${new Date().getFullYear()} ${name} - ${VAT[lang] || VAT.en} ${vat} | ${RIGHTS[lang] || RIGHTS.en}`;
 }
 
 /** Slug of a site page in the site language ('' for the home page). */
@@ -311,6 +355,7 @@ export function checkReadiness(ctx, user = null) {
   if (p.phone2?.trim() && !isValidPhone(p.phone2)) add('site', 'error', 'The second phone number is not valid.');
   if (!p.address.trim()) add('site', 'error', 'Address is required.');
   for (const s of SOCIALS) if (p[s.key]?.trim() && !isSocialUrl(p[s.key])) add('site', 'error', `The ${s.name} link is not valid: it must start with https://`);
+  if (!p.copyright?.trim() && !p.vat_number?.trim()) add('site', 'warning', `No P.IVA: the copyright of the footer shows "P.IVA ${VAT_PLACEHOLDER}". Add it in Site data.`);
   if (p.google_business_url?.trim() && !isGoogleMapsLink(p.google_business_url)) {
     add('site', 'warning', 'The Google Business Profile link is not a Google Maps link: the map of the Contact page shows the business name and address instead.');
   }

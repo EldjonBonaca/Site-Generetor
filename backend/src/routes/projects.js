@@ -11,8 +11,8 @@ import { SOCIAL_KEYS } from '../lib/socials.js';
 
 const router = Router();
 
-const PROJECT_FIELDS = ['site_name', 'phone', 'phone2', 'email', 'address', 'google_business_url', 'city', 'industry', 'language', 'notes', 'image_base_url', 'copyright', ...SOCIAL_KEYS];
-const MAX_LEN = { site_name: 200, phone: 40, phone2: 40, email: 200, address: 1000, google_business_url: 2000, city: 200, industry: 200, notes: 5000, image_base_url: 500, copyright: 300, ...Object.fromEntries(SOCIAL_KEYS.map((k) => [k, 500])) };
+const PROJECT_FIELDS = ['site_name', 'phone', 'phone2', 'email', 'address', 'google_business_url', 'city', 'industry', 'language', 'notes', 'image_base_url', 'copyright', 'vat_number', ...SOCIAL_KEYS];
+const MAX_LEN = { site_name: 200, phone: 40, phone2: 40, email: 200, address: 1000, google_business_url: 2000, city: 200, industry: 200, notes: 5000, image_base_url: 500, copyright: 600, vat_number: 40, ...Object.fromEntries(SOCIAL_KEYS.map((k) => [k, 500])) };
 
 export function serializeProject(row) {
   const { settings_json, ...rest } = row;

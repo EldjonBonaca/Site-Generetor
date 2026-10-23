@@ -2216,7 +2216,7 @@ function footer(b, site) {
     ...invite,
     b.section(cols, { row: true, ...style, align: 'flex-start', padY: Math.round(b.pad * 0.8) }),
     ...wordmark,
-    b.section([b.text(`<p>${escapeHtml(site.copyright)}${LEGAL_LINKS}</p>`, { align: 'center', size: 14, color, fixed: true })], {
+    b.section([b.text(`<p>${site.copyright}${LEGAL_LINKS}</p>`, { align: 'center', size: 14, color, fixed: true })], {
       ...(variant === 'brand' ? { bg: b.c.dark } : style),
       padY: 20,
       borderTop: light ? b.ink.border : 'rgba(255,255,255,0.12)',
@@ -2251,7 +2251,7 @@ export function globalStyles(spec) {
 /**
  * Build every document of a site.
  * @param {object} spec  sanitized template spec
- * @param {object} site  { lang, siteName, phone, phone2, email, address, map, copyright, hasLogo, mapEmbed, contactShortcode,
+ * @param {object} site  { lang, siteName, phone, phone2, email, address, map, copyright (HTML), hasLogo, mapEmbed, contactShortcode,
  *                         pages: { home|about|services|gallery|contact: { title, url } }, services: [{ name, url }] }
  * @returns {{ docs: Record<role, { doc, marks: Map }>, globalStyles }}
  */

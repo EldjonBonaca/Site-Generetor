@@ -42,7 +42,7 @@ const isUrl = (v) => {
     return false;
   }
 };
-const FIELDS = ['site_name', 'phone', 'phone2', 'email', 'address', 'google_business_url', 'city', 'industry', 'language', 'notes', 'copyright', ...SOCIALS.map((s) => s.key)];
+const FIELDS = ['site_name', 'phone', 'phone2', 'email', 'address', 'google_business_url', 'city', 'industry', 'language', 'notes', 'copyright', 'vat_number', ...SOCIALS.map((s) => s.key)];
 
 export default function SiteDataStep({ project, setProject }) {
   const { t } = useT();
@@ -136,11 +136,19 @@ export default function SiteDataStep({ project, setProject }) {
           <Field label={t('Industry / business type')}>
             {(id) => <Input id={id} value={form.industry} onChange={set('industry')} placeholder="Plumber" />}
           </Field>
+          <Field label={t('VAT number (P.IVA)')} hint={t('Shown in the copyright line of the footer. Until it is filled in the footer shows "P.IVA 123456".')}>
+            {(id) => <Input id={id} value={form.vat_number} onChange={set('vat_number')} placeholder="01234567890" />}
+          </Field>
           <Field
             label={t('Copyright (footer)')}
-            hint={t('Leave empty for "© {year} {name}. All rights reserved." in the site language.', { year: new Date().getFullYear(), name: form.site_name || t('Site name') })}
+            hint={t('Leave empty for the default line: "Creato da Local Web – Agenzia Web Marketing Milano Copyrights © {year} {name} - P.IVA {vat} | Tutti i diritti riservati." (with the link to localweb.it). Links (<a href="https://…">) are allowed.', {
+              year: new Date().getFullYear(),
+              name: form.site_name || t('Site name'),
+              vat: form.vat_number || '123456',
+            })}
+            className="sm:col-span-2"
           >
-            {(id) => <Input id={id} value={form.copyright} onChange={set('copyright')} placeholder={`© ${new Date().getFullYear()} ${form.site_name || 'Rossi S.r.l.'} – P.IVA 01234567890`} />}
+            {(id) => <Input id={id} value={form.copyright} onChange={set('copyright')} placeholder={`Copyrights © ${new Date().getFullYear()} ${form.site_name || 'Rossi S.r.l.'} - P.IVA ${form.vat_number || '01234567890'} | Tutti i diritti riservati.`} />}
           </Field>
           <Field
             label={t('Additional notes for the AI')}

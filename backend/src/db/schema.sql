@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS projects (
   address        TEXT NOT NULL DEFAULT '',
   google_business_url TEXT NOT NULL DEFAULT '', -- Google Business Profile link (optional): map of the Contact page
   map_resolved_url    TEXT NOT NULL DEFAULT '', -- the same link with a short link (maps.app.goo.gl…) expanded
+  vat_number     TEXT NOT NULL DEFAULT '',   -- P.IVA (default copyright line)
   facebook_url   TEXT NOT NULL DEFAULT '',   -- social networks (optional, lib/socials.js)
   instagram_url  TEXT NOT NULL DEFAULT '',
   linkedin_url   TEXT NOT NULL DEFAULT '',

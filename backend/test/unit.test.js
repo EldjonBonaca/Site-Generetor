@@ -154,3 +154,17 @@ test('an overloaded model hands over to the other models of the provider', async
     server.close();
   }
 });
+
+test('copyright line: agency credit by default, links only in the one typed by the user', async () => {
+  const { copyrightText, sanitizeCopyright } = await import('../src/generation/plan.js');
+  const year = new Date().getFullYear();
+  assert.equal(
+    copyrightText({ language: 'it', site_name: 'Edil Rossi & Figli', vat_number: '01234567890', copyright: '' }),
+    `Creato da <a href="https://localweb.it/" target="_blank" title="Local Web – Agenzia Web Marketing Milano">Local Web – Agenzia Web Marketing Milano</a> Copyrights © ${year} Edil Rossi &amp; Figli - P.IVA 01234567890 | Tutti i diritti riservati.`
+  );
+  assert.match(copyrightText({ language: 'it', site_name: 'Edil', vat_number: '', copyright: '' }), /- P\.IVA 123456 \|/, 'placeholder until the P.IVA is set');
+  assert.equal(
+    sanitizeCopyright('By <a href="https://x.it/" target="_blank" onclick="evil()">X</a> <script>alert(1)</script>© 2026 A&B <a href="javascript:alert(1)">bad</a>'),
+    'By <a href="https://x.it/" target="_blank" rel="noopener">X</a> alert(1)© 2026 A&amp;B bad'
+  );
+});

@@ -297,7 +297,9 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.match(zip.readAsText(root + 'additional-css.css'), /\.esg-header\{position:relative;z-index:100\}/);
   assert.doesNotMatch(header, /<li><a href=/, 'no menu written in HTML');
   const footer = zip.readAsText(root + 'templates/footer.json');
-  for (const t of ['Riparazione caldaie', '/bagni-su-misura/', 'mailto:info@rossi-idraulica.it', `© ${new Date().getFullYear()} Rossi Idraulica. All rights reserved.`]) assert.ok(footer.includes(t), `footer: ${t}`);
+  for (const t of ['Riparazione caldaie', '/bagni-su-misura/', 'mailto:info@rossi-idraulica.it', `Copyright © ${new Date().getFullYear()} Rossi Idraulica - VAT 123456 | All rights reserved.`]) assert.ok(footer.includes(t), `footer: ${t}`);
+  // Default copyright: credit of the agency, with its link
+  assert.ok(footer.includes('Created by <a href=\\"https://localweb.it/\\" target=\\"_blank\\" title=\\"Local Web – Agenzia Web Marketing Milano\\">Local Web – Agenzia Web Marketing Milano</a> Copyright'), 'footer: agency credit');
   // Legal pages created later by the site owner
   assert.ok(footer.includes('<a href=\\"/cookie-policy\\"'), 'footer: Cookie Policy link');
   assert.ok(footer.includes('<a href=\\"/informativa-sul-trattamento-dei-dati-personali\\"'), 'footer: Privacy Policy link');
