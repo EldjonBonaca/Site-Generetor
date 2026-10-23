@@ -5,11 +5,11 @@
  * Version: {{VERSION}}
  * Requires at least: 6.2
  * Requires PHP: 7.4
- * Requires Plugins: elementor
  * License: GPL-2.0-or-later
  *
  * Generated file. On activation it opens Tools → {{MENU_TITLE}}, which creates the website:
- *  1. setup: Hello Elementor theme (the other themes are deleted), Contact Form 7, Yoast SEO,
+ *  1. setup: Elementor (installed and activated: the plugin can be activated on a fresh WordPress),
+ *     Hello Elementor theme (the other themes are deleted), Contact Form 7, Yoast SEO,
  *     LocalWeb All In One, Loginizer, WP Fastest Cache, Really Simple SSL, the premium plugins bundled in plugins/ and,
  *     without Elementor Pro or when the header menu is its Navigation Menu widget, Ultimate Addons
  *     for Elementor (UAE);
@@ -37,7 +37,8 @@ const SCHEME = 'esg-image://';
 const IMAGES_PER_REQUEST = 3;
 // Header / footer template ids displayed by this plugin when Elementor Pro is not active
 const OPTION_HF = 'esg_site_{{HASH}}_hf';
-// Plugins installed from wordpress.org: the contact form, and the header/footer builder used without Elementor Pro
+// Plugins installed from wordpress.org: Elementor itself, the contact form, and the header/footer builder used without Elementor Pro
+const ELEMENTOR = array('slug' => 'elementor', 'file' => 'elementor/elementor.php', 'name' => 'Elementor');
 const CF7 = array('slug' => 'contact-form-7', 'file' => 'contact-form-7/wp-contact-form-7.php', 'name' => 'Contact Form 7');
 const UAE = array('slug' => 'header-footer-elementor', 'file' => 'header-footer-elementor/header-footer-elementor.php', 'name' => 'Ultimate Addons for Elementor');
 // SEO: the focus keyphrase, SEO title and meta description of every page and article are filled in
@@ -495,6 +496,10 @@ function remove_other_themes(array &$messages) {
  */
 function setup_dependencies() {
 	$messages = array();
+	// Elementor first: every page, article and template of the site is an Elementor document
+	ensure_plugin(ELEMENTOR, $messages);
+	// No redirect to the Elementor welcome screen on the next admin page
+	delete_transient('elementor_activation_redirect');
 	ensure_theme($messages);
 	if (!empty(data()['contactForm'])) {
 		ensure_plugin(CF7, $messages);
@@ -924,6 +929,9 @@ function gallery_shortcode(array $images) {
 }
 
 function import_content() {
+	if (!defined('ELEMENTOR_VERSION')) {
+		throw new \RuntimeException(t('noElementor'));
+	}
 	$data = data();
 	$state = state();
 	$messages = array();

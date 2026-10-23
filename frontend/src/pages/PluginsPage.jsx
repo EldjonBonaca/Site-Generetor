@@ -6,7 +6,7 @@ import { useToast } from '../components/Toast.jsx';
 import { Badge, Button, Card, EmptyState, IconButton, PageHeader, Spinner } from '../components/ui.jsx';
 
 /** Plugins the WordPress plugin of every site installs and activates (wp-plugin/plugin.php). */
-const FREE_PLUGINS = ['Contact Form 7', 'Yoast SEO', 'Ultimate Addons for Elementor', 'LocalWeb All In One', 'Loginizer', 'WP Fastest Cache', 'Really Simple SSL'];
+const FREE_PLUGINS = ['Elementor', 'Contact Form 7', 'Yoast SEO', 'Ultimate Addons for Elementor', 'LocalWeb All In One', 'Loginizer', 'WP Fastest Cache', 'Really Simple SSL'];
 
 /** Premium plugins uploaded once (e.g. WP Fastest Cache Premium): installed on every site exported afterwards. */
 export default function PluginsPage() {

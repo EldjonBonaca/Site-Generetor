@@ -320,7 +320,10 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   const pr = 'rossi-idraulica-site/';
   const php = plugin.readAsText(pr + 'rossi-idraulica-site.php');
   assert.match(php, /Plugin Name: Rossi Idraulica – Site builder/);
-  assert.match(php, /Requires Plugins: elementor/);
+  // Elementor is installed and activated by the plugin itself (it can be activated on a fresh WordPress)
+  assert.doesNotMatch(php, /Requires Plugins:/);
+  assert.ok(php.includes("'slug' => 'elementor', 'file' => 'elementor/elementor.php'"));
+  assert.match(php, /function setup_dependencies\(\) \{\s+\$messages = array\(\);\s+\/\/[^\n]*\n\s+ensure_plugin\(ELEMENTOR, \$messages\);/, 'Elementor first');
   assert.match(php, /^namespace ESG\\Site_[0-9a-f]{8};$/m);
   assert.doesNotMatch(php, /\{\{[A-Z_]+\}\}/, 'no unfilled placeholder');
   // Without Elementor Pro the header/footer are UAE templates (they survive the deletion of this plugin)
