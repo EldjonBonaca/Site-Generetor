@@ -109,8 +109,30 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
     industry: 'Plumber',
     language: 'en',
     image_base_url: 'https://rossi-idraulica.it/wp-content/uploads/2026/10',
+    facebook_url: 'https://www.facebook.com/rossi.idraulica',
+    instagram_url: 'https://www.instagram.com/rossi_idraulica',
+    x_url: 'not a link',
   });
   assert.equal(p.readiness.ready, false, 'no template/provider yet');
+  assert.ok(p.readiness.items.some((i) => i.step === 'site' && /X \(Twitter\) link is not valid/.test(i.message)), 'a social link must be a URL');
+  p = await api('PATCH', `/projects/${pid}`, { x_url: '' });
+  assert.ok(!p.readiness.items.some((i) => /link is not valid/.test(i.message)));
+
+  // Premium plugin uploaded once: bundled in every exported WordPress plugin (a zip without a plugin is refused)
+  const pluginZip = (php) => {
+    const z = new AdmZip();
+    z.addFile('wp-fastest-cache-premium/wpFastestCachePremium.php', Buffer.from(php));
+    z.addFile('wp-fastest-cache-premium/inc/x.php', Buffer.from('<?php'));
+    return new Blob([z.toBuffer()], { type: 'application/zip' });
+  };
+  const bad = new FormData();
+  bad.append('file', pluginZip('<?php // nothing'), 'notaplugin.zip');
+  await assert.rejects(api('POST', '/bundled-plugins', bad), /not a WordPress plugin/);
+  const good = new FormData();
+  good.append('file', pluginZip("<?php\n/*\nPlugin Name: WP Fastest Cache Premium\nVersion: 1.7.4\n*/"), 'wp-fastest-cache-premium.zip');
+  const premium = await api('POST', '/bundled-plugins', good);
+  assert.deepEqual([premium.zip, premium.file, premium.name, premium.version], ['wp-fastest-cache-premium.zip', 'wp-fastest-cache-premium/wpFastestCachePremium.php', 'WP Fastest Cache Premium', '1.7.4']);
+  assert.equal((await api('GET', '/bundled-plugins')).length, 1);
   assert.ok(p.readiness.items.some((i) => i.step === 'template' && i.level === 'error'));
 
   // 2. Services
@@ -306,6 +328,19 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.ok(php.includes("array('rule' => array('basic-global')"), 'shown on the entire site');
   assert.ok(!php.includes("'metform") && !php.includes('metform-form') && !php.includes('[metform'), 'Contact Form 7 only');
   const site = JSON.parse(plugin.readAsText(pr + 'data/site.json'));
+  // Login protection, cache, SSL; the premium plugin from the bundled zip; only Hello Elementor; favicon; self-removal
+  for (const slug of ['loginizer', 'wp-fastest-cache', 'really-simple-ssl']) assert.ok(php.includes(`'slug' => '${slug}'`), slug);
+  assert.deepEqual(site.bundledPlugins, [{ zip: 'wp-fastest-cache-premium.zip', file: 'wp-fastest-cache-premium/wpFastestCachePremium.php', name: 'WP Fastest Cache Premium' }]);
+  assert.ok(plugin.getEntry(pr + 'plugins/wp-fastest-cache-premium.zip'), 'premium zip bundled');
+  assert.match(php, /function remove_other_themes/);
+  assert.match(php, /update_option\('site_icon'/);
+  assert.match(php, /function remove_self\(\)[\s\S]*deactivate_plugins\(\$basename, true\)[\s\S]*delete_plugins/);
+  // Social networks: icons in the footer, profiles for Yoast
+  assert.deepEqual(site.socials.map((s) => s.key), ['facebook_url', 'instagram_url']);
+  const footerDoc = plugin.readAsText(pr + 'data/' + site.templates.find((t) => t.role === 'footer').elementor);
+  assert.match(footerDoc, /"widgetType":"social-icons"/);
+  assert.match(footerDoc, /"url":"https:\/\/www\.facebook\.com\/rossi\.idraulica"/);
+  assert.match(footerDoc, /"value":"fab fa-instagram"/);
   // The legal links of the copyright stay relative
   assert.deepEqual(site.relativeLinks, ['/cookie-policy', '/informativa-sul-trattamento-dei-dati-personali']);
   assert.ok(php.includes("in_array($m[2], $r['relative'], true)"), 'relative legal links');

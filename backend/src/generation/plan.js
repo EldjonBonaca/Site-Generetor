@@ -16,6 +16,7 @@ import { sanitizeSpec } from '../templates/spec.js';
 import { isValidEmail, isValidPhone, slugify, telHref } from '../lib/util.js';
 import { galleryPool } from '../lib/images.js';
 import { isGoogleMapsLink, siteMap } from '../lib/maps.js';
+import { SOCIALS, isSocialUrl, socialLinks } from '../lib/socials.js';
 
 /** The only pages of the site. Services are published as articles (role 'post'). */
 export const SITE_PAGE_ROLES = ['home', 'about', 'services', 'gallery', 'contact'];
@@ -143,6 +144,8 @@ export function siteInfo(ctx) {
     mapEmbed: ctx.settings.mapEmbed !== false,
     contactShortcode: contactForm(ctx).placeholder,
     menuSlug: ctx.menu.slug,
+    // Filled social networks: icons in the footer, links of the social icons of a Template Kit
+    socials: socialLinks(project),
     pages: Object.fromEntries(SITE_PAGE_ROLES.map((r) => [r, { title: pageTitle(lang, r), url: r === 'home' ? '/' : `/${pageSlug(lang, r)}/` }])),
     services: ctx.services.map((s) => ({ name: s.name || s.slug, url: `/${s.slug}/` })),
   };
@@ -216,6 +219,7 @@ export function siteLinks(ctx, pages = buildPages(ctx)) {
     links.push({ url: `tel:${telHref(ctx.project.phone2)}`, label: ctx.project.phone2, role: 'phone' });
   }
   if (ctx.project.email) links.push({ url: `mailto:${ctx.project.email}`, label: ctx.project.email, role: 'email' });
+  for (const s of socialLinks(ctx.project)) links.push({ url: s.url, label: s.name, role: 'social' });
   return links;
 }
 
@@ -306,6 +310,7 @@ export function checkReadiness(ctx, user = null) {
   if (!isValidEmail(p.email)) add('site', 'error', 'A valid email is required.');
   if (p.phone2?.trim() && !isValidPhone(p.phone2)) add('site', 'error', 'The second phone number is not valid.');
   if (!p.address.trim()) add('site', 'error', 'Address is required.');
+  for (const s of SOCIALS) if (p[s.key]?.trim() && !isSocialUrl(p[s.key])) add('site', 'error', `The ${s.name} link is not valid: it must start with https://`);
   if (p.google_business_url?.trim() && !isGoogleMapsLink(p.google_business_url)) {
     add('site', 'warning', 'The Google Business Profile link is not a Google Maps link: the map of the Contact page shows the business name and address instead.');
   }

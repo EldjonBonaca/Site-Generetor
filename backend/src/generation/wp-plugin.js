@@ -4,6 +4,7 @@
  *   <slug>/data/site.json      pages, articles, images, menu, templates, contact form, template styles, admin texts
  *   <slug>/data/elementor/*.json  Elementor documents (images referenced as esg-image://<file>)
  *   <slug>/images/*            the optimized images, imported into the Media Library
+ *   <slug>/plugins/*.zip       premium plugins uploaded in the app (lib/bundled-plugins.js), installed on the site
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,6 +14,8 @@ import { AdmZip } from '../lib/zip.js';
 import { slugify } from '../lib/util.js';
 import { contactForm } from './plan.js';
 import { LEGAL_PAGES } from '../templates/builder.js';
+import { listBundledPlugins, bundledPluginPath } from '../lib/bundled-plugins.js';
+import { socialLinks } from '../lib/socials.js';
 
 export const PLUGIN_IMAGE_SCHEME = 'esg-image://';
 const PHP_TEMPLATE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'wp-plugin', 'plugin.php');
@@ -58,6 +61,17 @@ const UI = {
     formCreated: 'Modulo di contatto "{title}" creato in {plugin} (le richieste arrivano a {email}).',
     permalinks: 'Permalink impostati su "Nome articolo".',
     globalStyles: 'Colori e font del template applicati al kit Elementor del sito.',
+    themesRemoved: 'Temi non usati eliminati: {names}. Resta solo Hello Elementor.',
+    themeRemoveFailed: 'Impossibile eliminare il tema "{name}" ({error}): eliminalo da Aspetto → Temi.',
+    faviconSet: 'Logo impostato come icona del sito (favicon).',
+    cleaning: 'Rimozione di questo plugin…',
+    popupTitle: 'Il sito è pronto!',
+    removed: 'Il plugin di creazione è stato disattivato ed eliminato: il sito è completo e non ne ha più bisogno.',
+    deactivated: 'Il plugin di creazione è stato disattivato, ma WordPress non ha permesso di eliminarlo: eliminalo da Plugin → Plugin installati.',
+    removeManual: 'Il sito è completo: ora disattiva ed elimina questo plugin da Plugin → Plugin installati.',
+    keepPlugin: 'Lascia attivo questo plugin: mostra header e footer del sito perché Ultimate Addons for Elementor non è installato.',
+    goPlugins: 'Vai ai Plugin',
+    goDashboard: 'Vai alla Bacheca',
   }),
   en: (name) => ({
     menuTitle: `Site ${name}`,
@@ -97,6 +111,17 @@ const UI = {
     formCreated: 'Contact form "{title}" created in {plugin} (messages are sent to {email}).',
     permalinks: 'Permalinks set to "Post name".',
     globalStyles: 'Colors and fonts of the template applied to the Elementor site kit.',
+    themesRemoved: 'Unused themes deleted: {names}. Only Hello Elementor is left.',
+    themeRemoveFailed: 'Could not delete the theme "{name}" ({error}): delete it from Appearance → Themes.',
+    faviconSet: 'Logo set as the site icon (favicon).',
+    cleaning: 'Removing this plugin…',
+    popupTitle: 'The website is ready!',
+    removed: 'The builder plugin has been deactivated and deleted: the site is complete and does not need it any more.',
+    deactivated: 'The builder plugin has been deactivated, but WordPress did not allow deleting it: delete it from Plugins → Installed Plugins.',
+    removeManual: 'The site is complete: now deactivate and delete this plugin from Plugins → Installed Plugins.',
+    keepPlugin: 'Keep this plugin active: it shows the header and footer of the site because Ultimate Addons for Elementor is not installed.',
+    goPlugins: 'Go to Plugins',
+    goDashboard: 'Go to the Dashboard',
   }),
 };
 
@@ -229,6 +254,13 @@ export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, c
     globalStyles: globalStyles || null,
     siteCss: siteCss || '',
     requiredPlugins: requiredPlugins.map(({ slug, file, name }) => ({ slug, file, name })),
+    // Premium plugins uploaded in the app: installed from plugins/<zip> after the free ones
+    bundledPlugins: listBundledPlugins().map((p) => {
+      add(`plugins/${p.zip}`, fs.readFileSync(bundledPluginPath(p.zip)));
+      return { zip: p.zip, file: p.file, name: p.name };
+    }),
+    // Social networks of the business: Yoast SEO organization profiles
+    socials: socialLinks(project).map((s) => ({ key: s.key, url: s.url })),
     // The menu of the header is the Navigation Menu widget of UAE: installed also with Elementor Pro
     uaeWidgets: templates.some((t) => JSON.stringify(t.doc || {}).includes('"widgetType":"navigation-menu"')),
     // Without Elementor Pro the plugin itself displays the header and footer (no other addon needed)

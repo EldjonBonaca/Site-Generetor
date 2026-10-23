@@ -318,13 +318,16 @@ Built by [`generation/wp-plugin.js`](backend/src/generation/wp-plugin.js) from t
 
 It requires Elementor (`Requires Plugins: elementor`); Elementor Pro is optional. Activating it opens **Tools → Site &lt;name&gt;**, which starts by itself and runs in AJAX steps (a few images per request, so slow hosts don't time out):
 
-0. installs and activates from wordpress.org what the site needs: **Contact Form 7**, **Yoast SEO** (focus keyphrase, SEO title and meta description of every page and article, business name and logo are filled in), **Ultimate Addons for Elementor** (only without Elementor Pro, for header and footer) and the **Hello Elementor** theme when the active theme is a block theme, or when Elementor Pro is not active (classic themes are kept with Pro);
+0. installs and activates from wordpress.org what the site needs: the **Hello Elementor** theme (the other themes are deleted), **Contact Form 7**, **Yoast SEO** (focus keyphrase, SEO title and meta description of every page and article, business name, logo and social profiles are filled in), **Ultimate Addons for Elementor** (only without Elementor Pro, for header and footer), **Loginizer**, **WP Fastest Cache** and **Really Simple SSL**; then the **premium plugins** uploaded in the app (**Plugins** page, e.g. WP Fastest Cache Premium), whose zips are bundled in `plugins/` of the generated plugin;
 1. copies the bundled images into the Media Library (with ALT texts and thumbnails);
 2. creates the services category, the menu and the Contact Form 7 form (name, email, phone, message, privacy consent, send button; email to the site address with Reply-To the visitor), whose shortcode replaces the `INSERIRE_ID` placeholder;
 3. creates the 5 pages with `_elementor_data`: each `esg-image://` becomes the attachment id + URL, internal links become absolute;
 4. creates one article per service (category, featured image, excerpt, Yoast / Rank Math title and description);
 5. creates the header, footer and single post template: with Elementor Pro as Theme Builder templates (display conditions for header and footer; the single post template has none, since the articles are already built with its design); **without Pro** header and footer are saved as Elementor sections and **displayed by the plugin itself** on every page and article (Hello Elementor hooks), so the plugin must stay active. It also sets the template colors/fonts as the Elementor global colors and fonts;
-6. sets the site title, logo, Home as static front page and "Post name" permalinks, then clears the Elementor CSS cache.
+6. sets the site title, logo, **favicon (the logo)**, Home as static front page and "Post name" permalinks, then clears the Elementor CSS cache;
+7. **removes itself**: it deactivates and deletes itself, since the site no longer needs it. When WordPress can only delete files with FTP credentials it is just deactivated, and a popup asks to delete it from Plugins; it stays active only when it shows the header and footer itself (Ultimate Addons for Elementor could not be installed).
+
+The social networks of *Site data* (all optional) become social icons in the footer; in a Template Kit the demo social links get the links of the site, and the networks the site does not have are removed.
 
 It records the ids it creates (option `esg_site_<hash>`), so **Update the website** updates the same posts instead of duplicating them. Pages or articles with the same slug are reused, and only the menu items it added are replaced. Unchanged images are not uploaded twice.
 

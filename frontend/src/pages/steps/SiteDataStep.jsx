@@ -26,7 +26,23 @@ export const isGoogleMapsLink = (v) => {
 };
 
 const NOTES_MAX = 5000; // same limit as the API (routes/projects.js)
-const FIELDS = ['site_name', 'phone', 'phone2', 'email', 'address', 'google_business_url', 'city', 'industry', 'language', 'notes', 'copyright'];
+/** Social networks (all optional): icons in the footer of the site (same list as backend/src/lib/socials.js). */
+const SOCIALS = [
+  { key: 'facebook_url', name: 'Facebook', placeholder: 'https://www.facebook.com/…' },
+  { key: 'instagram_url', name: 'Instagram', placeholder: 'https://www.instagram.com/…' },
+  { key: 'linkedin_url', name: 'LinkedIn', placeholder: 'https://www.linkedin.com/company/…' },
+  { key: 'youtube_url', name: 'YouTube', placeholder: 'https://www.youtube.com/@…' },
+  { key: 'tiktok_url', name: 'TikTok', placeholder: 'https://www.tiktok.com/@…' },
+  { key: 'x_url', name: 'X (Twitter)', placeholder: 'https://x.com/…' },
+];
+const isUrl = (v) => {
+  try {
+    return /^https?:$/.test(new URL(String(v || '').trim()).protocol);
+  } catch {
+    return false;
+  }
+};
+const FIELDS = ['site_name', 'phone', 'phone2', 'email', 'address', 'google_business_url', 'city', 'industry', 'language', 'notes', 'copyright', ...SOCIALS.map((s) => s.key)];
 
 export default function SiteDataStep({ project, setProject }) {
   const { t } = useT();
@@ -63,6 +79,7 @@ export default function SiteDataStep({ project, setProject }) {
     email: !isEmail(form.email) && t('Enter a valid email address'),
     address: !form.address.trim() && t('Required'),
     google_business_url: form.google_business_url.trim() && !isGoogleMapsLink(form.google_business_url) && t('This is not a Google Maps link: the map will show the business name and address.'),
+    ...Object.fromEntries(SOCIALS.map((s) => [s.key, form[s.key].trim() && !isUrl(form[s.key]) && t('Enter the full link, starting with https://')])),
   };
   const err = (k) => (touched[k] ? errors[k] || null : null);
 
@@ -132,6 +149,15 @@ export default function SiteDataStep({ project, setProject }) {
           >
             {(id) => <Textarea id={id} rows={4} value={form.notes} onChange={set('notes')} maxLength={NOTES_MAX} />}
           </Field>
+        </div>
+      </Card>
+      <Card title={t('Social networks')} description={t('Optional: fill in only the ones the business has. They are shown as icons in the footer of the site (and given to Yoast SEO).')} className="mt-6">
+        <div className="grid gap-5 sm:grid-cols-2">
+          {SOCIALS.map((s) => (
+            <Field key={s.key} label={s.name} error={err(s.key)}>
+              {(id) => <Input id={id} type="url" value={form[s.key]} onChange={set(s.key)} onBlur={blur(s.key)} placeholder={s.placeholder} invalid={!!err(s.key)} />}
+            </Field>
+          ))}
         </div>
       </Card>
     </>

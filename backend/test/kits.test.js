@@ -178,6 +178,16 @@ test('section types and kit document preparation', () => {
   assert.equal(report.changed.length, 1);
   assert.equal(report.removed.length, 1);
   assert.match(report.settings[0], /background_color/);
+
+  // Demo social links: the networks of the site get its links, the others are removed
+  const social = (url, icon) => ({ _id: icon, social_icon: { value: `fab fa-${icon}`, library: 'fa-brands' }, link: { url } });
+  const footer = { content: [box([w('social-icons', { social_icon_list: [social('https://facebook.com/envato', 'facebook'), social('https://twitter.com/envato', 'twitter'), social('https://example.com', 'globe')] }), w('button', { text: 'Instagram', link: { url: 'https://instagram.com/envato' } })])] };
+  const socials = [{ key: 'facebook_url', name: 'Facebook', icon: 'fab fa-facebook-f', url: 'https://www.facebook.com/rossi' }];
+  const prepared = prepareDocument(footer, 'footer', [{ type: 'other' }], { ...site, socials });
+  const [icons, button] = prepared.doc.content[0].elements;
+  assert.deepEqual(icons.settings.social_icon_list.map((x) => x.link.url), ['https://www.facebook.com/rossi', 'https://example.com'], 'facebook of the site, no demo twitter');
+  assert.equal(button.settings.link.url, '', 'demo instagram link removed');
+  assert.ok(!prepared.marks.get(`${icons.id}:social_icon_list.0.link.url`)?.hint, 'not an AI field');
 });
 
 test('template kits: upload, AI analysis, roles, site generation and export without demo content', async () => {

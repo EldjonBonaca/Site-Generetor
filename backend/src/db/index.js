@@ -33,6 +33,8 @@ addColumn('projects', 'template_kit_id', 'INTEGER REFERENCES template_kits(id) O
 addColumn('projects', 'phone2', "TEXT NOT NULL DEFAULT ''");
 addColumn('projects', 'google_business_url', "TEXT NOT NULL DEFAULT ''");
 addColumn('projects', 'map_resolved_url', "TEXT NOT NULL DEFAULT ''");
+// Social networks of the site, all optional (lib/socials.js)
+for (const col of ['facebook_url', 'instagram_url', 'linkedin_url', 'youtube_url', 'tiktok_url', 'x_url']) addColumn('projects', col, "TEXT NOT NULL DEFAULT ''");
 // Databases created before templates replaced the Template Kits keep the old `kits` / `kit_mappings`
 // tables and `projects.kit_id` (SQLite cannot drop a foreign-key column): they are no longer used.
 

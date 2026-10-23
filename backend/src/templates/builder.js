@@ -2142,6 +2142,32 @@ export const LEGAL_PAGES = [
 ];
 const LEGAL_LINKS = LEGAL_PAGES.map((p) => ` | <a href="${p.url}" style="color:inherit">${p.text}</a>`).join('');
 
+/**
+ * Social icons of the site (free Elementor widget): only the networks the project has, round /
+ * rounded / square like the buttons of the template. o: { bg (icon background), color, align }
+ */
+function socialIcons(b, socials, o = {}) {
+  const el = b.widget('social-icons', {
+    social_icon_list: socials.map((s) => ({
+      _id: b.id(),
+      social_icon: { value: s.icon, library: 'fa-brands' },
+      link: { url: s.url, is_external: 'on', nofollow: '', custom_attributes: '' },
+    })),
+    shape: b.st.buttons === 'square' ? 'square' : b.st.buttons === 'pill' ? 'circle' : 'rounded',
+    align: o.align || 'left',
+    icon_color: 'custom',
+    icon_primary_color: o.bg,
+    icon_secondary_color: o.color,
+    hover_primary_color: b.c.secondary,
+    hover_secondary_color: b.c.onSecondary,
+    icon_size: px(15),
+    icon_padding: px(0.7, 'em'),
+    icon_spacing: px(10),
+  });
+  socials.forEach((_, i) => b.mark(el, `social_icon_list.${i}.link.url`, { fixed: true }));
+  return el;
+}
+
 function footer(b, site) {
   const variant = b.spec.layout.footer;
   const light = variant === 'light';
@@ -2152,8 +2178,10 @@ function footer(b, site) {
   const hover = light ? b.ink.kicker : b.c.secondary;
   const colTitle = (t) => [b.heading(t, { tag: 'h4', size: 18, color: titleColor, fixed: true }), b.line('left')];
   const list = (items) => b.iconList(items, { color, hover, iconColor: b.c.secondary });
+  // Social networks of the site (optional) below the logo
+  const social = site.socials?.length ? [socialIcons(b, site.socials, { bg: light ? rgba(b.c.primary, 0.1) : 'rgba(255,255,255,0.1)', color: light ? b.c.primaryText : '#FFFFFF' })] : [];
   const cols = [
-    b.box([brand(b, site, { color: titleColor })], { width: 22 }),
+    b.box([brand(b, site, { color: titleColor }), ...social], { width: 22, gap: 20 }),
     b.box([...colTitle(b.L.links), list(menuItems(site))], { width: 22, gap: 12 }),
   ];
   if (site.services.length) cols.push(b.box([...colTitle(b.L.services), list(site.services.map((s) => ({ text: s.name, url: s.url })))], { width: 22, gap: 12 }));

@@ -44,6 +44,8 @@ export const config = {
   outputDir: path.join(storageDir, 'output'),
   tmpDir: path.join(storageDir, 'tmp'),
   kitsDir: path.join(storageDir, 'kits'),
+  // Premium WordPress plugins installed on every exported site (lib/bundled-plugins.js)
+  pluginsDir: path.join(storageDir, 'plugins'),
   maxImageBytes: Number(process.env.MAX_IMAGE_MB || 15) * 1024 * 1024,
   // Uploaded images of this size or larger are compressed below it (lib/optimize.js)
   optimizeImageBytes: Number(process.env.IMAGE_OPTIMIZE_KB || 1000) * 1000,
@@ -52,6 +54,6 @@ export const config = {
   frontendDist: path.resolve(BACKEND_ROOT, '../frontend/dist'),
 };
 
-for (const dir of [config.storageDir, config.imagesDir, config.libraryDir, config.outputDir, config.tmpDir, config.kitsDir]) {
+for (const dir of [config.storageDir, config.imagesDir, config.libraryDir, config.outputDir, config.tmpDir, config.kitsDir, config.pluginsDir]) {
   fs.mkdirSync(dir, { recursive: true });
 }

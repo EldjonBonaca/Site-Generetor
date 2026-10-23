@@ -16,6 +16,7 @@ import templates from './routes/templates.js';
 import providers from './routes/providers.js';
 import prompts from './routes/prompts.js';
 import generations from './routes/generations.js';
+import bundledPlugins from './routes/bundled-plugins.js';
 import library from './routes/library.js';
 import kits from './routes/kits.js';
 
@@ -48,7 +49,7 @@ app.post('/api/login', auth.login);
 app.post('/api/logout', auth.logout);
 app.get('/api/me', auth.me);
 
-for (const r of [projects, images, library, templates, kits, providers, prompts, generations]) app.use('/api', r);
+for (const r of [projects, images, library, templates, kits, providers, prompts, generations, bundledPlugins]) app.use('/api', r);
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
 // Serve the built frontend if present

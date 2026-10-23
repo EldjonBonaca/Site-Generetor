@@ -9,9 +9,10 @@
  * License: GPL-2.0-or-later
  *
  * Generated file. On activation it opens Tools → {{MENU_TITLE}}, which creates the website:
- *  1. setup: Hello Elementor theme (replacing a block theme, or any theme without Elementor Pro),
- *     Contact Form 7 and, without Elementor Pro or when the header menu is its Navigation Menu widget,
- *     Ultimate Addons for Elementor (UAE);
+ *  1. setup: Hello Elementor theme (the other themes are deleted), Contact Form 7, Yoast SEO,
+ *     Loginizer, WP Fastest Cache, Really Simple SSL, the premium plugins bundled in plugins/ and,
+ *     without Elementor Pro or when the header menu is its Navigation Menu widget, Ultimate Addons
+ *     for Elementor (UAE);
  *  2. images (Media Library), a few per request;
  *  3. the 5 pages (Home, About, Services, Gallery, Contact) built with Elementor, one article per
  *     service, the menu, the contact form, header/footer/single post templates, the template colors
@@ -20,6 +21,8 @@
  * templates shown on the whole site, which keep working after this plugin is deleted. Only when UAE
  * cannot be installed this plugin displays them itself (Hello Elementor hooks).
  * Running it again updates what it created (tracked in the option OPTION).
+ * When the site is created the plugin deactivates and deletes itself (step "cleanup"); when
+ * WordPress does not allow it, a popup asks to delete it.
  */
 
 namespace ESG\Site_{{HASH}};
@@ -39,6 +42,12 @@ const CF7 = array('slug' => 'contact-form-7', 'file' => 'contact-form-7/wp-conta
 const UAE = array('slug' => 'header-footer-elementor', 'file' => 'header-footer-elementor/header-footer-elementor.php', 'name' => 'Ultimate Addons for Elementor');
 // SEO: the focus keyphrase, SEO title and meta description of every page and article are filled in
 const YOAST = array('slug' => 'wordpress-seo', 'file' => 'wordpress-seo/wp-seo.php', 'name' => 'Yoast SEO');
+// Security (login protection), cache and SSL: installed and activated on every site
+const SITE_PLUGINS = array(
+	array('slug' => 'loginizer', 'file' => 'loginizer/loginizer.php', 'name' => 'Loginizer'),
+	array('slug' => 'wp-fastest-cache', 'file' => 'wp-fastest-cache/wpFastestCache.php', 'name' => 'WP Fastest Cache'),
+	array('slug' => 'really-simple-ssl', 'file' => 'really-simple-ssl/rlrsssl-really-simple-ssl.php', 'name' => 'Really Simple SSL'),
+);
 
 register_activation_hook(__FILE__, __NAMESPACE__ . '\\activate');
 register_uninstall_hook(__FILE__, __NAMESPACE__ . '\\uninstall');
@@ -144,6 +153,7 @@ function render_page() {
 		'nonce' => wp_create_nonce(PAGE),
 		'autorun' => !$done && !empty($_GET['autorun']),
 		'ui' => $data['ui'],
+		'urls' => array('home' => home_url('/'), 'plugins' => admin_url('plugins.php'), 'dashboard' => admin_url()),
 	);
 	?>
 	<div class="wrap">
@@ -186,6 +196,11 @@ function render_page() {
 		#esg-log li.esg-error { color: #b32d2e; font-weight: 600; }
 		#esg-log li.esg-warning { color: #996800; }
 		#esg-log li.esg-success { color: #007017; font-weight: 600; }
+		#esg-popup { position: fixed; inset: 0; z-index: 100000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.55); }
+		#esg-popup .esg-box { max-width: 520px; width: 100%; padding: 28px 30px; border-radius: 10px; background: #fff; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+		#esg-popup h2 { margin: 0 0 12px; font-size: 22px; }
+		#esg-popup p { font-size: 14px; line-height: 1.6; }
+		#esg-popup .esg-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
 	</style>
 	<script>
 	(function () {
@@ -233,6 +248,9 @@ function render_page() {
 			// Plugins / theme installed in the "setup" request are loaded by the following requests
 			step('setup').then(function (r) {
 				r.messages.forEach(function (m) { line(m.text, m.level); });
+				return step('extras');
+			}).then(function (r) {
+				r.messages.forEach(function (m) { line(m.text, m.level); });
 				return images(line(''), -1);
 			}).then(function () {
 				line(cfg.ui.creatingContent);
@@ -243,11 +261,51 @@ function render_page() {
 				status.className = 'esg-success';
 				document.getElementById('esg-links').innerHTML = r.linksHtml;
 				button.textContent = cfg.ui.rerun;
+				// The site does not need this plugin any more: it removes itself (or asks to be removed)
+				var cleaning = line(cfg.ui.cleaning);
+				return step('cleanup').catch(function () {
+					return { status: 'manual', message: cfg.ui.removeManual };
+				}).then(function (c) {
+					cleaning.textContent = c.message;
+					cleaning.className = c.status === 'removed' ? 'esg-success' : 'esg-warning';
+					if (c.status === 'removed' || c.status === 'deactivated') button.style.display = 'none';
+					popup(c);
+				});
 			}).catch(function (e) {
 				line(fmt(cfg.ui.failed, { message: e.message }), 'error');
 			}).then(function () {
 				button.disabled = false;
 			});
+		};
+		// Popup at the end: the site is ready, and what happened to this plugin
+		var popup = function (c) {
+			var box = document.createElement('div');
+			box.id = 'esg-popup';
+			var inner = document.createElement('div');
+			inner.className = 'esg-box';
+			var h = document.createElement('h2');
+			h.textContent = cfg.ui.popupTitle;
+			var p = document.createElement('p');
+			p.textContent = c.message;
+			var actions = document.createElement('div');
+			actions.className = 'esg-actions';
+			var link = function (text, url, primary) {
+				var a = document.createElement('a');
+				a.className = 'button' + (primary ? ' button-primary button-hero' : ' button-hero');
+				a.href = url;
+				a.textContent = text;
+				actions.appendChild(a);
+			};
+			if (c.status === 'deactivated' || c.status === 'manual') link(cfg.ui.goPlugins, cfg.urls.plugins, true);
+			link(cfg.ui.viewSite, cfg.urls.home, c.status === 'removed' || c.status === 'keep');
+			if (c.status === 'removed') link(cfg.ui.goDashboard, cfg.urls.dashboard, false);
+			inner.appendChild(h);
+			inner.appendChild(p);
+			inner.appendChild(actions);
+			box.appendChild(inner);
+			// The plugin is still installed: the popup can be closed to read the log
+			if (c.status !== 'removed') box.addEventListener('click', function (e) { if (e.target === box) box.remove(); });
+			document.body.appendChild(box);
 		};
 		button.addEventListener('click', run);
 		if (cfg.autorun) run();
@@ -298,6 +356,9 @@ function ajax_step() {
 		if ($step === 'setup') {
 			wp_send_json_success(setup_dependencies());
 		}
+		if ($step === 'extras') {
+			wp_send_json_success(setup_extras());
+		}
 		if ($step === 'images') {
 			wp_send_json_success(import_images(IMAGES_PER_REQUEST));
 		}
@@ -307,6 +368,9 @@ function ajax_step() {
 			render_links(created_links(state()));
 			$result['linksHtml'] = ob_get_clean();
 			wp_send_json_success($result);
+		}
+		if ($step === 'cleanup') {
+			wp_send_json_success(remove_self());
 		}
 		wp_send_json_error(array('message' => 'Unknown step.'), 400);
 	} catch (\Throwable $e) {
@@ -337,7 +401,7 @@ function upgrader_error($result, $skin) {
 	return $errors->has_errors() ? $errors->get_error_message() : 'unknown error';
 }
 
-/** Install (from wordpress.org) and activate a plugin. */
+/** Install (from wordpress.org, or from $plugin['source'], a zip bundled with this plugin) and activate a plugin. */
 function ensure_plugin(array $plugin, array &$messages) {
 	load_upgrader();
 	if (is_plugin_active($plugin['file'])) {
@@ -349,7 +413,8 @@ function ensure_plugin(array $plugin, array &$messages) {
 			return false;
 		}
 		$skin = new \WP_Ajax_Upgrader_Skin();
-		$result = (new \Plugin_Upgrader($skin))->install('https://downloads.wordpress.org/plugin/' . $plugin['slug'] . '.latest-stable.zip');
+		$package = !empty($plugin['source']) ? $plugin['source'] : 'https://downloads.wordpress.org/plugin/' . $plugin['slug'] . '.latest-stable.zip';
+		$result = (new \Plugin_Upgrader($skin))->install($package);
 		if (is_wp_error($result) || !$result) {
 			$messages[] = array('level' => 'warning', 'text' => t('installFailed', array('name' => $plugin['name'], 'error' => upgrader_error($result, $skin))));
 			return false;
@@ -365,17 +430,11 @@ function ensure_plugin(array $plugin, array &$messages) {
 }
 
 /**
- * The templates are made for Hello Elementor. Block themes (e.g. Twenty Twenty-Five) do not show
- * Elementor headers/footers, and without Elementor Pro this plugin displays them through the Hello
- * Elementor hooks: in those cases the theme is switched (installed from wordpress.org if needed).
- * With Elementor Pro a classic theme chosen by the user is kept.
+ * The site uses only the Hello Elementor theme (the templates are made for it): it is installed from
+ * wordpress.org if needed and activated; the other themes are deleted afterwards (remove_other_themes).
  */
 function ensure_theme(array &$messages) {
 	if (get_template() === 'hello-elementor') {
-		return;
-	}
-	$block = function_exists('wp_is_block_theme') && wp_is_block_theme();
-	if (!$block && (defined('ELEMENTOR_PRO_VERSION') || !has_header_footer())) {
 		return;
 	}
 	if (!wp_get_theme('hello-elementor')->exists()) {
@@ -393,6 +452,40 @@ function ensure_theme(array &$messages) {
 	}
 	switch_theme('hello-elementor');
 	$messages[] = array('level' => 'info', 'text' => t('themeSwitched'));
+}
+
+/**
+ * Only Hello Elementor stays: the other installed themes are deleted (never the active one, nor its
+ * parent). Skipped on multisite (themes are shared by the network) and when WordPress could only
+ * delete files with FTP credentials.
+ */
+function remove_other_themes(array &$messages) {
+	if (get_template() !== 'hello-elementor' || is_multisite() || !current_user_can('delete_themes')) {
+		return;
+	}
+	require_once ABSPATH . 'wp-admin/includes/theme.php';
+	require_once ABSPATH . 'wp-admin/includes/file.php';
+	$others = array_diff(array_keys(wp_get_themes()), array(get_stylesheet(), get_template()));
+	if (!$others) {
+		return;
+	}
+	if (get_filesystem_method() !== 'direct') {
+		$messages[] = array('level' => 'warning', 'text' => t('themeRemoveFailed', array('name' => implode(', ', $others), 'error' => 'FTP credentials required')));
+		return;
+	}
+	$removed = array();
+	foreach ($others as $stylesheet) {
+		$name = wp_get_theme($stylesheet)->get('Name');
+		$result = delete_theme($stylesheet);
+		if ($result === true) {
+			$removed[] = $name;
+		} else {
+			$messages[] = array('level' => 'warning', 'text' => t('themeRemoveFailed', array('name' => $name, 'error' => is_wp_error($result) ? $result->get_error_message() : 'unknown error')));
+		}
+	}
+	if ($removed) {
+		$messages[] = array('level' => 'info', 'text' => t('themesRemoved', array('names' => implode(', ', $removed))));
+	}
 }
 
 /**
@@ -418,6 +511,27 @@ function setup_dependencies() {
 			ensure_plugin($plugin, $messages);
 		}
 	}
+	return array('done' => true, 'messages' => $messages);
+}
+
+/**
+ * Second step (its own request, so that a slow host does not time out): login protection, cache and
+ * SSL, the premium plugins bundled with this plugin, and only Hello Elementor among the themes.
+ */
+function setup_extras() {
+	$messages = array();
+	$data = data();
+	foreach (SITE_PLUGINS as $plugin) {
+		ensure_plugin($plugin, $messages);
+	}
+	// Premium plugins uploaded in the app (e.g. WP Fastest Cache Premium), after the free plugins they extend
+	$bundled = isset($data['bundledPlugins']) && is_array($data['bundledPlugins']) ? $data['bundledPlugins'] : array();
+	foreach ($bundled as $plugin) {
+		if (!empty($plugin['zip']) && !empty($plugin['file']) && preg_match('/^[a-z0-9-]+\.zip$/', $plugin['zip']) && file_exists(__DIR__ . '/plugins/' . $plugin['zip'])) {
+			ensure_plugin(array('slug' => '', 'file' => $plugin['file'], 'name' => $plugin['name'], 'source' => __DIR__ . '/plugins/' . $plugin['zip']), $messages);
+		}
+	}
+	remove_other_themes($messages);
 	return array('done' => true, 'messages' => $messages);
 }
 
@@ -686,6 +800,22 @@ function yoast_site_settings(array $data, array $images, array &$messages) {
 		$titles['company_logo_id'] = $images[$data['logo']]['id'];
 	}
 	update_option('wpseo_titles', $titles);
+	// Social profiles of the business (organization schema): Facebook + the others
+	$socials = isset($data['socials']) && is_array($data['socials']) ? $data['socials'] : array();
+	if ($socials) {
+		$social = get_option('wpseo_social', array());
+		$social = is_array($social) ? $social : array();
+		$others = array();
+		foreach ($socials as $s) {
+			if ($s['key'] === 'facebook_url') {
+				$social['facebook_site'] = esc_url_raw($s['url']);
+			} else {
+				$others[] = esc_url_raw($s['url']);
+			}
+		}
+		$social['other_social_urls'] = $others;
+		update_option('wpseo_social', $social);
+	}
 	$messages[] = array('level' => 'info', 'text' => t('yoastReady'));
 }
 
@@ -845,8 +975,7 @@ function import_content() {
 		$content = replace_string($post['content'], $r);
 		$post_doc = !empty($post['elementor']) ? element_doc($post['elementor']) : null;
 		if ($image && !$post_doc && !defined('ELEMENTOR_PRO_VERSION')) {
-			$content = '<figure class="wp-block-image size-large">' . wp_get_attachment_image($image, 'large') . '</figure>' . "
-" . $content;
+			$content = '<figure class="wp-block-image size-large">' . wp_get_attachment_image($image, 'large') . '</figure>' . "\n" . $content;
 		}
 		$id = upsert_post($state, 'posts', $post['key'], array(
 			'post_type' => 'post',
@@ -946,6 +1075,11 @@ function import_content() {
 	update_option('blogname', $data['site']['name']);
 	if (!empty($data['logo']) && isset($images[$data['logo']])) {
 		set_theme_mod('custom_logo', $images[$data['logo']]['id']);
+		// Site icon (favicon): the logo (WordPress makes the icon sizes from a bitmap, not from an SVG)
+		if (!preg_match('/\.svg$/i', $data['logo'])) {
+			update_option('site_icon', $images[$data['logo']]['id']);
+			$messages[] = array('level' => 'info', 'text' => t('faviconSet'));
+		}
 	}
 	yoast_site_settings($data, $images, $messages);
 	if (isset($page_ids['home'])) {
@@ -967,6 +1101,33 @@ function import_content() {
 	save_state($state);
 	$messages[] = array('level' => 'info', 'text' => t('summary', array('pages' => count($page_ids), 'posts' => count($data['posts']), 'images' => count($images))));
 	return array('done' => true, 'messages' => $messages);
+}
+
+/**
+ * Last step: the site no longer needs this plugin (header and footer are UAE / Elementor Pro
+ * templates, the articles are static Elementor documents), so it deactivates and deletes itself.
+ * When WordPress can only delete files with FTP credentials it is just deactivated, and the popup
+ * asks to delete it. It stays active when it displays the header and footer itself (no UAE, no Pro).
+ * @return array { status: removed | deactivated | manual | keep, message }
+ */
+function remove_self() {
+	if (get_option(OPTION_HF)) {
+		return array('status' => 'keep', 'message' => t('keepPlugin'));
+	}
+	require_once ABSPATH . 'wp-admin/includes/plugin.php';
+	require_once ABSPATH . 'wp-admin/includes/file.php';
+	$basename = plugin_basename(__FILE__);
+	if (!current_user_can('activate_plugins')) {
+		return array('status' => 'manual', 'message' => t('removeManual'));
+	}
+	deactivate_plugins($basename, true);
+	if (is_plugin_active($basename)) {
+		return array('status' => 'manual', 'message' => t('removeManual'));
+	}
+	if (current_user_can('delete_plugins') && get_filesystem_method() === 'direct' && delete_plugins(array($basename)) === true) {
+		return array('status' => 'removed', 'message' => t('removed'));
+	}
+	return array('status' => 'deactivated', 'message' => t('deactivated'));
 }
 
 // ---------------------------------------------------------------------------- comments

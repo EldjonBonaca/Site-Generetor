@@ -606,4 +606,23 @@ export default {
   '{n} image(s) uploaded': '{n} immagine/i caricata/e',
   'JPG, PNG, WEBP or SVG · images of 1 MB or more are compressed automatically': 'JPG, PNG, WEBP o SVG · le immagini da 1 MB in su vengono compresse automaticamente',
   'Compressed under 1 MB with the best quality: {list}': 'Compresse sotto 1 MB con la migliore qualità: {list}',
+  // Social networks of the site
+  'Social networks': 'Social network',
+  'Optional: fill in only the ones the business has. They are shown as icons in the footer of the site (and given to Yoast SEO).': "Facoltativi: compila solo quelli che l'attività ha. Vengono mostrati come icone nel footer del sito (e passati a Yoast SEO).",
+  'Enter the full link, starting with https://': 'Inserisci il link completo, che inizia con https://',
+  // WordPress plugins
+  Plugins: 'Plugin',
+  'WordPress plugins': 'Plugin WordPress',
+  'Plugins installed and activated on every site by the WordPress plugin you download from the export.': "Plugin installati e attivati su ogni sito dal plugin WordPress che scarichi dall'esportazione.",
+  'Upload premium plugin (.zip)': 'Carica plugin premium (.zip)',
+  'Premium plugins': 'Plugin premium',
+  'Upload the .zip of a plugin you own (e.g. WP Fastest Cache Premium): it is put inside the WordPress plugin of every site exported from now on, and installed and activated after the free plugins. Export the site again after uploading.':
+    "Carica lo .zip di un plugin che possiedi (es. WP Fastest Cache Premium): viene inserito nel plugin WordPress di ogni sito esportato da ora in poi, e installato e attivato dopo i plugin gratuiti. Dopo averlo caricato, esporta di nuovo il sito.",
+  'No premium plugins': 'Nessun plugin premium',
+  'Upload the .zip file you downloaded from the plugin website.': 'Carica il file .zip scaricato dal sito del plugin.',
+  'Plugin "{name}" uploaded: it is installed on every site you export from now on.': 'Plugin "{name}" caricato: viene installato su ogni sito che esporti da ora in poi.',
+  'Remove "{name}"? Sites exported afterwards will not install it.': 'Rimuovere "{name}"? I siti esportati dopo non lo installeranno.',
+  'Installed on every site': 'Installati su ogni sito',
+  'Free plugins from wordpress.org, installed and activated automatically. Only the Hello Elementor theme is kept; when the site is ready the builder plugin removes itself.':
+    'Plugin gratuiti da wordpress.org, installati e attivati in automatico. Resta solo il tema Hello Elementor; quando il sito è pronto il plugin di creazione si rimuove da solo.',
 };

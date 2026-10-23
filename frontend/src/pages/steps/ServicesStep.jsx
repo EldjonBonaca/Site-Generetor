@@ -92,6 +92,16 @@ export default function ServicesStep({ project, reload }) {
             </SortableContext>
           </DndContext>
         )}
+        {/* Second "Add service" at the end of the list: no need to scroll back up */}
+        <button
+          type="button"
+          onClick={add}
+          disabled={adding}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 py-4 text-sm font-medium text-slate-600 hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 disabled:opacity-60"
+        >
+          <Plus className="size-5" />
+          {t('Add service')}
+        </button>
       </Card>
     </>
   );

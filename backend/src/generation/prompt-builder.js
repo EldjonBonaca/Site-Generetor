@@ -214,7 +214,7 @@ export function technicalInstructions({ fields, languageLabel, pageTitle, role, 
     ? `\n- The page comes from an Elementor Template Kit made for another business. The "demo text" of a field only shows its role and length: write completely new content for this business. Never reuse, translate or paraphrase demo texts, and never keep demo brand names, people, prices, figures, dates, addresses, emails or phone numbers.`
     : '';
   const numbers = fields.some((f) => f.format === 'number') ? '\n- Fields marked [number] contain only digits (e.g. "250"): no words, units or symbols.' : '';
-  const pages = links.filter((l) => !['phone', 'email'].includes(l.role));
+  const pages = links.filter((l) => !['phone', 'email', 'social'].includes(l.role));
   const client = String(notes || '').trim() ? '\n- Respect the INSTRUCTIONS OF THE CLIENT given above in every field (where they concern this part of the site).' : '';
   return `
 

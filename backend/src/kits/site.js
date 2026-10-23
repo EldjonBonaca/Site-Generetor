@@ -29,6 +29,7 @@ import { buildSite } from '../templates/builder.js';
 import { sanitizeSpec } from '../templates/spec.js';
 import { stripHtml } from '../lib/util.js';
 import { mapIframe, siteMap } from '../lib/maps.js';
+import { socialOf } from '../lib/socials.js';
 import { loadKitTemplate } from './read.js';
 import { SECTION_TYPES } from './analysis.js';
 
@@ -247,6 +248,42 @@ function prepareForms(doc, info, site) {
     });
   }
   return { forms, swaps };
+}
+
+/** URL of the first link of a list item (social icon, icon list row…), or ''. */
+const itemLink = (item) => Object.entries(item).find(([k, v]) => /link|url/i.test(k) && v && typeof v === 'object' && typeof v.url === 'string')?.[1].url || '';
+
+/**
+ * Links to social networks (social icons, icon lists, buttons…): the networks the project has get
+ * its links; the demo links of the other networks are removed — a list item (a social icon, an icon
+ * list row) disappears, a single widget keeps no link. Nothing else of the widget changes.
+ * @returns {string[]} refs of the links set (final values, not AI fields)
+ */
+function setSocials(doc, socials) {
+  const refs = [];
+  const own = new Map(socials.map((s) => [s.key, s.url]));
+  walkElements(getRoot(doc).elements, (el) => {
+    if (el.elType !== 'widget' || !el.settings || typeof el.settings !== 'object') return;
+    const visit = (obj, path) => {
+      for (const [k, v] of Object.entries(obj)) {
+        if (k === '__dynamic__' || !v || typeof v !== 'object') continue;
+        if (Array.isArray(v)) {
+          obj[k] = v.filter((item) => {
+            const net = item && typeof item === 'object' ? socialOf(itemLink(item)) : null;
+            return !net || own.has(net.key);
+          });
+          obj[k].forEach((item, i) => item && typeof item === 'object' && visit(item, [...path, k, i]));
+        } else if (typeof v.url === 'string' && /link|url/i.test(k)) {
+          const net = socialOf(v.url);
+          if (!net) continue;
+          v.url = own.get(net.key) || '';
+          if (v.url) refs.push(`${el.id}:${[...path, k, 'url'].join('.')}`);
+        } else visit(v, [...path, k]);
+      }
+    };
+    visit(el.settings, []);
+  });
+  return refs;
 }
 
 /** Navigation menus of any widget -> the menu of the site. */
@@ -564,6 +601,7 @@ export function prepareDocument(doc, role, sectionInfo, site, demo = null) {
   notes.videos = cleanDemo(doc);
   if (isPage) notes.clientLogos = sections.filter((s) => s.type === 'clients').length;
   setMenus(doc, site.menuSlug);
+  for (const ref of setSocials(doc, site.socials || [])) fixedRefs.add(ref);
 
   // 1. Service cards (every card of the kit stays): the first ones get the services, in order; the
   //    others are written by the AI and link to the services page
