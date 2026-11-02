@@ -405,13 +405,28 @@ function upgrader_error($result, $skin) {
 	return $errors->has_errors() ? $errors->get_error_message() : 'unknown error';
 }
 
+/**
+ * The real main file of a plugin: the one given when it exists, else the PHP file with the plugin
+ * header in its folder (a Template Kit only tells the folder: e.g. Royal Elementor Addons is
+ * royal-elementor-addons/wpr-addons.php, not royal-elementor-addons.php).
+ */
+function plugin_main_file(array $plugin) {
+	if (file_exists(WP_PLUGIN_DIR . '/' . $plugin['file'])) {
+		return $plugin['file'];
+	}
+	$folder = strtok($plugin['file'], '/');
+	$found = $folder ? array_keys(get_plugins('/' . $folder)) : array();
+	return $found ? $folder . '/' . $found[0] : $plugin['file'];
+}
+
 /** Install (from wordpress.org, or from $plugin['source'], a zip bundled with this plugin) and activate a plugin. */
 function ensure_plugin(array $plugin, array &$messages) {
 	load_upgrader();
 	if (is_plugin_active($plugin['file'])) {
 		return true;
 	}
-	if (!file_exists(WP_PLUGIN_DIR . '/' . $plugin['file'])) {
+	$folder = strtok($plugin['file'], '/');
+	if (!file_exists(WP_PLUGIN_DIR . '/' . $plugin['file']) && !($folder && is_dir(WP_PLUGIN_DIR . '/' . $folder))) {
 		if (!current_user_can('install_plugins')) {
 			$messages[] = array('level' => 'warning', 'text' => t('installFailed', array('name' => $plugin['name'], 'error' => 'permission denied')));
 			return false;
@@ -423,6 +438,10 @@ function ensure_plugin(array $plugin, array &$messages) {
 			$messages[] = array('level' => 'warning', 'text' => t('installFailed', array('name' => $plugin['name'], 'error' => upgrader_error($result, $skin))));
 			return false;
 		}
+	}
+	$plugin['file'] = plugin_main_file($plugin);
+	if (is_plugin_active($plugin['file'])) {
+		return true;
 	}
 	$activated = activate_plugin($plugin['file']);
 	if (is_wp_error($activated)) {

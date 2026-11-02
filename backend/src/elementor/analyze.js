@@ -55,11 +55,12 @@ const SKIP_WIDGETS = new Set([
   'sidebar', 'menu-anchor', 'google_maps', 'video', 'audio', 'spacer', 'code-highlight', 'lottie',
 ]);
 
-// Heuristics for unknown (3rd-party) widgets
+// Heuristics for unknown (3rd-party) widgets. Reviews of addons (ElementsKit, Royal, Jeg…) keep their text in keys like
+// "review", "testimonial", "client", "comment": they are demo content too
 const TEXTISH_KEY =
-  /(^|_)(title|text|heading|headline|description|desc|content|subtitle|sub_title|subheading|caption|label|name|job|designation|position|quote|excerpt|message|editor|button|btn)(_|\d|$)/;
+  /(^|_)(title|text|heading|headline|description|desc|content|subtitle|sub_title|subheading|caption|label|name|job|designation|position|quote|excerpt|message|editor|button|btn|review|reviews|testimonial|comment|feedback|paragraph|body|bio|summary|intro|tagline|slogan|author|client|company|occupation|details|txt)(_|\d|$)/;
 const NON_TEXT_KEY =
-  /(colou?r|typography|font|size|align|_tag$|^tag|width|height|margin|padding|border|radius|shadow|spacing|gap|icon|animation|css|class|link|url|_id$|^_|style|hover|background|duration|layout|view|skin|_position$|transition|opacity|z_index|display|show|hide|enable|switch|_type$|effect|delay|speed|direction|orientation|overlay|blend|filter|media|image|video|lottie|svg|unit|offset|rotate|scale|indent|weight|transform|decoration|letter|stroke|selector|motion|sticky|responsive|separator|source|order)/;
+  /(colou?r|typography|font|size|align|_tag$|^tag|width|height|margin|padding|border|radius|shadow|spacing|gap|icon|animation|css|class|link|url|_id$|^_|style|hover|background|duration|layout|(^|_)view(_|$)|skin|_position$|transition|opacity|z_index|display|show|hide|enable|switch|_type$|effect|delay|speed|direction|orientation|overlay|blend|filter|media|image|video|lottie|svg|unit|offset|rotate|scale|indent|weight|transform|decoration|letter|stroke|selector|motion|sticky|responsive|separator|source|order)/;
 
 const RESPONSIVE_SUFFIX = /_(tablet|mobile|laptop|widescreen|tablet_extra|mobile_extra)$/;
 

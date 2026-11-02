@@ -213,3 +213,13 @@ test('SEO score with the checks of Yoast: green page, thin page, docToHtml of El
   ] }] };
   assert.equal(docToHtml(doc), '<h1>Chi Siamo</h1>\n<p>Primo paragrafo.</p>\n<img src="x.webp" alt="Foto &lt;bella>">\n<p><a href="/contatti/">Contatti</a></p>\n<p>Testo</p>');
 });
+
+test('reviews of addon widgets (Template Kits) are texts for the AI', () => {
+  const doc = { content: [{ id: 'c1', elType: 'container', settings: {}, elements: [
+    { id: 'w1', elType: 'widget', widgetType: 'elementskit-testimonial', settings: { ekit_testimonial_data: [{ _id: 'a1', client_name: 'John Carter', designation: 'Manager', review: 'Great service, fast and friendly team.', rating: '5' }] }, elements: [] },
+  ] }] };
+  const keys = analyzeDocument(doc, { prefix: 'home' }).fields.map((f) => f.key);
+  assert.ok(keys.includes('review'), keys.join(','));
+  assert.ok(keys.includes('client_name') && keys.includes('designation'));
+  assert.ok(!keys.includes('rating'));
+});
