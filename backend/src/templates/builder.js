@@ -39,7 +39,7 @@ export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
  * Version of the generated structure. Field ids depend on it: a generation made with another
  * version cannot be exported (exporter.js), it has to be generated again.
  */
-export const BUILDER_VERSION = 11;
+export const BUILDER_VERSION = 12;
 
 export const DOC_ROLES = ['home', 'about', 'services', 'gallery', 'contact', 'single_post', 'header', 'footer'];
 
@@ -715,41 +715,6 @@ function bandEdges(b, out) {
  */
 /** The sentence under the title of a page banner is the first paragraph of the page: it carries the focus keyphrase. */
 const bannerHint = (site, role) => `short sentence under the title "${site.pages[role].title}" in the page banner (the first paragraph of the page): contains the exact focus keyphrase of the page`;
-
-/**
- * Text section of the pages with little text of their own (Services, Gallery, Contact): a subheading
- * and a presentation of about 300 words written around the focus keyphrase of the page, so that the
- * page has the text, the subheading and the keyphrase density search engines and Yoast SEO expect.
- */
-function seoText(b, site, role, bg) {
-  const what = {
-    services: ['Services', 'the services of the business as a whole: what it does, for whom, how it works and why choose it'],
-    gallery: ['Gallery', 'the works shown in the photos: kind of jobs, materials, care and results for the customers'],
-    contact: ['Contact', 'how to contact the business and what happens next (estimate, visit, response time), the area it serves, opening hours if known'],
-  }[role];
-  const center = b.st.align === 'center' && b.st.titles !== 'bar';
-  const align = center ? 'center' : 'left';
-  const { copy } = b.spec;
-  const sample = { services: [copy.servicesTitle, copy.servicesText], gallery: [copy.galleryTitle, copy.aboutText], contact: [copy.contactTitle, copy.contactText] }[role];
-  return b.section(
-    [
-      b.box(
-        [
-          b.heading(sample[0], { tag: 'h2', size: 34, align, bar: b.st.titles === 'bar', hint: `subheading of the text of the ${what[0]} page: contains the exact focus keyphrase of the page`, max: 80 }),
-          ...(b.st.titles === 'line' ? [b.line(align)] : []),
-          b.text(sample[1], {
-            align: center ? 'center' : 'left',
-            hint: `text of the ${what[0]} page about ${what[1]}: 3 paragraphs, about 300 words; the first sentence contains the exact focus keyphrase, used 2–3 times in total, natural and useful for the reader`,
-            max: 2200,
-            min: 1500,
-          }),
-        ],
-        { maxWidth: 880, gap: 16, align: center ? 'center' : 'stretch', anim: 0 }
-      ),
-    ],
-    { bg, align: 'center' }
-  );
-}
 
 function subheader(b, site, role, nextBg = b.ink.bg) {
   const variant = b.spec.layout.subheader;
@@ -1593,7 +1558,11 @@ function about(b, site) {
 }
 
 function services(b, site) {
-  const boxed = b.spec.layout.services === 'boxed';
+  const { layout } = b.spec;
+  // After the cards: how we work (when the template has it), then the call to action in the style of the template
+  const ids = ['services', ...((b.spec.sections || DEFAULT_SECTIONS).includes('process') ? ['process'] : []), 'cta'];
+  planSurfaces(b, ids.map((id) => ({ id, natural: NATURAL_SURFACE[id](layout) })), layout.subheader === 'photo' ? 'band' : 'alt');
+  const boxed = surface(b, 'services', 'bg') === 'alt';
   const bg = boxed ? b.ink.alt : b.ink.bg;
   const out = [subheader(b, site, 'services', bg)];
   if (site.services.length) {
@@ -1609,7 +1578,10 @@ function services(b, site) {
       )
     );
   }
-  out.push(seoText(b, site, 'services', bg === b.ink.alt ? b.ink.bg : b.ink.alt));
+  if (ids.includes('process')) out.push(processSteps(b));
+  out.push(cta(b, site));
+  sectionLines(b, out, ['subheader', ...ids.slice(site.services.length ? 0 : 1)]);
+  bandEdges(b, out);
   return out;
 }
 
@@ -1626,7 +1598,9 @@ function gallery(b, site) {
     image_border_radius: corners(b.imgRadius),
   });
   b.mark(el, 'wp_gallery', { slot: 'gallery' });
-  return [subheader(b, site, 'gallery'), b.section([el], { bg: b.ink.bg }), seoText(b, site, 'gallery', b.ink.alt)];
+  const out = [subheader(b, site, 'gallery'), b.section([el], { bg: b.ink.bg }), cta(b, site)];
+  bandEdges(b, out);
+  return out;
 }
 
 // The second phone number (optional) follows the first one
@@ -1686,6 +1660,8 @@ function contact(b, site) {
     ...(stacked ? { maxWidth: 860 } : { width: 52 }),
     anim: 0,
   });
+  // The address opens in Google Maps (also an outgoing link for search engines)
+  const mapButton = site.mapLink ? [b.button(b.L.openMap, site.mapLink, { variant: 'outline', outlineColor: b.ink.heading, align: stacked && b.st.align === 'center' ? 'center' : 'left', fixed: true })] : [];
   const out = [subheader(b, site, 'contact', b.ink.alt)];
   if (stacked) {
     out.push(
@@ -1696,6 +1672,7 @@ function contact(b, site) {
             items.map((it, i) => b.box([infoBox(it)], { width: b.columns(items.length), card: true, on: 'alt', pad: 28, anim: i * 120, lift: true })),
             { row: true, gap: 24, align: 'stretch', justify: 'center' }
           ),
+          ...mapButton,
           form,
         ],
         { bg: b.ink.alt, align: 'center', gap: 40 }
@@ -1704,7 +1681,7 @@ function contact(b, site) {
   } else {
     out.push(
       // The details never take more than half of the row: long texts wrap instead of running over the form
-      b.section([b.box([intro(b, parts, { align: 'left' }), ...items.map((it) => infoBox(it, { position: 'left' }))], { width: 42, gap: 22, css: 'esg-contact-info' }), form], {
+      b.section([b.box([intro(b, parts, { align: 'left' }), ...items.map((it) => infoBox(it, { position: 'left' })), ...mapButton], { width: 42, gap: 22, css: 'esg-contact-info' }), form], {
         row: true,
         bg: b.ink.alt,
         align: 'flex-start',
@@ -1714,8 +1691,6 @@ function contact(b, site) {
   // The map: the listing of the Google Business Profile of the site, else its address (lib/maps.js)
   const map = site.map || siteMap({ address: site.address });
   if (site.mapEmbed && map.src) out.push(b.section([b.html(mapIframe(map.src))], { full: true, gap: 0 }));
-  out.push(seoText(b, site, 'contact', b.ink.bg));
-  if (site.mapLink) out[out.length - 1].elements[0].elements.push(b.button(b.L.openMap, site.mapLink, { variant: 'outline', outlineColor: b.ink.heading, align: b.st.align === 'center' && b.st.titles !== 'bar' ? 'center' : 'left', fixed: true }));
   return out;
 }
 
