@@ -63,6 +63,9 @@ const UI = {
     globalStyles: 'Colori e font del template applicati al kit Elementor del sito.',
     themesRemoved: 'Temi non usati eliminati: {names}. Resta solo Hello Elementor.',
     whatsappReady: 'Pulsante WhatsApp attivo (Joinchat) con il numero +{number}.',
+    languageSet: 'WordPress impostato in italiano ({locale}).',
+    languageFailed: 'Impossibile scaricare la lingua {locale}: impostala da Impostazioni → Generali → Lingua del sito.',
+    defaultsRemoved: 'Contenuti di esempio di WordPress eliminati: {titles}.',
     noElementor: 'Elementor non è attivo: installalo e attivalo da Plugin → Aggiungi nuovo, poi clicca "Crea il sito".',
     themeRemoveFailed: 'Impossibile eliminare il tema "{name}" ({error}): eliminalo da Aspetto → Temi.',
     faviconSet: 'Logo impostato come icona del sito (favicon).',
@@ -115,6 +118,9 @@ const UI = {
     globalStyles: 'Colors and fonts of the template applied to the Elementor site kit.',
     themesRemoved: 'Unused themes deleted: {names}. Only Hello Elementor is left.',
     whatsappReady: 'WhatsApp button on (Joinchat) with the number +{number}.',
+    languageSet: 'WordPress language set to {locale}.',
+    languageFailed: 'Could not download the language {locale}: set it in Settings → General → Site Language.',
+    defaultsRemoved: 'Sample content of WordPress deleted: {titles}.',
     noElementor: 'Elementor is not active: install and activate it from Plugins → Add New Plugin, then click "Create the website".',
     themeRemoveFailed: 'Could not delete the theme "{name}" ({error}): delete it from Appearance → Themes.',
     faviconSet: 'Logo set as the site icon (favicon).',
@@ -128,6 +134,22 @@ const UI = {
     goDashboard: 'Go to the Dashboard',
   }),
 };
+
+/** WordPress locale of each site language (English = the default en_US, nothing to install). */
+const WP_LOCALES = { it: 'it_IT', es: 'es_ES', fr: 'fr_FR', de: 'de_DE', pt: 'pt_PT', en: '' };
+const IN_PLACE = { it: 'a', en: 'in', es: 'en', fr: 'à', de: 'in', pt: 'em' };
+
+/**
+ * Tagline of the site (Settings → General): the main service and the place, e.g. "Idraulico a Roma"
+ * (the first service, else the business type; the city, when known).
+ */
+export function siteTagline(ctx) {
+  const { project, services } = ctx;
+  const main = (services?.[0]?.name || project.industry || '').trim();
+  const city = (project.city || '').trim();
+  if (!main) return city ? `${project.site_name} – ${city}` : '';
+  return city ? `${main} ${IN_PLACE[project.language] || IN_PLACE.en} ${city}` : main;
+}
 
 /** Folder / zip name of the plugin, e.g. "edil-bianchi-site". */
 export const pluginSlug = (project) => `${slugify(project.site_name, 40) || 'website'}-site`;
@@ -243,7 +265,8 @@ export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, c
   });
 
   const site = {
-    site: { name: project.site_name, language: project.language },
+    // WordPress in the language of the site; tagline = main service + place
+    site: { name: project.site_name, language: project.language, locale: WP_LOCALES[project.language] || '', tagline: siteTagline(ctx) },
     ui,
     images: imageEntries,
     logo: images.find((i) => i.logo)?.file || null,

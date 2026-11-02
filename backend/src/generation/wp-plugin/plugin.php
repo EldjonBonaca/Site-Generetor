@@ -498,6 +498,10 @@ function remove_other_themes(array &$messages) {
  */
 function setup_dependencies() {
 	$messages = array();
+	// WordPress in the language of the site (the plugins installed afterwards get their translations too)
+	set_language($messages);
+	// The sample content of a new WordPress ("Hello world!", "Sample Page", draft privacy page) goes away first
+	remove_default_content($messages);
 	// Elementor first: every page, article and template of the site is an Elementor document
 	ensure_plugin(ELEMENTOR, $messages);
 	// No redirect to the Elementor welcome screen on the next admin page
@@ -548,7 +552,84 @@ function setup_extras() {
 		}
 	}
 	remove_other_themes($messages);
+	update_translations();
 	return array('done' => true, 'messages' => $messages);
+}
+
+/**
+ * WordPress (admin and front end) in the language of the site, e.g. it_IT: the language pack is
+ * downloaded from wordpress.org when missing. Plugins installed afterwards get their translations.
+ */
+function set_language(array &$messages) {
+	$locale = isset(data()['site']['locale']) ? (string) data()['site']['locale'] : '';
+	if ($locale === '' || !preg_match('/^[a-z]{2}_[A-Z]{2}$/', $locale) || get_option('WPLANG') === $locale) {
+		return;
+	}
+	require_once ABSPATH . 'wp-admin/includes/translation-install.php';
+	if (!in_array($locale, get_available_languages(), true)) {
+		if (!current_user_can('install_languages') || !wp_can_install_language_pack() || !wp_download_language_pack($locale)) {
+			$messages[] = array('level' => 'warning', 'text' => t('languageFailed', array('locale' => $locale)));
+			return;
+		}
+	}
+	update_option('WPLANG', $locale);
+	$messages[] = array('level' => 'info', 'text' => t('languageSet', array('locale' => $locale)));
+}
+
+/** Translations of the theme and of the plugins just installed, in the language of the site. */
+function update_translations() {
+	if (!get_option('WPLANG') || !current_user_can('update_plugins')) {
+		return;
+	}
+	try {
+		load_upgrader();
+		require_once ABSPATH . 'wp-admin/includes/update.php';
+		wp_update_plugins();
+		wp_update_themes();
+		$updates = wp_get_translation_updates();
+		if ($updates) {
+			(new \Language_Pack_Upgrader(new \Automatic_Upgrader_Skin()))->bulk_upgrade($updates);
+		}
+	} catch (\Throwable $e) {
+		// Translations are a nicety: the site works without them
+	}
+}
+
+/**
+ * The sample content of a fresh WordPress: the "Hello world!" post (with its comment), the "Sample
+ * Page" and the draft privacy policy page. Only the untouched ones (never edited) are deleted, and
+ * only on the first run.
+ */
+function remove_default_content(array &$messages) {
+	$state = state();
+	if (!empty($state['done_at']) || !empty($state['defaults_removed'])) {
+		return;
+	}
+	$slugs = array(
+		'post' => array('hello-world', 'ciao-mondo', 'hola-mundo', 'bonjour-tout-le-monde', 'hallo-welt', 'ola-mundo'),
+		'page' => array('sample-page', 'pagina-di-esempio', 'pagina-de-ejemplo', 'page-d-exemple', 'beispiel-seite', 'pagina-exemplo', 'privacy-policy'),
+	);
+	$removed = array();
+	foreach ($slugs as $type => $names) {
+		$posts = get_posts(array('post_type' => $type, 'post_status' => array('publish', 'draft'), 'post_name__in' => $names, 'numberposts' => 20));
+		foreach ($posts as $post) {
+			// Never edited since WordPress created it (the privacy page only while it is a draft)
+			$untouched = $post->post_modified_gmt === $post->post_date_gmt || $post->post_modified_gmt === '0000-00-00 00:00:00';
+			if (!$untouched || ($post->post_name === 'privacy-policy' && $post->post_status !== 'draft')) {
+				continue;
+			}
+			if ((int) get_option('wp_page_for_privacy_policy') === (int) $post->ID) {
+				update_option('wp_page_for_privacy_policy', 0);
+			}
+			$removed[] = $post->post_title;
+			wp_delete_post($post->ID, true);
+		}
+	}
+	$state['defaults_removed'] = 1;
+	save_state($state);
+	if ($removed) {
+		$messages[] = array('level' => 'info', 'text' => t('defaultsRemoved', array('titles' => implode(', ', $removed))));
+	}
 }
 
 /** The widgets of Ultimate Addons for Elementor are available (its Navigation Menu is the menu of the header). */
@@ -800,6 +881,30 @@ function set_seo($post_id, $seo) {
 		update_post_meta($post_id, '_yoast_wpseo_metadesc', wp_slash($seo['description']));
 		update_post_meta($post_id, 'rank_math_description', wp_slash($seo['description']));
 	}
+	// SEO score of the page computed with the checks of Yoast SEO on its final text (0-100, green from 71):
+	// shown in the lists of pages / articles; Yoast computes it again when the page is opened in the editor
+	if (isset($seo['score']) && is_numeric($seo['score'])) {
+		update_post_meta($post_id, '_yoast_wpseo_linkdex', (string) max(0, min(100, (int) $seo['score'])));
+	}
+}
+
+/**
+ * Like opening the page in Elementor and clicking "Update": Elementor saves the document, writing the
+ * text of the page into the post content and saving the post again, so Yoast SEO analyses (and
+ * indexes) the real text, headings, images and links of the page instead of an empty content.
+ */
+function save_like_editor($post_id) {
+	if (!class_exists('\Elementor\Plugin') || empty(\Elementor\Plugin::$instance->documents)) {
+		return;
+	}
+	try {
+		$document = \Elementor\Plugin::$instance->documents->get($post_id, false);
+		if ($document) {
+			$document->save(array('elements' => $document->get_elements_data()));
+		}
+	} catch (\Throwable $e) {
+		// The page stays as imported: it is updated when opened in Elementor
+	}
 }
 
 /** Yoast SEO site representation: the business as an organization, with its name and logo (structured data). */
@@ -981,6 +1086,9 @@ function import_content() {
 			$messages[] = array('level' => 'warning', 'text' => t('noTemplate', array('title' => $page['title'])));
 		}
 		set_seo($id, $page['seo']);
+		if ($doc) {
+			save_like_editor($id);
+		}
 		$page_ids[$page['role']] = $id;
 	}
 
@@ -1017,6 +1125,9 @@ function import_content() {
 			clear_elementor($id);
 		}
 		set_seo($id, $post['seo']);
+		if ($post_doc) {
+			save_like_editor($id);
+		}
 	}
 
 	fill_menu($state, $menu, array_values($page_ids));
@@ -1092,6 +1203,10 @@ function import_content() {
 
 	// Site settings: name, logo, static front page, "Post name" permalinks
 	update_option('blogname', $data['site']['name']);
+	// Tagline: the main service and the place, e.g. "Idraulico a Roma"
+	if (!empty($data['site']['tagline'])) {
+		update_option('blogdescription', $data['site']['tagline']);
+	}
 	if (!empty($data['logo']) && isset($images[$data['logo']])) {
 		set_theme_mod('custom_logo', $images[$data['logo']]['id']);
 		// Site icon (favicon): the logo (WordPress makes the icon sizes from a bitmap, not from an SVG)

@@ -160,17 +160,19 @@ async function generateFields({ provider, ctx, page, promptRow, fields, log, ext
 }
 
 /** Fill all AI fields (+ SEO) of a page, in chunks. Mutates `page`. */
-export async function generatePage({ provider, ctx, page, promptRow, log, onlyFieldIds = null }) {
+export async function generatePage({ provider, ctx, page, promptRow, log, onlyFieldIds = null, usedKeyphrases = [] }) {
   const targets = page.fields.filter((f) => f.source !== 'shared' && (onlyFieldIds ? onlyFieldIds.includes(f.id) : f.source !== 'auto'));
   const wantSeo = !onlyFieldIds ? page.slug !== null : onlyFieldIds.some((id) => id.startsWith('_seo.'));
   const seoFields = wantSeo
     ? [
-        { id: '_seo.keyphrase', format: 'text', maxLength: 60, label: 'Focus keyphrase', hint: 'Yoast SEO focus keyphrase: the 2–4 word search people type to find this page (e.g. service + city), different on every page' },
-        { id: '_seo.title', format: 'text', maxLength: 60, label: 'SEO title', hint: 'SEO title of the page: starts with the focus keyphrase' },
-        { id: '_seo.description', format: 'text', maxLength: 155, label: 'Meta description', hint: 'meta description of the page: contains the focus keyphrase' },
+        { id: '_seo.keyphrase', format: 'text', maxLength: 60, label: 'Focus keyphrase', hint: 'Yoast SEO focus keyphrase: the 2–4 word search people type to find this page (main word of the page + service or business type + city), different on every page' },
+        { id: '_seo.title', format: 'text', maxLength: 60, label: 'SEO title', hint: 'SEO title of the page: starts with the exact focus keyphrase, 40–60 characters' },
+        { id: '_seo.description', format: 'text', maxLength: 156, minLength: 120, label: 'Meta description', hint: 'meta description of the page, 120–156 characters: contains the exact focus keyphrase once' },
       ].filter((f) => !onlyFieldIds || onlyFieldIds.includes(f.id))
     : [];
-  const all = [...targets.map((f) => ({ ...f, original: f.original })), ...seoFields];
+  // SEO first: the focus keyphrase is decided with the first texts of the page (banner sentence, titles),
+  // and the following parts are told to use it
+  const all = [...seoFields, ...targets.map((f) => ({ ...f, original: f.original }))];
   if (!all.length) return;
 
   // Context for partial regeneration: current texts of the page.
@@ -188,7 +190,10 @@ export async function generatePage({ provider, ctx, page, promptRow, log, onlyFi
 
   for (const [i, chunk] of chunks.entries()) {
     const partNote = chunks.length > 1 ? `\n- This page is filled in ${chunks.length} parts; this is part ${i + 1}.` : '';
-    const { values, tokens, missing } = await generateFields({ provider, ctx, page, promptRow, fields: chunk, log, extra: extra + partNote });
+    // Yoast flags a focus keyphrase already used by another page of the site
+    const used = chunk.some((f) => f.id === '_seo.keyphrase') && usedKeyphrases.length ? `\n- Focus keyphrases already used by other pages of the site (choose a different one): ${usedKeyphrases.map((k) => `"${k}"`).join(', ')}.` : '';
+    const keyphrase = !chunk.some((f) => f.id === '_seo.keyphrase') && page.seo?.keyphrase ? `\n- The focus keyphrase of this page is "${page.seo.keyphrase}": use it exactly as the SEO rules below say (subheadings, first sentence of the long texts).` : '';
+    const { values, tokens, missing } = await generateFields({ provider, ctx, page, promptRow, fields: chunk, log, extra: extra + partNote + used + keyphrase });
     page.tokens += tokens;
     for (const f of page.fields) {
       if (f.id in values) {
@@ -289,7 +294,8 @@ export async function runGeneration(generationId, { pageKeys = null } = {}) {
       save(id, state);
       log('info', `Generating "${page.title}" (${page.fields.filter((f) => f.source !== 'auto' && f.source !== 'shared').length} fields)...`);
       try {
-        await generatePage({ provider, ctx, page, promptRow: sitePromptFor(ctx), log });
+        const usedKeyphrases = state.output.pages.filter((p) => p !== page && p.seo?.keyphrase).map((p) => p.seo.keyphrase);
+        await generatePage({ provider, ctx, page, promptRow: sitePromptFor(ctx), log, usedKeyphrases });
         page.status = 'done';
         page.error = null;
         log('success', `"${page.title}" done (${page.tokens.toLocaleString('en')} tokens so far on this page).`);
@@ -345,7 +351,8 @@ export async function regenerateField(generationId, pageKey, fieldId) {
   const provider = getProvider(gen.provider_id);
   const before = page.tokens;
   log('info', `Regenerating field ${fieldId} of "${page.title}"...`);
-  await generatePage({ provider, ctx, page, promptRow: sitePromptFor(ctx), log, onlyFieldIds: [fieldId] });
+  const usedKeyphrases = state.output.pages.filter((p) => p !== page && p.seo?.keyphrase).map((p) => p.seo.keyphrase);
+  await generatePage({ provider, ctx, page, promptRow: sitePromptFor(ctx), log, onlyFieldIds: [fieldId], usedKeyphrases });
   state.tokens += page.tokens - before;
   log('success', `Field ${fieldId} regenerated.`);
   save(generationId, state);

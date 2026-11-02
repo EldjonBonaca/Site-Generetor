@@ -39,18 +39,18 @@ export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
  * Version of the generated structure. Field ids depend on it: a generation made with another
  * version cannot be exported (exporter.js), it has to be generated again.
  */
-export const BUILDER_VERSION = 10;
+export const BUILDER_VERSION = 11;
 
 export const DOC_ROLES = ['home', 'about', 'services', 'gallery', 'contact', 'single_post', 'header', 'footer'];
 
 /** Fixed labels in the site language. */
 const LABELS = {
-  it: { menu: 'Menu', links: 'Link', services: 'Servizi', contacts: 'Contatti', about: 'Chi siamo', readMore: 'Scopri di più', phone: 'Telefono', email: 'Email', address: 'Indirizzo', otherServices: 'Altri servizi' },
-  en: { menu: 'Menu', links: 'Links', services: 'Services', contacts: 'Contact', about: 'About us', readMore: 'Read more', phone: 'Phone', email: 'Email', address: 'Address', otherServices: 'Other services' },
-  es: { menu: 'Menú', links: 'Enlaces', services: 'Servicios', contacts: 'Contacto', about: 'Quiénes somos', readMore: 'Leer más', phone: 'Teléfono', email: 'Email', address: 'Dirección', otherServices: 'Otros servicios' },
-  fr: { menu: 'Menu', links: 'Liens', services: 'Services', contacts: 'Contact', about: 'Qui sommes-nous', readMore: 'En savoir plus', phone: 'Téléphone', email: 'E-mail', address: 'Adresse', otherServices: 'Autres services' },
-  de: { menu: 'Menü', links: 'Links', services: 'Leistungen', contacts: 'Kontakt', about: 'Über uns', readMore: 'Mehr erfahren', phone: 'Telefon', email: 'E-Mail', address: 'Adresse', otherServices: 'Weitere Leistungen' },
-  pt: { menu: 'Menu', links: 'Links', services: 'Serviços', contacts: 'Contactos', about: 'Quem somos', readMore: 'Saiba mais', phone: 'Telefone', email: 'Email', address: 'Morada', otherServices: 'Outros serviços' },
+  it: { menu: 'Menu', links: 'Link', services: 'Servizi', contacts: 'Contatti', about: 'Chi siamo', readMore: 'Scopri di più', phone: 'Telefono', email: 'Email', address: 'Indirizzo', otherServices: 'Altri servizi', openMap: 'Apri in Google Maps' },
+  en: { menu: 'Menu', links: 'Links', services: 'Services', contacts: 'Contact', about: 'About us', readMore: 'Read more', phone: 'Phone', email: 'Email', address: 'Address', otherServices: 'Other services', openMap: 'Open in Google Maps' },
+  es: { menu: 'Menú', links: 'Enlaces', services: 'Servicios', contacts: 'Contacto', about: 'Quiénes somos', readMore: 'Leer más', phone: 'Teléfono', email: 'Email', address: 'Dirección', otherServices: 'Otros servicios', openMap: 'Abrir en Google Maps' },
+  fr: { menu: 'Menu', links: 'Liens', services: 'Services', contacts: 'Contact', about: 'Qui sommes-nous', readMore: 'En savoir plus', phone: 'Téléphone', email: 'E-mail', address: 'Adresse', otherServices: 'Autres services', openMap: 'Ouvrir dans Google Maps' },
+  de: { menu: 'Menü', links: 'Links', services: 'Leistungen', contacts: 'Kontakt', about: 'Über uns', readMore: 'Mehr erfahren', phone: 'Telefon', email: 'E-Mail', address: 'Adresse', otherServices: 'Weitere Leistungen', openMap: 'In Google Maps öffnen' },
+  pt: { menu: 'Menu', links: 'Links', services: 'Serviços', contacts: 'Contactos', about: 'Quem somos', readMore: 'Saiba mais', phone: 'Telefone', email: 'Email', address: 'Morada', otherServices: 'Outros serviços', openMap: 'Abrir no Google Maps' },
 };
 
 const PADDING = { compact: 64, normal: 96, airy: 128 };
@@ -712,6 +712,44 @@ function bandEdges(b, out) {
  * Banner of the inner pages, per the subheader layout: the page title over a photo ("photo"), on a
  * tinted band with a breadcrumb and no photo ("plain"), or beside a photo ("split").
  */
+/** The sentence under the title of a page banner is the first paragraph of the page: it carries the focus keyphrase. */
+const bannerHint = (site, role) => `short sentence under the title "${site.pages[role].title}" in the page banner (the first paragraph of the page): contains the exact focus keyphrase of the page`;
+
+/**
+ * Text section of the pages with little text of their own (Services, Gallery, Contact): a subheading
+ * and a presentation of about 300 words written around the focus keyphrase of the page, so that the
+ * page has the text, the subheading and the keyphrase density search engines and Yoast SEO expect.
+ */
+function seoText(b, site, role, bg) {
+  const what = {
+    services: ['Services', 'the services of the business as a whole: what it does, for whom, how it works and why choose it'],
+    gallery: ['Gallery', 'the works shown in the photos: kind of jobs, materials, care and results for the customers'],
+    contact: ['Contact', 'how to contact the business and what happens next (estimate, visit, response time), the area it serves, opening hours if known'],
+  }[role];
+  const center = b.st.align === 'center' && b.st.titles !== 'bar';
+  const align = center ? 'center' : 'left';
+  const { copy } = b.spec;
+  const sample = { services: [copy.servicesTitle, copy.servicesText], gallery: [copy.galleryTitle, copy.aboutText], contact: [copy.contactTitle, copy.contactText] }[role];
+  return b.section(
+    [
+      b.box(
+        [
+          b.heading(sample[0], { tag: 'h2', size: 34, align, bar: b.st.titles === 'bar', hint: `subheading of the text of the ${what[0]} page: contains the exact focus keyphrase of the page`, max: 80 }),
+          ...(b.st.titles === 'line' ? [b.line(align)] : []),
+          b.text(sample[1], {
+            align: center ? 'center' : 'left',
+            hint: `text of the ${what[0]} page about ${what[1]}: 3 paragraphs, about 300 words; the first sentence contains the exact focus keyphrase, used 2–3 times in total, natural and useful for the reader`,
+            max: 2200,
+            min: 1500,
+          }),
+        ],
+        { maxWidth: 880, gap: 16, align: center ? 'center' : 'stretch', anim: 0 }
+      ),
+    ],
+    { bg, align: 'center' }
+  );
+}
+
 function subheader(b, site, role, nextBg = b.ink.bg) {
   const variant = b.spec.layout.subheader;
   const center = b.st.align === 'center' && b.st.titles !== 'bar' && variant !== 'split';
@@ -725,7 +763,7 @@ function subheader(b, site, role, nextBg = b.ink.bg) {
       crumb,
       b.heading(site.pages[role].title, { tag: 'h1', size: 56, align, bar, fixed: true }),
       ...(b.st.titles === 'line' ? [b.line(align)] : []),
-      b.text(b.spec.copy.subheaderText, { align, size: 18, hint: `short sentence under the title "${site.pages[role].title}" in the page banner`, max: 140 }),
+      b.text(b.spec.copy.subheaderText, { align, size: 18, hint: bannerHint(site, role), max: 160 }),
     ];
     // The band stands out from the section below it
     const bg = nextBg === b.ink.alt ? b.ink.bg : b.ink.alt;
@@ -746,7 +784,7 @@ function subheader(b, site, role, nextBg = b.ink.bg) {
     [
       b.heading(site.pages[role].title, { tag: 'h1', size: 52, color: '#FFFFFF', align, fixed: true }),
       ...(b.st.titles === 'plain' ? [] : [b.line(align)]),
-      b.text(b.spec.copy.subheaderText, { color: 'rgba(255,255,255,0.88)', align, hint: `short sentence under the title "${site.pages[role].title}" in the page banner`, max: 140 }),
+      b.text(b.spec.copy.subheaderText, { color: 'rgba(255,255,255,0.88)', align, hint: bannerHint(site, role), max: 160 }),
     ],
     {
       slot: 'subheader',
@@ -1521,11 +1559,11 @@ function about(b, site) {
     mediaRow(
       b,
       [
-        b.heading(b.L.about, { bar: b.st.titles === 'bar', fixed: true }),
+        b.heading(b.L.about, { bar: b.st.titles === 'bar', hint: `title of the presentation of the business on the About page: starts with "${b.L.about}" and contains the exact focus keyphrase of the page (e.g. "${b.L.about}: …")`, max: 80 }),
         ...titleLine(b),
         b.text(copy.aboutPageText, {
           dropcap: true,
-          hint: 'first part of the presentation of the business on the About page: who we are, history and experience (2 paragraphs), WITHOUT sub-titles',
+          hint: 'first part of the presentation of the business on the About page: who we are, history and experience (2 paragraphs), WITHOUT sub-titles; the first sentence contains the exact focus keyphrase of the page',
           max: 1200,
           min: 300,
         }),
@@ -1570,6 +1608,7 @@ function services(b, site) {
       )
     );
   }
+  out.push(seoText(b, site, 'services', bg === b.ink.alt ? b.ink.bg : b.ink.alt));
   return out;
 }
 
@@ -1586,7 +1625,7 @@ function gallery(b, site) {
     image_border_radius: corners(b.imgRadius),
   });
   b.mark(el, 'wp_gallery', { slot: 'gallery' });
-  return [subheader(b, site, 'gallery'), b.section([el], { bg: b.ink.bg })];
+  return [subheader(b, site, 'gallery'), b.section([el], { bg: b.ink.bg }), seoText(b, site, 'gallery', b.ink.alt)];
 }
 
 // The second phone number (optional) follows the first one
@@ -1674,6 +1713,8 @@ function contact(b, site) {
   // The map: the listing of the Google Business Profile of the site, else its address (lib/maps.js)
   const map = site.map || siteMap({ address: site.address });
   if (site.mapEmbed && map.src) out.push(b.section([b.html(mapIframe(map.src))], { full: true, gap: 0 }));
+  out.push(seoText(b, site, 'contact', b.ink.bg));
+  if (site.mapLink) out[out.length - 1].elements[0].elements.push(b.button(b.L.openMap, site.mapLink, { variant: 'outline', outlineColor: b.ink.heading, align: b.st.align === 'center' && b.st.titles !== 'bar' ? 'center' : 'left', fixed: true }));
   return out;
 }
 

@@ -148,7 +148,8 @@ test('Italian full site: template, articles, gallery, reviews, contact form, men
   const servicesJson = read('templates/services.json');
   const servicesDoc = JSON.parse(servicesJson);
   assert.equal(servicesDoc.title, 'Servizi');
-  assert.equal(servicesDoc.content.length, 2, 'subheader + only one section: all services');
+  assert.equal(servicesDoc.content.length, 3, 'subheader + one section with all services + the SEO text');
+  assert.match(JSON.stringify(servicesDoc.content[2]), /"header_size":"h2"/, 'SEO text with its subheading');
   assert.equal([...servicesJson.matchAll(/"link_to":"custom"/g)].length, 5, 'one card (linked image) per service');
   for (const s of services) {
     assert.match(servicesJson, new RegExp(`"title":"${s.name}"`));
@@ -164,9 +165,9 @@ test('Italian full site: template, articles, gallery, reviews, contact form, men
   const boxes = JSON.parse(homeJson).content[2].elements[1].elements.map((e) => e.elements[0].settings);
   assert.equal(boxes.length, 4);
   for (const b of boxes) assert.ok(b.title_text && b.description_text && !/lorem|This is the heading/i.test(b.title_text + b.description_text));
-  // Chi Siamo: one "Chi siamo" section, no "La nostra storia" / "Missione" titles
+  // Chi Siamo: one presentation titled by the AI ("Chi siamo: …" with the focus keyphrase), no "La nostra storia" / "Missione" titles
   const aboutJson = read('templates/about.json');
-  assert.match(aboutJson, /"title":"Chi siamo"/);
+  assert.equal((aboutJson.match(/"header_size":"h2"/g) || []).length >= 1, true);
   assert.doesNotMatch(aboutJson, /nostra storia|missione e valori/i);
   // Gallery: all provided images except the logo, lightbox on
   const galleryWidget = JSON.parse(read('templates/gallery.json')).content[1].elements[0];

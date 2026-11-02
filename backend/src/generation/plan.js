@@ -200,6 +200,7 @@ export function siteInfo(ctx) {
     address: oneLine(project.address),
     // Map of the Contact page: the Google Business Profile listing, else the address (lib/maps.js)
     map: projectMap(project),
+    mapLink: mapLink(project),
     copyright: copyrightText(project),
     hasLogo: ctx.images.some((i) => i.role === 'logo'),
     mapEmbed: ctx.settings.mapEmbed !== false,
@@ -215,6 +216,13 @@ export function siteInfo(ctx) {
 /** Map of the site: { src (iframe link), query (text searched on the map), fromListing }. */
 export const projectMap = (project) =>
   siteMap({ businessUrl: project.google_business_url, resolvedUrl: project.map_resolved_url, siteName: project.site_name, address: project.address });
+
+/** Link "Open in Google Maps" of the Contact page: the Google Business Profile, else a search of the place ('' without data). */
+export function mapLink(project) {
+  if (project.google_business_url?.trim() && isGoogleMapsLink(project.google_business_url) && !/<iframe/i.test(project.google_business_url)) return project.google_business_url.trim();
+  const query = projectMap(project).query;
+  return query ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}` : '';
+}
 
 /** The Elementor documents of the project (built once per context), from its template or its Template Kit. */
 export function builtSite(ctx) {
@@ -281,6 +289,8 @@ export function siteLinks(ctx, pages = buildPages(ctx)) {
   }
   if (ctx.project.email) links.push({ url: `mailto:${ctx.project.email}`, label: ctx.project.email, role: 'email' });
   for (const s of socialLinks(ctx.project)) links.push({ url: s.url, label: s.name, role: 'social' });
+  const map = mapLink(ctx.project);
+  if (map) links.push({ url: map, label: 'Google Maps', role: 'map' });
   return links;
 }
 

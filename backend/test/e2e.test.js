@@ -327,7 +327,15 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   // Elementor is installed and activated by the plugin itself (it can be activated on a fresh WordPress)
   assert.doesNotMatch(php, /Requires Plugins:/);
   assert.ok(php.includes("'slug' => 'elementor', 'file' => 'elementor/elementor.php'"));
-  assert.match(php, /function setup_dependencies\(\) \{\s+\$messages = array\(\);\s+\/\/[^\n]*\n\s+ensure_plugin\(ELEMENTOR, \$messages\);/, 'Elementor first');
+  const setup = php.slice(php.indexOf('function setup_dependencies()'));
+  assert.ok(setup.indexOf('set_language($messages)') < setup.indexOf('remove_default_content($messages)') && setup.indexOf('remove_default_content($messages)') < setup.indexOf('ensure_plugin(ELEMENTOR, $messages)'), 'language, then sample content removed, then Elementor');
+  assert.ok(setup.indexOf('ensure_plugin(ELEMENTOR, $messages)') < setup.indexOf('ensure_theme($messages)'), 'Elementor before everything else');
+  // Italian WordPress, tagline, pages saved like in the Elementor editor (Yoast reads their text), SEO score
+  assert.match(php, /update_option\('WPLANG', \$locale\)/);
+  assert.match(php, /update_option\('blogdescription'/);
+  assert.match(php, /'hello-world', 'ciao-mondo'/);
+  assert.match(php, /\$document->save\(array\('elements' => \$document->get_elements_data\(\)\)\)/);
+  assert.match(php, /'_yoast_wpseo_linkdex'/);
   assert.match(php, /^namespace ESG\\Site_[0-9a-f]{8};$/m);
   assert.doesNotMatch(php, /\{\{[A-Z_]+\}\}/, 'no unfilled placeholder');
   // Without Elementor Pro the header/footer are UAE templates (they survive the deletion of this plugin)
@@ -337,6 +345,8 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.ok(php.includes("array('rule' => array('basic-global')"), 'shown on the entire site');
   assert.ok(!php.includes("'metform") && !php.includes('metform-form') && !php.includes('[metform'), 'Contact Form 7 only');
   const site = JSON.parse(plugin.readAsText(pr + 'data/site.json'));
+  assert.equal(site.site.locale, '', 'English site: default WordPress language');
+  assert.equal(site.site.tagline, 'Riparazione caldaie in Roma', 'tagline: main service + city');
   // Login protection, cache, SSL; the premium plugin from the bundled zip; only Hello Elementor; favicon; self-removal
   for (const slug of ['lw-all-in-one', 'loginizer', 'wp-fastest-cache', 'really-simple-ssl']) assert.ok(php.includes(`'slug' => '${slug}'`), slug);
   assert.deepEqual(site.bundledPlugins, [{ zip: 'wp-fastest-cache-premium.zip', file: 'wp-fastest-cache-premium/wpFastestCachePremium.php', name: 'WP Fastest Cache Premium' }]);

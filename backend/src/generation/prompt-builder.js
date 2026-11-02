@@ -214,7 +214,7 @@ export function technicalInstructions({ fields, languageLabel, pageTitle, role, 
     ? `\n- The page comes from an Elementor Template Kit made for another business. The "demo text" of a field only shows its role and length: write completely new content for this business. Never reuse, translate or paraphrase demo texts, and never keep demo brand names, people, prices, figures, dates, addresses, emails or phone numbers.`
     : '';
   const numbers = fields.some((f) => f.format === 'number') ? '\n- Fields marked [number] contain only digits (e.g. "250"): no words, units or symbols.' : '';
-  const pages = links.filter((l) => !['phone', 'email', 'social'].includes(l.role));
+  const pages = links.filter((l) => !['phone', 'email', 'social', 'map'].includes(l.role));
   const client = String(notes || '').trim() ? '\n- Respect the INSTRUCTIONS OF THE CLIENT given above in every field (where they concern this part of the site).' : '';
   return `
 
@@ -231,8 +231,11 @@ ${pages.length ? `Site structure: ${pages.map((l) => `${l.label} (${l.url})`).jo
       ? `\n- Fields marked [link]: the value must be exactly one of these URLs (choose the one matching the button/link text): ${links.map((l) => l.url).join(' , ')}`
       : ''
   }
-- "_seo.keyphrase" (if present): Yoast SEO focus keyphrase, the 2–4 word search that should find this page (e.g. service + city), in ${languageLabel}. Use it in the SEO title (at the beginning), in the meta description and in the main title and first paragraph of the page.
-- "_seo.title" (if present): SEO title for this page, max 60 characters. "_seo.description" (if present): meta description, max 155 characters.${extra}
+- SEO (Yoast SEO must rate every page green). "_seo.keyphrase" (if present): the focus keyphrase, the 2–4 word search that should find this page, in ${languageLabel}: the main word of the page or its service + the business type or service + the city (e.g. "galleria lavori idraulico Roma", "contatti idraulico Roma"); never the same keyphrase on two pages. Use the EXACT keyphrase (same words, same order):
+  · at the beginning of "_seo.title" (40–60 characters) and once in "_seo.description" (120–156 characters);
+  · in the short sentence under the page title in the banner (it is the first paragraph of the page) and in the first sentence of each long text;
+  · in at least one subheading (the titles of the sections, h2/h3) but not in all of them;
+  · 2–4 times in the long texts of the page in total (about 1 time every 100 words), always naturally — never a list of keywords.${extra}
 ${includeStructure ? `\nFields:\n${formatTemplateStructure(fields)}\n` : ''}
 Expected JSON shape:
 ${shape}`;
