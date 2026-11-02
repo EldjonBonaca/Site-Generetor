@@ -110,7 +110,7 @@ test('Italian full site: template, articles, gallery, reviews, contact form, men
   }
   assert.equal(gen.status, 'completed', gen.error || '');
   const about = gen.pages.find((x) => x.key === 'about');
-  assert.equal(about.fields.find((f) => f.id === 'about.intro.heading1.title').value, 'Chi Siamo', 'subheader title = page title');
+  assert.ok(about.fields.some((f) => /^about\.intro\.heading\d\.title$/.test(f.id) && f.value === 'Chi Siamo'), 'subheader title = page title');
   const post = gen.pages.find((x) => x.role === 'post');
   assert.ok(post.fields.find((f) => f.id === 'post.content').value.replace(/<[^>]+>/g, '').length >= 300);
   for (const pg of gen.pages) for (const f of pg.fields.filter((x) => x.format === 'link')) {

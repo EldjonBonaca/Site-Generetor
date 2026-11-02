@@ -360,7 +360,8 @@ function createDoc(role, spec, site) {
    * line beside it ("dash", CSS of the header). o.onDark: on a photo or a dark band.
    */
   const kicker = (text, o = {}) => {
-    const el = heading(text, { tag: 'p', size: st.kicker === 'pill' ? 12 : 13, weight: '700', upper: true, ...o, color: o.color || ink.kicker });
+    // A <div>, not a <p>: the first paragraph of the page (where Yoast SEO looks for the keyphrase) is the text under the title
+    const el = heading(text, { tag: 'div', size: st.kicker === 'pill' ? 12 : 13, weight: '700', upper: true, ...o, color: o.color || ink.kicker });
     const align = o.align || 'left';
     if (st.kicker === 'pill') {
       Object.assign(el.settings, {
@@ -756,9 +757,9 @@ function subheader(b, site, role, nextBg = b.ink.bg) {
   const align = center ? 'center' : 'left';
   if (variant === 'plain' || variant === 'split') {
     const bar = b.st.titles === 'bar';
-    // Breadcrumb as a text (not a heading): the page title stays the first heading of the banner, as in the photo banner
-    const crumb = b.text(`${site.pages.home.title} / ${site.pages[role].title}`, { align, size: 13, color: b.ink.kicker, fixed: true });
-    Object.assign(crumb.settings, { typography_font_weight: '600', typography_text_transform: 'uppercase', typography_letter_spacing: px(1.5) });
+    // Breadcrumb in a <div> (neither a heading nor a paragraph): the page title stays the first heading of the banner, and the
+    // sentence under it the first paragraph of the page (where Yoast SEO looks for the keyphrase)
+    const crumb = b.heading(`${site.pages.home.title} / ${site.pages[role].title}`, { tag: 'div', size: 13, weight: '600', upper: true, align, color: b.ink.kicker, fixed: true });
     const content = [
       crumb,
       b.heading(site.pages[role].title, { tag: 'h1', size: 56, align, bar, fixed: true }),

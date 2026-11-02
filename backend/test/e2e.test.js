@@ -227,7 +227,7 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.ok(home.seo.keyphrase, 'Yoast focus keyphrase written with the SEO fields');
   assert.ok(home.fields.some((f) => f.id.startsWith('home.s5.heading') && f.value === 'Riparazione caldaie'), 'service card title = service name');
   const about = gen.pages.find((pg) => pg.key === 'about');
-  assert.equal(about.fields.find((f) => f.id === 'about.intro.heading1.title').value, 'About Us', 'subheader title = page title');
+  assert.ok(about.fields.some((f) => /^about\.intro\.heading\d\.title$/.test(f.id) && f.value === 'About Us'), 'subheader title = page title');
   const shared = about.fields.filter((f) => f.source === 'shared');
   assert.equal(shared.length, 9);
   assert.ok(shared.every((f) => f.sharedFrom.page === 'home' && f.value === null));

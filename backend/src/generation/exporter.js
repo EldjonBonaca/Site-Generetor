@@ -20,6 +20,7 @@ import { languageName } from './prompt-builder.js';
 import { buildWxr } from './wxr.js';
 import { buildPlugin, PLUGIN_IMAGE_SCHEME } from './wp-plugin.js';
 import { docsText } from './export-docs.js';
+import { docToHtml, seoScore } from './seo-score.js';
 import { fieldValue } from './runner.js';
 import { BUILDER_VERSION, articleDoc, highlightTitles } from '../templates/builder.js';
 import { measureDemoImages, loadDemoImages, demoImagePath } from '../kits/demo-images.js';
@@ -316,7 +317,7 @@ function postDoc(single, post, imageUrl) {
 
 const IMAGE_URL = /\.(jpe?g|png|webp|gif|svg|avif)(\?|$)/i;
 
-function runChecks(ctx, built, posts, links, baseUrl, T) {
+function runChecks(ctx, built, posts, links, baseUrl, T, seoReport = []) {
   const items = [];
   const add = (level, message) => items.push({ level, message });
   const allowed = new Set(links.map((l) => normalizeUrl(l.url)));
@@ -376,6 +377,10 @@ function runChecks(ctx, built, posts, links, baseUrl, T) {
     if (len < 300) add('error', T.chkPostShort(p.title, len));
     if (!p.image) add('warning', T.chkPostImage(p.title));
   }
+  // SEO (checks of Yoast SEO): every page and article should be green
+  for (const r of seoReport.filter((x) => x.rating !== 'good')) add('warning', T.chkSeo(r.title, r.score, r.checks.filter((c) => c.score < 9).map((c) => c.text)));
+  const green = seoReport.filter((x) => x.rating === 'good').length;
+  if (green) add('ok', T.chkSeoGood(green, seoReport.length));
   // Key figures written by the AI: realistic examples, the client must confirm them
   const kitStats = ctx.kit && built.some(({ page }) => builtSite(ctx).docs[page.role]?.sections?.some((s) => s.type === 'stats' || s.type === 'pricing'));
   if (ctx.template?.spec.sections?.includes('stats') || kitStats) add('warning', T.chkStats);
@@ -444,6 +449,19 @@ function pluginInput(ctx, pages, allPages, posts, exported, links, category, ima
       doc: b ? toImportable(b.doc, b.page) : null,
     };
   });
+  // SEO score of every page and article (checks of Yoast SEO on the final content): saved by the plugin
+  const keyphrases = [...sitePages.map((p) => p.seo?.keyphrase), ...posts.map((p) => p.page.seo?.keyphrase)].filter(Boolean);
+  const seoReport = [];
+  const withScore = (seo, doc, slug, title) => {
+    if (!seo?.keyphrase || !doc) return seo;
+    const others = [...keyphrases];
+    others.splice(others.indexOf(seo.keyphrase), 1);
+    const r = seoScore({ html: docToHtml(doc), ...seo, slug, otherKeyphrases: others });
+    seoReport.push({ title, ...r });
+    return { ...seo, score: r.score };
+  };
+  for (const p of sitePages) p.seo = withScore(p.seo, p.doc, p.slug, p.title);
+
   const templates = ['header', 'footer', 'single_post']
     .map(builtFor)
     .filter(Boolean)
@@ -456,16 +474,22 @@ function pluginInput(ctx, pages, allPages, posts, exported, links, category, ima
     ctx,
     pages: sitePages,
     templates,
-    posts: posts.map((p) => ({
-      key: p.page.key,
-      title: p.title,
-      slug: p.slug,
-      content: sanitizeHtml(p.content),
-      excerpt: p.excerpt,
-      image: p.image?.name || null,
-      seo: { keyphrase: p.page.seo?.keyphrase || '', title: p.page.seo?.title || '', description: p.page.seo?.description || '' },
-      doc: postDoc(single, p, p.image ? PLUGIN_IMAGE_SCHEME + p.image.name : null),
-    })),
+    posts: posts.map((p) => {
+      const doc = postDoc(single, p, p.image ? PLUGIN_IMAGE_SCHEME + p.image.name : null);
+      const seo = { keyphrase: p.page.seo?.keyphrase || '', title: p.page.seo?.title || '', description: p.page.seo?.description || '' };
+      return {
+        key: p.page.key,
+        title: p.title,
+        slug: p.slug,
+        content: sanitizeHtml(p.content),
+        excerpt: p.excerpt,
+        image: p.image?.name || null,
+        seo: withScore(seo, doc, p.slug, p.title),
+        doc,
+      };
+    }),
+    // SEO score of every page / article with the checks that are not green (export checks)
+    seoReport,
     // Uploaded images (photos + logo) and their hero / subheader crops (not shown in the gallery)
     images: [...exported].map(([key, e]) => {
       const img = ctx.images.find((i) => i.id === key);
@@ -571,14 +595,15 @@ export async function exportGeneration(generationId) {
   );
 
   // WordPress plugin: creates the same site on activation, with the images bundled
-  const plugin = buildPlugin(pluginInput(ctx, pages, output.pages, posts, exported, links, category, path.join(outRoot, 'images')));
+  const input = pluginInput(ctx, pages, output.pages, posts, exported, links, category, path.join(outRoot, 'images'));
+  const plugin = buildPlugin(input);
   fs.writeFileSync(path.join(outRoot, plugin.fileName), plugin.buffer);
   const pluginDir = path.join(config.outputDir, String(gen.id), 'plugin');
   fs.mkdirSync(pluginDir, { recursive: true });
   fs.writeFileSync(path.join(pluginDir, plugin.fileName), plugin.buffer);
 
   const menuItems = sitePages.map((p) => ({ title: p.title, url: p.seo.slug ? `/${p.seo.slug}/` : '/' }));
-  const checks = runChecks(ctx, built, posts, links, baseUrl, T);
+  const checks = runChecks(ctx, built, posts, links, baseUrl, T, input.seoReport);
   const docInfo = { ctx, pages, built, posts, exported, baseUrl, placeholder: baseUrl === PLACEHOLDER_BASE_URL, category, menuItems, pluginFile: plugin.fileName, imageCount: exported.size, oneLineAddress: oneLine(ctx.project.address), siteCss: builtSite(ctx).siteCss || '' };
 
   fs.writeFileSync(path.join(outRoot, 'content.md'), contentMarkdown(ctx, pages, output.pages));

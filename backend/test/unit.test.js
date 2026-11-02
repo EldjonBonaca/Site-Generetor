@@ -180,3 +180,36 @@ test('WhatsApp number for Joinchat: digits with the country code, only when the 
   assert.equal(p('333 123 4567', 'it', ''), null, 'button off');
   assert.equal(p('abc'), null, 'not a number');
 });
+
+test('SEO score with the checks of Yoast: green page, thin page, docToHtml of Elementor widgets', async () => {
+  const { seoScore, docToHtml } = await import('../src/generation/seo-score.js');
+  const filler = 'Lavoriamo con cura e attenzione per ogni cliente della zona, con materiali certificati e tempi chiari. ';
+  const body = Array.from({ length: 30 }, () => filler).join('');
+  const kp = 'galleria lavori idraulico Roma';
+  const html = [
+    '<h1>Galleria</h1>',
+    `<p>Benvenuti nella galleria lavori idraulico Roma: le foto dei nostri interventi.</p>`,
+    `<h2>La nostra galleria lavori idraulico Roma</h2>`,
+    `<p>${body} Nella galleria lavori idraulico Roma trovi bagni e caldaie. ${body}</p>`,
+    '<h3>Bagni rinnovati</h3>',
+    '<img src="a.webp" alt="galleria lavori idraulico Roma bagno"><img src="b.webp" alt="caldaia">',
+    '<p><a href="/contatti/">Contattaci</a> <a href="https://www.google.com/maps/search/?api=1&query=Roma">Apri in Google Maps</a></p>',
+  ].join('\n');
+  const good = seoScore({ html, keyphrase: kp, title: 'Galleria lavori idraulico Roma | Rossi Idraulica', description: 'Galleria lavori idraulico Roma: guarda le foto di bagni, caldaie e impianti realizzati da Rossi Idraulica in città e provincia, con cura.', slug: 'galleria', otherKeyphrases: ['idraulico Roma'] });
+  assert.equal(good.rating, 'good', JSON.stringify(good.checks.filter((c) => c.score < 9)));
+  assert.ok(good.score >= 85, `score ${good.score}`);
+
+  const thin = seoScore({ html: '<h1>Galleria</h1><p>Le nostre foto.</p><img src="a.webp" alt="">', keyphrase: kp, title: 'Galleria', description: 'Foto', slug: 'galleria', otherKeyphrases: [kp] });
+  assert.equal(thin.rating, 'bad');
+  assert.ok(thin.checks.some((c) => c.id === 'textLength' && c.score < 0));
+  assert.ok(thin.checks.some((c) => c.id === 'previouslyUsed' && c.score < 9));
+
+  const doc = { content: [{ elType: 'container', elements: [
+    { elType: 'widget', widgetType: 'heading', settings: { title: 'Chi Siamo', header_size: 'h1' }, elements: [] },
+    { elType: 'widget', widgetType: 'text-editor', settings: { editor: '<p>Primo paragrafo.</p>' }, elements: [] },
+    { elType: 'widget', widgetType: 'image', settings: { image: { url: 'x.webp', alt: 'Foto <bella>' } }, elements: [] },
+    { elType: 'widget', widgetType: 'button', settings: { text: 'Contatti', link: { url: '/contatti/' } }, elements: [] },
+    { elType: 'widget', widgetType: 'html', settings: { html: '<style>.a{}</style><p>Testo</p>' }, elements: [] },
+  ] }] };
+  assert.equal(docToHtml(doc), '<h1>Chi Siamo</h1>\n<p>Primo paragrafo.</p>\n<img src="x.webp" alt="Foto &lt;bella>">\n<p><a href="/contatti/">Contatti</a></p>\n<p>Testo</p>');
+});
