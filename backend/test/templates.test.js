@@ -1085,3 +1085,14 @@ test('no overlapping elements: column titles, large titles on phones, hero arrow
   // Vertical labels never go past their title block
   assert.match(build({ signature: 'vertical' }).css, /\.elementor-widget\.esg-vlabel\{[^}]*max-height:calc\(100% - 4px\);overflow:hidden/);
 });
+
+test('a category whose suitable directions are all used gets a new one instead of a repeat', async () => {
+  const { pickDirection, DIRECTIONS } = await import('../src/templates/directions.js');
+  const suitable = ['corporate', 'technical', 'industrial', 'minimal', 'natural'];
+  const existing = suitable.map((direction) => ({ direction }));
+  const next = pickDirection(existing, { suitable, rng: () => 0.5 });
+  assert.ok(!suitable.includes(next.id), `got ${next.id}`);
+  assert.ok(DIRECTIONS.length >= 16, 'heritage, clinical, playful, urban added');
+  // While a suitable direction is unused, it comes first
+  assert.equal(pickDirection(existing.slice(0, 4), { suitable, rng: () => 0.5 }).id, 'natural');
+});

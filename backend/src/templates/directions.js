@@ -152,6 +152,46 @@ export const DIRECTIONS = [
     style: { theme: ['light', 'dark'], buttons: ['square'], cards: ['outline'], titles: ['plain'], align: ['left'], scale: ['xl'], images: ['square'], titleCase: ['upper', 'normal'], kicker: ['dash'], radius: [0, 0], spacing: ['airy'], headingWeight: ['500', '600'], uppercase: [true], fill: ['deep', 'flat'], motion: ['none', 'slide'], hover: ['still', 'underline'], edges: ['hero'], rhythm: ['lines'], highlight: ['none', 'outline'], decor: ['wordmark', 'lines'], photoTone: ['mono', 'duotone'], photoRatio: ['wide', 'tall'], signature: ['vertical', 'numbers'] },
     layout: { header: ['classic', 'centered', 'transparent'], hero: ['bottom', 'editorial'], heroButtons: ['one', 'link'], heroHeight: ['full', 'auto'], heroPhrases: ['none'], about: ['wide', 'badge', 'stacked', 'triptych'], features: ['list', 'split'], cta: ['split', 'banner', 'photo-split'], services: ['list', 'overlay'], testimonials: ['quote', 'minimal', 'side'], homeGallery: ['strip', 'masonry', 'mosaic'], footer: ['dark', 'light'], footerCta: ['large', 'none'], divider: ['none'], subheader: ['plain', 'split'], stats: ['inline'], process: ['vertical', 'timeline'], highlights: ['strip'] },
   },
+  {
+    id: 'heritage',
+    name: 'Family heritage',
+    summary: 'Classic and warm: cream pages, traditional serif titles, framed photos and the feel of a family business with a history.',
+    brief: 'Classic heritage look of a family business with a long tradition: cream pages, traditional serif titles, framed photos, warm deep colors, trustworthy and familiar.',
+    palette: 'warm and traditional: a deep red, bottle green, navy or brown primary, an ochre / mustard / brass "secondary", a cream or parchment "background"',
+    fonts: [['Playfair Display', 'Source Sans 3'], ['Libre Baskerville', 'Lato'], ['Lora', 'Nunito'], ['EB Garamond', 'Open Sans']],
+    style: { theme: ['light'], buttons: ['rounded', 'square'], cards: ['outline', 'tinted'], titles: ['line', 'plain'], align: ['center'], scale: ['normal', 'large'], images: ['framed', 'rounded'], titleCase: ['normal'], kicker: ['dash', 'plain'], radius: [2, 8], spacing: ['normal', 'airy'], headingWeight: ['600', '700'], uppercase: [false, true], fill: ['flat', 'deep'], motion: ['fade', 'rise'], hover: ['lift', 'still'], edges: ['hero'], rhythm: ['alternate', 'lines'], highlight: ['italic', 'none'], decor: ['frame', 'dropcap', 'dots'], photoTone: ['natural', 'faded'], photoRatio: ['standard', 'tall'], signature: ['stamp', 'none', 'numbers'] },
+    layout: { header: ['centered', 'topbar', 'classic'], hero: ['center', 'split', 'card', 'slideshow'], heroButtons: ['two', 'one'], heroHeight: ['auto', 'full'], heroPhrases: ['none'], about: ['badge', 'collage', 'image-left', 'triptych'], features: ['icons', 'center', 'list'], cta: ['banner', 'phone'], services: ['cards', 'boxed'], testimonials: ['quote', 'cards', 'side'], homeGallery: ['mosaic', 'carousel'], footer: ['dark', 'brand'], footerCta: ['large', 'none'], divider: ['curve', 'none', 'wave-brush'], subheader: ['photo', 'plain'], stats: ['band', 'cards'], process: ['cards', 'timeline'], highlights: ['strip'] },
+  },
+  {
+    id: 'clinical',
+    name: 'Clean clinical',
+    summary: 'Bright and reassuring: white pages, soft blue-green tones, rounded cards and lots of clarity, like a modern clinic.',
+    brief: 'Clean clinical look of a modern practice: bright white pages, soft blue / teal / mint tones, rounded cards with soft shadows, clear icons and simple titles, calm and reassuring.',
+    palette: 'fresh and calm: a teal, cyan, medical blue or mint primary (deep enough for white text), a soft complementary "secondary" (coral, sky, lime), a very light cool "background"',
+    fonts: [['Plus Jakarta Sans', 'Inter'], ['Manrope', 'Open Sans'], ['Outfit', 'DM Sans'], ['Nunito', 'Inter']],
+    style: { theme: ['light'], buttons: ['pill', 'rounded'], cards: ['shadow', 'tinted'], titles: ['plain', 'line'], align: ['center', 'left'], scale: ['normal', 'large'], images: ['rounded'], titleCase: ['normal'], kicker: ['pill'], radius: [14, 22], spacing: ['airy', 'normal'], headingWeight: ['700', '600'], uppercase: [false], fill: ['radial', 'flat', 'gradient'], motion: ['rise', 'fade'], hover: ['lift', 'glow'], edges: ['all', 'hero'], rhythm: ['alternate', 'fixed'], highlight: ['color', 'marker'], decor: ['blob', 'dots', 'none'], photoTone: ['natural'], photoRatio: ['standard', 'wide'], signature: ['none', 'numbers'] },
+    layout: { header: ['classic', 'topbar', 'split'], hero: ['split', 'color', 'left', 'card'], heroButtons: ['two', 'link'], heroHeight: ['auto', 'compact'], heroPhrases: ['rotating', 'none'], about: ['image-right', 'badge', 'stacked', 'sandwich'], features: ['cards', 'bento', 'icons'], cta: ['split', 'photo-split', 'phone'], services: ['boxed', 'cards'], testimonials: ['cards', 'side'], homeGallery: ['carousel', 'masonry'], footer: ['light', 'brand'], footerCta: ['none', 'large'], divider: ['curve', 'waves', 'curve-asymmetrical'], subheader: ['plain', 'split'], stats: ['cards', 'inline'], process: ['cards', 'timeline'], highlights: ['strip', 'marquee'] },
+  },
+  {
+    id: 'playful',
+    name: 'Bright and playful',
+    summary: 'Cheerful colors, round shapes, tilted details and lively motion: joyful and easy to like.',
+    brief: 'Bright and playful look: cheerful saturated colors, very round shapes, pill buttons, blobs and tilted details, lively entrances, joyful and friendly (children, pets, food, leisure).',
+    palette: 'cheerful and bright: a vivid primary (e.g. tangerine, grass green, sunny blue, raspberry) with a contrasting playful "secondary" (yellow, pink, turquoise) and a light warm "background"',
+    fonts: [['Quicksand', 'Nunito'], ['Rubik', 'DM Sans'], ['Fraunces', 'Nunito'], ['Poppins', 'Quicksand']],
+    style: { theme: ['light'], buttons: ['pill'], cards: ['tinted', 'shadow'], titles: ['plain', 'line'], align: ['center'], scale: ['large', 'xl'], images: ['rounded', 'arch'], titleCase: ['normal'], kicker: ['pill'], radius: [20, 30], spacing: ['normal'], headingWeight: ['800', '700'], uppercase: [false], fill: ['flat', 'radial'], motion: ['zoom', 'rise'], hover: ['lift', 'glow'], edges: ['all'], rhythm: ['alternate', 'fixed'], highlight: ['marker', 'color'], decor: ['blob', 'dots'], photoTone: ['natural'], photoRatio: ['standard', 'tall'], signature: ['tilted', 'stamp'] },
+    layout: { header: ['classic', 'bold', 'centered'], hero: ['split', 'color', 'center'], heroButtons: ['two', 'one'], heroHeight: ['auto', 'full'], heroPhrases: ['rotating'], about: ['collage', 'badge', 'image-left', 'sandwich'], features: ['bento', 'cards', 'center'], cta: ['split', 'phone'], services: ['boxed', 'overlay'], testimonials: ['cards', 'band'], homeGallery: ['masonry', 'carousel'], footer: ['brand', 'light'], footerCta: ['large', 'none'], divider: ['waves', 'zigzag', 'wave-brush', 'mountains'], subheader: ['photo', 'split'], stats: ['cards', 'band'], process: ['cards'], highlights: ['marquee', 'strip'] },
+  },
+  {
+    id: 'urban',
+    name: 'Urban contemporary',
+    summary: 'Black pages, huge condensed titles, a neon accent and graphic edges: strong, young and metropolitan.',
+    brief: 'Urban contemporary look: near-black pages, huge condensed uppercase titles, one neon / acid accent, graphic outlined titles and zigzag edges, strong, young and metropolitan (gyms, barbers, tattoo, street food, mechanics).',
+    palette: 'near-black "dark" and a strong primary, one neon or acid accent as "secondary" (lime, electric yellow, hot pink, cyan) for buttons and details',
+    fonts: [['Bebas Neue', 'Inter'], ['Archivo', 'Space Grotesk'], ['Syne', 'Inter'], ['Oswald', 'DM Sans']],
+    style: { theme: ['dark'], buttons: ['square', 'pill'], cards: ['outline', 'accent'], titles: ['plain', 'bar'], align: ['left'], scale: ['xl'], images: ['square', 'rounded'], titleCase: ['upper'], kicker: ['plain', 'dash'], radius: [0, 4], spacing: ['compact', 'normal'], headingWeight: ['800', '700'], uppercase: [true], fill: ['flat', 'deep'], motion: ['slide', 'zoom'], hover: ['glow', 'underline'], edges: ['all', 'hero'], rhythm: ['lines', 'fixed'], highlight: ['outline', 'color'], decor: ['grid', 'wordmark', 'lines'], photoTone: ['mono', 'duotone'], photoRatio: ['tall', 'wide'], signature: ['tilted', 'vertical', 'numbers'] },
+    layout: { header: ['transparent', 'bold', 'classic'], hero: ['bottom', 'left', 'slideshow'], heroButtons: ['two', 'link'], heroHeight: ['full', 'auto'], heroPhrases: ['rotating', 'none'], about: ['wide', 'stacked', 'triptych', 'collage'], features: ['bento', 'split', 'list'], cta: ['phone', 'banner'], services: ['overlay', 'list'], testimonials: ['band', 'side', 'quote'], homeGallery: ['strip', 'masonry'], footer: ['dark'], footerCta: ['large'], divider: ['zigzag', 'tilt', 'triangle', 'none'], subheader: ['photo', 'split'], stats: ['band', 'inline'], process: ['timeline', 'vertical'], highlights: ['marquee'] },
+  },
 ];
 
 const BY_ID = new Map(DIRECTIONS.map((d) => [d.id, d]));
@@ -190,8 +230,12 @@ export function pickDirection(existing, { requested, exclude = [], suitable = nu
   const base = fitting.length ? fitting : DIRECTIONS.map((d) => d.id);
   let pool = base.filter((id) => !exclude.includes(id));
   if (!pool.length) pool = base;
+  // Every suitable direction already has a template in the category: the other directions come in too,
+  // so a new template does not repeat one (the suitable ones stay first when they are used as little)
+  if (fitting.length && pool.every((id) => countOf(used, id) > 0)) pool = [...pool, ...DIRECTIONS.map((d) => d.id).filter((id) => !pool.includes(id) && !exclude.includes(id))];
+  const rank = (id) => (fitting.includes(id) ? fitting.indexOf(id) : fitting.length ? fitting.length + rng() : rng());
   // Least used in the category, then in the whole library; then the most suitable for the industry (or at random)
-  const score = (id) => countOf(used, id) * 1000 + countOf(elsewhere, id) * 100 + (fitting.length ? fitting.indexOf(id) : rng());
+  const score = (id) => countOf(used, id) * 1000 + countOf(elsewhere, id) * 100 + rank(id);
   return BY_ID.get(pool.reduce((a, b) => (score(b) < score(a) ? b : a)));
 }
 
