@@ -39,7 +39,7 @@ export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
  * Version of the generated structure. Field ids depend on it: a generation made with another
  * version cannot be exported (exporter.js), it has to be generated again.
  */
-export const BUILDER_VERSION = 15;
+export const BUILDER_VERSION = 16;
 
 export const DOC_ROLES = ['home', 'about', 'services', 'gallery', 'contact', 'single_post', 'header', 'footer'];
 
@@ -1725,13 +1725,15 @@ function contactItems(site) {
   ].filter((i) => i.text);
 }
 
-/** Contact Form 7 has no design of its own: fields, consent and button in the colors and corners of the template. */
+/**
+ * Contact Form 7 has no design of its own: fields, consent and button in the colors and corners of the template.
+ * Part of the site CSS (Customize → Additional CSS), its colors linked to the Elementor global colors (linkCssColors).
+ */
 function formCss(b) {
   const { c } = b;
   const radius = b.st.buttons === 'pill' ? 50 : b.st.buttons === 'square' ? 0 : b.radius;
   const field = Math.min(radius, 12);
-  return `<style>
-.esg-form .wpcf7-form{display:flex;flex-direction:column;gap:16px;margin:0}
+  return `.esg-form .wpcf7-form{display:flex;flex-direction:column;gap:16px;margin:0}
 .esg-form .wpcf7-form>p{margin:0}
 .esg-form .wpcf7-form label{display:block;font-size:14px;font-weight:600;color:${c.heading}}
 .esg-form .wpcf7-form-control-wrap{display:block;margin-top:6px}
@@ -1748,8 +1750,7 @@ function formCss(b) {
 .esg-form .wpcf7-spinner{display:block;margin:10px auto 0}
 .esg-contact-info{min-width:0;overflow-wrap:break-word;word-break:break-word}
 .esg-contact-info .e-con,.esg-contact-info .elementor-widget{max-width:100%!important;min-width:0}
-@media (min-width:1025px){.e-con.esg-contact-info{max-width:calc(50% - 14px)!important}}
-</style>`;
+@media (min-width:1025px){.e-con.esg-contact-info{max-width:calc(50% - 14px)!important}}`;
 }
 
 function contact(b, site) {
@@ -1763,7 +1764,7 @@ function contact(b, site) {
   };
   const infoBox = (it, o) => b.iconBox(it.icon, b.L[it.label], it.text, { fixed: true, url: it.url, titleSize: 17, ...o });
   // The form card is always light: the Contact Form 7 fields are styled for light backgrounds
-  const form = b.box([b.heading(copy.formTitle, { size: 26, color: b.c.heading, hint: 'title above the contact form', max: 60 }), b.line(), b.shortcode(site.contactShortcode), b.html(formCss(b))], {
+  const form = b.box([b.heading(copy.formTitle, { size: 26, color: b.c.heading, hint: 'title above the contact form', max: 60 }), b.line(), b.shortcode(site.contactShortcode)], {
     card: true,
     bg: '#FFFFFF',
     pad: 40,
@@ -2367,10 +2368,72 @@ function footer(b, site) {
 const BUILDERS = { home, about, services, gallery, contact, single_post: singlePost, header, footer };
 const DOC_TYPES = { header: 'header', footer: 'footer', single_post: 'single-post' };
 
+/**
+ * Global colors of the site (Elementor kit): the 4 system colors, then the other colors of the palette
+ * as custom colors. Most specific first: a value equal to two of them is linked to the first one.
+ * Pure white and black are never linked (they are used everywhere for other reasons).
+ */
+export function globalPalette(spec) {
+  const c = siteColors(spec.style.colors);
+  return [
+    { id: 'primary', title: 'Primary', color: c.primary, system: true },
+    { id: 'secondary', title: 'Secondary', color: c.secondary, system: true },
+    { id: 'accent', title: 'Accent', color: c.accent, system: true },
+    { id: 'text', title: 'Text', color: c.text, system: true },
+    { id: 'esghead', title: 'Titoli', color: c.heading },
+    { id: 'esgdark', title: 'Scuro', color: c.dark },
+    { id: 'esgback', title: 'Sfondo chiaro', color: c.background },
+  ];
+}
+
+const NEVER_GLOBAL = ['#FFFFFF', '#000000'];
+const hexKey = (v) => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toUpperCase() : null);
+
+/**
+ * Every color setting of the documents equal to a global color gets the link to it (__globals__):
+ * changing the global color in Elementor (Site settings → Global colors) changes the whole site.
+ * The value stays as it is (shown when the kit has no such color). Mixed shades and transparent
+ * colors (rgba) stay fixed.
+ */
+export function linkGlobalColors(content, palette) {
+  const byHex = new Map();
+  for (const p of palette) if (!NEVER_GLOBAL.includes(p.color.toUpperCase()) && !byHex.has(p.color.toUpperCase())) byHex.set(p.color.toUpperCase(), p.id);
+  const visit = (el) => {
+    const st = el.settings;
+    if (st) {
+      for (const [key, value] of Object.entries(st)) {
+        const id = byHex.get(hexKey(value));
+        if (id && /color/.test(key)) st.__globals__ = { ...(st.__globals__ || {}), [key]: `globals/colors?id=${id}` };
+      }
+    }
+    (el.elements || []).forEach(visit);
+  };
+  content.forEach(visit);
+  return content;
+}
+
+/**
+ * The colors of the site CSS equal to a global color become its CSS variable (with the color as
+ * fallback); their transparent versions (rgba) a mix of the variable with transparent.
+ */
+export function linkCssColors(css, palette) {
+  const byHex = new Map();
+  for (const p of palette) if (!NEVER_GLOBAL.includes(p.color.toUpperCase()) && !byHex.has(p.color.toUpperCase())) byHex.set(p.color.toUpperCase(), p.id);
+  const variable = (hex) => `var(--e-global-color-${byHex.get(hex)},${hex})`;
+  const toHex = (r, g, b) => `#${[r, g, b].map((n) => Number(n).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+  return css
+    .replace(/#[0-9a-f]{6}\b/gi, (hex) => (byHex.has(hex.toUpperCase()) ? variable(hex.toUpperCase()) : hex))
+    .replace(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*(0?\.\d+|[01])\)/g, (m, r, g, b, a) => {
+      const hex = toHex(r, g, b);
+      return byHex.has(hex) ? `color-mix(in srgb,${variable(hex)} ${Math.round(Number(a) * 100)}%,transparent)` : m;
+    });
+}
+
 /** Elementor global colors and fonts (merged into the active Elementor kit by the WordPress plugin). */
 export function globalStyles(spec) {
   const { fonts, headingWeight } = spec.style;
-  const colors = siteColors(spec.style.colors);
+  const palette = globalPalette(spec);
+  const colors = Object.fromEntries(palette.map((p) => [p.id, p.color]));
   const font = (_id, title, family, weight) => ({ _id, title, typography_typography: 'custom', typography_font_family: family, typography_font_weight: weight });
   return {
     system_colors: [
@@ -2379,6 +2442,7 @@ export function globalStyles(spec) {
       { _id: 'text', title: 'Text', color: colors.text },
       { _id: 'accent', title: 'Accent', color: colors.accent },
     ],
+    custom_colors: palette.filter((p) => !p.system).map((p) => ({ _id: p.id, title: p.title, color: p.color })),
     system_typography: [
       font('primary', 'Primary', fonts.heading, headingWeight),
       font('secondary', 'Secondary', fonts.heading, '600'),
@@ -2400,7 +2464,7 @@ export function buildSite(spec, site) {
   for (const role of DOC_ROLES) {
     const b = createDoc(role, spec, site);
     b.spec = spec;
-    const content = BUILDERS[role](b, site);
+    const content = linkGlobalColors(BUILDERS[role](b, site), globalPalette(spec));
     docs[role] = {
       doc: { version: '0.4', title: role, type: DOC_TYPES[role] || 'page', content, page_settings: role in DOC_TYPES ? {} : { hide_title: 'yes' } },
       marks: b.marks,
@@ -2416,7 +2480,7 @@ export function buildSite(spec, site) {
 export function siteCss(spec, site) {
   const b = createDoc('site', spec, site);
   b.spec = spec;
-  return `${headerCss(b)}\n${finishCss(b)}\n`;
+  return linkCssColors(`${headerCss(b)}\n${finishCss(b)}\n${formCss(b)}\n`, globalPalette(spec));
 }
 
 /**

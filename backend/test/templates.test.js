@@ -743,7 +743,7 @@ test('entrance animations, card hover and shaped band edges follow the template'
   assert.match(fade, /"animation":"fadeIn","animation_delay":\d+,"animation_duration":"slow"/, 'slow fade, still staggered');
 
   const glow = css(build({ hover: 'glow' }));
-  assert.match(glow, /\.esg-card:hover\{box-shadow:0 0 0 2px #F2A541/, 'ring of the secondary color');
+  assert.match(glow, /\.esg-card:hover\{box-shadow:0 0 0 2px var\(--e-global-color-secondary,#F2A541\),0 18px 44px color-mix\(in srgb,var\(--e-global-color-secondary,#F2A541\) 20%,transparent\)/, 'ring of the secondary color (global color)');
   assert.doesNotMatch(glow, /translateY\(-6px\)/);
   assert.doesNotMatch(css(build({ hover: 'still' })), /\.esg-card:hover\{/, 'still cards');
 
@@ -1191,4 +1191,25 @@ test('new section layouts: compact / framed services, minimal / card call to act
   assert.ok([...faqCards.docs.home.marks.values()].filter((m) => /^frequently asked question \d/.test(m.hint || '')).length === 4);
   const faqAcc = buildSite(sanitizeSpec({ sections }), sampleSite());
   assert.match(json(faqAcc.docs.home.doc), /"widgetType":"accordion"/, 'default: accordion');
+});
+
+test('global colors: the palette in the Elementor kit, the documents and the site CSS linked to it', () => {
+  const spec = sanitizeSpec({ style: { colors: { primary: '#1F4E79', secondary: '#F2A541' } } });
+  const site = buildSite(spec, sampleSite());
+  const ids = [...site.globalStyles.system_colors, ...site.globalStyles.custom_colors].map((c) => c._id);
+  assert.deepEqual(ids, ['primary', 'secondary', 'text', 'accent', 'esghead', 'esgdark', 'esgback']);
+  // Every setting holding a palette color is linked to its global color
+  let linked = 0;
+  let unlinked = [];
+  const visit = (el) => {
+    for (const [k, v] of Object.entries(el.settings || {})) {
+      if (/color/.test(k) && /^#1F4E79$/i.test(v)) (el.settings.__globals__?.[k] === 'globals/colors?id=primary' ? linked++ : unlinked.push(k));
+    }
+    (el.elements || []).forEach(visit);
+  };
+  for (const { doc } of Object.values(site.docs)) doc.content.forEach(visit);
+  assert.ok(linked > 5, `primary linked ${linked} times`);
+  assert.deepEqual(unlinked, []);
+  assert.match(site.siteCss, /var\(--e-global-color-primary,#1F4E79\)/);
+  assert.doesNotMatch(site.siteCss, /#1F4E79(?!\))/, 'no fixed primary color left in the CSS');
 });

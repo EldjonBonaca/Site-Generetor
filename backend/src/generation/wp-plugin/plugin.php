@@ -1430,7 +1430,16 @@ function apply_global_styles($styles, array &$messages) {
 		return;
 	}
 	$current = get_post_meta($kit_id, '_elementor_page_settings', true);
-	update_post_meta($kit_id, '_elementor_page_settings', wp_slash(array_merge(is_array($current) ? $current : array(), $styles)));
+	$current = is_array($current) ? $current : array();
+	// The custom colors of the site (titles, dark, light background) are added to the ones the kit already has
+	if (!empty($styles['custom_colors']) && !empty($current['custom_colors']) && is_array($current['custom_colors'])) {
+		$ours = wp_list_pluck($styles['custom_colors'], '_id');
+		$kept = array_filter($current['custom_colors'], function ($c) use ($ours) {
+			return !in_array(isset($c['_id']) ? $c['_id'] : '', $ours, true);
+		});
+		$styles['custom_colors'] = array_merge($styles['custom_colors'], array_values($kept));
+	}
+	update_post_meta($kit_id, '_elementor_page_settings', wp_slash(array_merge($current, $styles)));
 	delete_post_meta($kit_id, '_elementor_css');
 	$messages[] = array('level' => 'info', 'text' => t('globalStyles'));
 }

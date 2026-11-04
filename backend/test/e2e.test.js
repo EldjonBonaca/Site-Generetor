@@ -310,7 +310,7 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   const contact = zip.readAsText(root + 'templates/contact.json');
   assert.ok(contact.includes('[contact-form-7 id=\\"INSERIRE_ID\\" title=\\"Contact form\\"]'));
   assert.match(contact, /"css_classes":\s*"esg-form"/, 'Contact Form 7 styled by the template');
-  assert.match(contact, /\.esg-form input\[type=submit\]\{width:100%/);
+  assert.doesNotMatch(contact, /<style/, 'no CSS on the page: the form CSS is in the Additional CSS');
 
   const csv = zip.readAsText(root + 'seo.csv');
   assert.match(csv, /"\/riparazione-caldaie\/"/);
@@ -372,6 +372,7 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.ok(php.includes("!empty($data['uaeWidgets'])") && php.includes("$node['widgetType'] === 'navigation-menu' && empty($r['uae_widgets'])"), 'UAE for the menu, fallback without it');
   // The CSS of the whole site goes to the Additional CSS of the theme, between markers (the owner's CSS stays)
   assert.match(site.siteCss, /\.esg-header\{position:relative;z-index:100\}/);
+  assert.match(site.siteCss, /\.esg-form input\[type=submit\]\{width:100%[^}]*background:var\(--e-global-color-primary,#[0-9A-F]{6}\)/, 'form CSS in the Additional CSS, in the global primary color');
   assert.ok(php.includes('wp_update_custom_css_post(') && php.includes("':start */'"), 'Additional CSS');
   assert.deepEqual(site.pages.map((x) => [x.role, x.title, x.slug]), [
     ['home', 'Home', 'home'],
