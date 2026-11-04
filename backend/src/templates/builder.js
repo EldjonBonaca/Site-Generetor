@@ -39,7 +39,7 @@ export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
  * Version of the generated structure. Field ids depend on it: a generation made with another
  * version cannot be exported (exporter.js), it has to be generated again.
  */
-export const BUILDER_VERSION = 12;
+export const BUILDER_VERSION = 13;
 
 export const DOC_ROLES = ['home', 'about', 'services', 'gallery', 'contact', 'single_post', 'header', 'footer'];
 
@@ -994,11 +994,13 @@ function mediaRow(b, content, o = {}) {
 const titleLine = (b) => (b.st.titles === 'line' ? [b.line()] : []);
 
 /** Full-screen hero (the editorial hero keeps its height: title + wide photo). */
-const fullHero = (layout) => layout.heroHeight === 'full' && layout.hero !== 'editorial';
+const fullHero = (layout) => layout.heroHeight === 'full' && layout.hero !== 'editorial' && layout.hero !== 'mesh';
 /** The arrow to the next section: full-screen heroes, except "bottom" whose title already sits at the bottom. */
 const hasScrollCue = (layout) => fullHero(layout) && layout.hero !== 'bottom';
 /** Height of the shaped bottom edge of the hero (the arrow stands above it). */
-const heroEdge = (layout) => (layout.hero !== 'split' && layout.divider !== 'none' ? SHAPE_HEIGHT[layout.divider] || 70 : 0);
+const heroEdge = (layout) => (!LIGHT_HEROES.includes(layout.hero) && layout.divider !== 'none' ? SHAPE_HEIGHT[layout.divider] || 70 : 0);
+/** Heroes on the page color or a light tint (no photo or color behind the text): dark texts, normal header, no shaped edge. */
+const LIGHT_HEROES = ['split', 'editorial', 'bento', 'mesh'];
 /** CSS id of the section after the hero, target of the arrow. */
 const NEXT_ID = 'esg-next';
 
@@ -1058,10 +1060,10 @@ function hero(b, site) {
   const variant = layout.hero;
   // Light texts on a photo, or on the brand color ("color")
   const onImage = variant === 'center' || variant === 'left' || variant === 'bottom' || variant === 'slideshow' || variant === 'color';
-  const align = variant === 'center' || variant === 'editorial' || variant === 'slideshow' ? 'center' : 'left';
+  const align = variant === 'center' || variant === 'editorial' || variant === 'slideshow' || variant === 'mesh' ? 'center' : 'left';
   const css = underHeader(b);
   // Beside the photo ("split", "color") the title has half the width: a smaller size keeps long words inside it
-  const size = variant === 'bottom' ? 66 : variant === 'editorial' ? 64 : variant === 'split' || variant === 'color' ? 50 : 58;
+  const size = variant === 'bottom' ? 66 : variant === 'mesh' ? 68 : variant === 'editorial' ? 64 : variant === 'split' || variant === 'color' || variant === 'bento' ? 50 : 58;
   // Buttons: contact + call ("two"), contact only ("one"), or contact + a text link with a phone icon ("link").
   // Built after the texts (element ids, hence field ids, follow the creation order)
   const buttons = () => {
@@ -1084,13 +1086,49 @@ function hero(b, site) {
   const edge = shape(b, b.ink.bg);
   // Height (vh): the one of the layout, the whole screen with an arrow to the next section ("full"), or lower ("compact")
   const height = (base) => ({ full: 100, compact: Math.min(base, base > 90 ? 72 : 66) })[layout.heroHeight] || base;
-  const light = variant === 'split' || variant === 'editorial';
+  const light = LIGHT_HEROES.includes(variant);
   const cue = [
     ...(hasScrollCue(layout) ? [scrollCue(b, light ? b.ink.heading : '#FFFFFF')] : []),
     ...(b.st.signature === 'stamp' && site.siteName ? [heroStamp(b, site, light ? b.ink.heading : '#FFFFFF')] : []),
   ];
   // Room for the arrow under the content: when the content is taller than the screen (phones) it would lie on the buttons
   const cuePad = hasScrollCue(layout) ? { padBottom: Math.max(b.pad, heroEdge(layout) + 100) } : {};
+  /** A photo tile of the hero: cropped to `height`, rounded like the images of the template, zooming on hover. */
+  const tile = (slot, height, o = {}) =>
+    b.box([b.picture(slot, { height, mobileHeight: o.mobileHeight || 220, size: slot === 'hero' ? 'large' : 'medium_large', wide: true })], {
+      overflow: true,
+      zoom: true,
+      radius: b.imgRadius,
+      anim: o.anim ?? 0,
+      ...o.box,
+    });
+  if (variant === 'bento') {
+    // The text in a tinted tile, beside a grid of photos: a tall one (the hero image) and two stacked ones
+    const textTile = b.box(content, { width: 47, tablet: 100, bg: b.ink.alt, radius: Math.min(Math.max(b.imgRadius, 8) + 6, 32), pad: 56, gap: 20, justify: 'center', anim: 0 });
+    const small = b.box([tile('photo', 250, { anim: 150 }), tile('photo', 250, { anim: 250 })], { width: 38, tablet: 38, gap: 20 });
+    small.settings.hide_mobile = 'hidden-mobile';
+    const photos = b.box([tile('hero', 520, { mobileHeight: 280, box: { width: 58, tablet: 58, mobile: 100 } }), small], { width: 50, tablet: 100, row: true, gap: 20, align: 'stretch', justify: 'space-between' });
+    return b.section([textTile, photos, ...cue], {
+      row: true,
+      bg: b.ink.bg,
+      align: 'stretch',
+      gap: 20,
+      padY: Math.round(b.pad * 0.6),
+      ...(layout.heroHeight === 'full' ? { minHeight: 100 } : {}),
+      ...cuePad,
+    });
+  }
+  if (variant === 'mesh') {
+    // A large centered title on a soft gradient of the brand colors (esg-mesh, site CSS), three photos
+    // below it like on a stage: the hero image in the middle, taller (the side ones hidden on phones)
+    const side = (anim) => {
+      const el = tile('photo', 340, { anim, box: { width: 27, tablet: 27 } });
+      el.settings.hide_mobile = 'hidden-mobile';
+      return el;
+    };
+    const stage = b.box([side(150), tile('hero', 460, { mobileHeight: 280, anim: 0, box: { width: 40, tablet: 40, mobile: 100 } }), side(250)], { row: true, gap: 24, align: 'flex-end', justify: 'center' });
+    return b.section([b.box(content, { maxWidth: 940, gap: 22, align: 'center', anim: 0 }), stage, ...cue], { bg: b.ink.bg, align: 'center', gap: 56, padY: Math.round(b.pad * 1.1), css: 'esg-mesh' });
+  }
   if (variant === 'editorial') {
     // Magazine opening: big centered title on the page color, a wide photo below
     return b.section(
@@ -1500,7 +1538,7 @@ function home(b, site) {
   const layout = b.spec.layout;
   // Sections shown (no featured services without services), their backgrounds per the rhythm
   const ids = (b.spec.sections || DEFAULT_SECTIONS).filter((id) => HOME_SECTIONS[id] && (id !== 'services' || site.services.length));
-  planSurfaces(b, ids.map((id) => ({ id, natural: NATURAL_SURFACE[id](layout) })), ['split', 'editorial'].includes(layout.hero) ? 'alt' : 'band');
+  planSurfaces(b, ids.map((id) => ({ id, natural: NATURAL_SURFACE[id](layout) })), ['split', 'editorial'].includes(layout.hero) ? 'alt' : LIGHT_HEROES.includes(layout.hero) ? 'bg' : 'band');
   const out = [hero(b, site), ...ids.map((id) => HOME_SECTIONS[id](b, site))];
   // The shaped bottom edge of the hero takes the color of the next section
   const next = out[1]?.settings;
@@ -1889,6 +1927,7 @@ body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-r
 ::selection{background:${c.primary};color:${c.onPrimary}}
 .elementor-button{transition:background-color .3s,color .3s,border-color .3s,transform .3s ${ease},box-shadow .3s}
 ${hover}
+.esg-mesh{background-image:radial-gradient(55% 60% at 10% 15%,${rgba(c.primary, ink.dark ? 0.4 : 0.2)} 0,transparent 70%),radial-gradient(45% 55% at 92% 8%,${rgba(c.secondary, ink.dark ? 0.3 : 0.24)} 0,transparent 70%),radial-gradient(50% 50% at 55% 100%,${rgba(c.accent, ink.dark ? 0.3 : 0.16)} 0,transparent 70%)}
 .esg-zoom{overflow:hidden}
 .esg-zoom img{transition:transform .9s ${ease}}
 .esg-zoom:hover img{transform:scale(1.06)}

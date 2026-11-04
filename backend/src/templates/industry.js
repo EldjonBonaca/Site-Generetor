@@ -19,7 +19,7 @@ import { DIRECTIONS } from './directions.js';
 const RETRIES = 2;
 
 /** Directions that suit most industries, used to complete a short list of suitable ones. */
-const VERSATILE = ['corporate', 'minimal', 'technical', 'natural', 'editorial', 'bold', 'friendly', 'premium', 'industrial'];
+const VERSATILE = ['modern', 'corporate', 'swiss', 'minimal', 'technical', 'natural', 'editorial', 'bold', 'friendly', 'premium', 'industrial'];
 
 const SYSTEM = 'You are a senior web designer and marketing consultant. You always answer with a single valid JSON object exactly as requested, without any extra text.';
 

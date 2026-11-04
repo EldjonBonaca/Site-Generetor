@@ -141,6 +141,8 @@ const VARIANT_LABELS = {
   'hero.bottom': 'Big title at the bottom of a photo',
   'hero.editorial': 'Big centered title above a wide photo',
   'hero.color': 'Text on the brand color, photo beside it',
+  'hero.bento': 'Text in a tile beside a grid of photos',
+  'hero.mesh': 'Big title on a soft color gradient, photos below',
   'divider.curve': 'Curve',
   'divider.tilt': 'Slant',
   'divider.waves': 'Waves',

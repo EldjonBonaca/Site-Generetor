@@ -310,7 +310,7 @@ export function TemplatePreview({ spec, compact = false, className }) {
     </div>
   );
   // Height: the whole screen (with an arrow to the next section) or lower; the editorial hero keeps its height
-  const full = l.heroHeight === 'full' && l.hero !== 'editorial';
+  const full = l.heroHeight === 'full' && l.hero !== 'editorial' && l.hero !== 'mesh';
   const compactHero = l.heroHeight === 'compact';
   const cue = (color) => (
     <>
@@ -330,7 +330,50 @@ export function TemplatePreview({ spec, compact = false, className }) {
     </>
   );
   let hero;
-  if (l.hero === 'editorial') {
+  if (l.hero === 'bento') {
+    // The text in a tinted tile, a grid of photos beside it: a tall one and two stacked ones
+    hero = (
+      <div className={cx('relative flex gap-1.5 p-2', full && 'min-h-48')} style={{ background: ink.bg }}>
+        <div className="flex w-1/2 flex-col justify-center space-y-1 p-3" style={{ background: ink.alt, borderRadius: Math.min(Math.max(st.radius, 8) + 6, 32) / 3 }}>
+          {heroKicker(ink.kicker)}
+          {heroTitle(ink.heading)}
+          {phrases(ink.kicker)}
+          {heroButtons(mainBg, ink.heading)}
+        </div>
+        <div className="flex w-1/2 gap-1.5">
+          <Photo className="h-full min-h-28 w-3/5" wide />
+          <div className="flex w-2/5 flex-col gap-1.5">
+            <Photo className="min-h-[54px] w-full flex-1" wide />
+            <Photo className="min-h-[54px] w-full flex-1" wide />
+          </div>
+        </div>
+        {cue(ink.heading)}
+      </div>
+    );
+  } else if (l.hero === 'mesh') {
+    // A large centered title on a soft gradient of the brand colors, three photos below like on a stage
+    hero = (
+      <div
+        className="relative flex flex-col items-center gap-3 px-4 py-6 text-center"
+        style={{
+          backgroundColor: ink.bg,
+          backgroundImage: `radial-gradient(55% 60% at 10% 15%, ${c.primary}33 0, transparent 70%), radial-gradient(45% 55% at 92% 8%, ${c.secondary}3d 0, transparent 70%), radial-gradient(50% 50% at 55% 100%, ${c.accent}29 0, transparent 70%)`,
+        }}
+      >
+        <div className="w-4/5 space-y-1">
+          <div className="flex justify-center">{heroKicker(ink.kicker)}</div>
+          {heroTitle(ink.heading, 16)}
+          {phrases(ink.kicker, true)}
+          {heroButtons(mainBg, ink.heading, true)}
+        </div>
+        <div className="flex w-full items-end justify-center gap-1.5">
+          <Photo className="h-14 w-1/4" wide />
+          <Photo className="h-20 w-2/5" wide />
+          <Photo className="h-14 w-1/4" wide />
+        </div>
+      </div>
+    );
+  } else if (l.hero === 'editorial') {
     hero = (
       <div className="relative flex flex-col items-center gap-3 px-4 py-6 text-center" style={{ background: ink.alt }}>
         <div className="w-4/5 space-y-1">

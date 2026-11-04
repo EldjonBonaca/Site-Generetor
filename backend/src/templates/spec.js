@@ -31,7 +31,9 @@ export const LAYOUTS = {
   header: ['classic', 'centered', 'topbar', 'bold', 'transparent', 'split'],
   // "slideshow": centered text over a slideshow of the hero image and other photos; "color": the text on the
   // brand color (no photo behind it), the hero photo framed beside it
-  hero: ['center', 'left', 'split', 'card', 'bottom', 'editorial', 'slideshow', 'color'],
+  // "bento": the text in a tinted tile beside a grid of three photos; "mesh": a large centered title on a
+  // soft gradient of the brand colors, three photos below it like on a stage
+  hero: ['center', 'left', 'split', 'card', 'bottom', 'editorial', 'slideshow', 'color', 'bento', 'mesh'],
   // Buttons of the hero: contact + call, only the contact button, or the contact button + a text link to call
   heroButtons: ['two', 'one', 'link'],
   // Height of the hero: the one of its layout, the whole screen (with a "scroll down" arrow), or lower

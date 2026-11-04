@@ -1135,3 +1135,29 @@ test('category analysis with palettes and visual preferences; colors typed by th
   assert.match(branded, /BRAND COLORS chosen by the user \(mandatory\): "primary" #0B6E4F/);
   assert.doesNotMatch(branded, /Elegant palettes typical/);
 });
+
+test('modern heroes (bento, mesh) and directions; first templates of other categories show another first screen', async () => {
+  const { DIRECTIONS } = await import('../src/templates/directions.js');
+  const { firstScreen } = await import('../src/templates/similarity.js');
+  for (const hero of ['bento', 'mesh']) {
+    const site = buildSite(sanitizeSpec({ layout: { hero, header: 'transparent' } }), sampleSite());
+    const top = site.docs.home.doc.content[0];
+    const slots = [...site.docs.home.marks.values()].filter((m) => m.slot).map((m) => m.slot);
+    assert.ok(slots.includes('hero') && slots.filter((s) => s === 'photo').length >= 2, `${hero}: the hero image and two more photos`);
+    assert.ok(!String(top.settings.css_classes || '').includes('esg-under'), `${hero}: light hero, the header is not laid over it`);
+    assert.ok(!top.settings.shape_divider_bottom, `${hero}: no shaped edge`);
+    if (hero === 'mesh') {
+      assert.equal(top.settings.css_classes, 'esg-mesh');
+      assert.match(site.siteCss, /\.esg-mesh\{background-image:radial-gradient/);
+    }
+  }
+  assert.ok(['modern', 'swiss'].every((id) => DIRECTIONS.some((d) => d.id === id)));
+
+  // Each first template of 6 categories: a first screen none of the previous categories has (while possible)
+  const library = [];
+  for (const name of ['Dentisti', 'Ristoranti', 'Avvocati', 'Palestre', 'Fioristi', 'Fotografi']) {
+    const { spec } = await generateTemplateSpec(new MockProvider({}), { category: { name }, existing: [], library: [...library].reverse() });
+    library.push(spec);
+  }
+  assert.equal(new Set(library.map(firstScreen)).size, 6, library.map(firstScreen).join(' / '));
+});

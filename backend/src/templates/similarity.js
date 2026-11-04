@@ -25,7 +25,7 @@ export const FAMILIES = {
   },
   layout: {
     header: { classic: 'bar', centered: 'bar', topbar: 'topbar', bold: 'bold', transparent: 'over', split: 'split' },
-    hero: { center: 'photo-center', slideshow: 'photo-center', left: 'photo-side', bottom: 'photo-side', card: 'photo-card', split: 'split', editorial: 'editorial', color: 'color' },
+    hero: { center: 'photo-center', slideshow: 'photo-center', left: 'photo-side', bottom: 'photo-side', card: 'photo-card', split: 'split', editorial: 'editorial', color: 'color', bento: 'bento', mesh: 'editorial' },
     heroButtons: { two: 'two', one: 'one', link: 'one' },
     heroHeight: { auto: 'normal', compact: 'normal', full: 'full' },
     about: { 'image-left': 'row', 'image-right': 'row', badge: 'row', collage: 'row', wide: 'wide', stacked: 'wide', triptych: 'three', sandwich: 'three' },
@@ -65,7 +65,7 @@ export function change(group, key, a, b) {
 export function effective(design) {
   const style = { ...(design.style || {}) };
   const layout = { ...(design.layout || {}) };
-  if (layout.hero === 'editorial') layout.heroHeight = 'auto';
+  if (layout.hero === 'editorial' || layout.hero === 'mesh') layout.heroHeight = 'auto';
   if (layout.divider === 'none') style.edges = 'hero';
   if (layout.features) layout.featureCount = String(featureCount(layout));
   return { style, layout };
@@ -111,7 +111,7 @@ export function repeatedBlocks(shape) {
 /** Home blocks in a strong color or over a photo (the others stand on the page color or a light tint). */
 const COLORED = new Set(['photo-band', 'color-band', 'color-card', 'media-band']);
 /** Heroes on a photo or on the brand color (the split and editorial ones stand on a light tint). */
-const LIGHT_HEROES = ['split', 'editorial'];
+const LIGHT_HEROES = ['split', 'editorial', 'bento', 'mesh'];
 
 /**
  * How much strong color the Home page shows: its colored and photo bands, plus the hero when it is

@@ -50,7 +50,7 @@ export const DIRECTIONS = [
     palette: 'a confident blue, navy, teal or deep brand color as primary, a warm complementary "secondary" for buttons, a very light cool "background"',
     fonts: [['Montserrat', 'Open Sans'], ['Plus Jakarta Sans', 'Inter'], ['Poppins', 'Lato'], ['Outfit', 'Inter'], ['Source Sans 3', 'Source Sans 3']],
     style: { theme: ['light'], buttons: ['rounded', 'pill'], cards: ['shadow', 'accent', 'outline'], titles: ['line', 'plain'], align: ['center', 'left'], scale: ['normal', 'large'], images: ['rounded', 'square'], titleCase: ['normal'], kicker: ['pill', 'plain'], radius: [6, 12], spacing: ['normal'], headingWeight: ['700', '600'], uppercase: [false, true], fill: ['gradient', 'radial', 'flat'], motion: ['rise', 'fade'], hover: ['lift', 'glow'], edges: ['hero'], rhythm: ['alternate', 'fixed'], highlight: ['color', 'none'], decor: ['none', 'grid'], photoTone: ['natural'], photoRatio: ['standard', 'wide'], signature: ['numbers', 'none'] },
-    layout: { header: ['classic', 'topbar'], hero: ['center', 'left', 'split', 'slideshow', 'color'], heroButtons: ['two', 'link'], heroHeight: ['auto', 'compact', 'full'], heroPhrases: ['none', 'rotating'], about: ['image-left', 'image-right', 'badge', 'stacked', 'sandwich'], features: ['icons', 'cards', 'bento', 'split', 'center'], cta: ['banner', 'split', 'photo-split', 'phone'], services: ['boxed', 'cards', 'list'], testimonials: ['cards', 'quote', 'side'], homeGallery: ['carousel', 'masonry', 'mosaic'], footer: ['dark', 'brand'], footerCta: ['none', 'large'], divider: ['curve', 'none', 'curve-asymmetrical', 'opacity-tilt'], subheader: ['photo', 'split'], stats: ['band', 'cards'], process: ['cards', 'timeline'], highlights: ['strip'] },
+    layout: { header: ['classic', 'topbar'], hero: ['center', 'left', 'split', 'slideshow', 'color', 'bento'], heroButtons: ['two', 'link'], heroHeight: ['auto', 'compact', 'full'], heroPhrases: ['none', 'rotating'], about: ['image-left', 'image-right', 'badge', 'stacked', 'sandwich'], features: ['icons', 'cards', 'bento', 'split', 'center'], cta: ['banner', 'split', 'photo-split', 'phone'], services: ['boxed', 'cards', 'list'], testimonials: ['cards', 'quote', 'side'], homeGallery: ['carousel', 'masonry', 'mosaic'], footer: ['dark', 'brand'], footerCta: ['none', 'large'], divider: ['curve', 'none', 'curve-asymmetrical', 'opacity-tilt'], subheader: ['photo', 'split'], stats: ['band', 'cards'], process: ['cards', 'timeline'], highlights: ['strip'] },
   },
   {
     id: 'minimal',
@@ -60,7 +60,7 @@ export const DIRECTIONS = [
     palette: 'almost monochrome: near-black "heading", a single restrained accent as primary (one hue only), "secondary" close to the primary or neutral, white-ish "background"',
     fonts: [['Manrope', 'Inter'], ['Space Grotesk', 'Inter'], ['Work Sans', 'Work Sans'], ['DM Sans', 'DM Sans'], ['Jost', 'Inter']],
     style: { theme: ['light'], buttons: ['square'], cards: ['outline'], titles: ['plain'], align: ['left'], scale: ['large'], images: ['square'], titleCase: ['normal'], kicker: ['dash', 'plain'], radius: [0, 4], spacing: ['airy'], headingWeight: ['500', '600'], uppercase: [false], fill: ['flat', 'deep'], motion: ['fade', 'none'], hover: ['still', 'underline'], edges: ['hero'], rhythm: ['lines'], highlight: ['none'], decor: ['wordmark', 'none', 'lines'], photoTone: ['mono', 'natural', 'faded'], photoRatio: ['standard', 'tall', 'wide'], signature: ['numbers', 'vertical', 'none'] },
-    layout: { header: ['classic', 'centered'], hero: ['split', 'card', 'editorial'], heroButtons: ['one', 'link'], heroHeight: ['auto', 'compact'], heroPhrases: ['none'], about: ['wide', 'image-right', 'stacked'], features: ['list', 'split'], cta: ['split', 'photo-split'], services: ['cards', 'list'], testimonials: ['minimal', 'quote', 'side'], homeGallery: ['masonry', 'strip'], contact: ['stacked', 'split'], footer: ['light'], footerCta: ['none'], divider: ['none'], subheader: ['plain', 'split'], stats: ['inline'], process: ['vertical', 'timeline'], highlights: ['strip'] },
+    layout: { header: ['classic', 'centered'], hero: ['split', 'card', 'editorial', 'mesh'], heroButtons: ['one', 'link'], heroHeight: ['auto', 'compact'], heroPhrases: ['none'], about: ['wide', 'image-right', 'stacked'], features: ['list', 'split'], cta: ['split', 'photo-split'], services: ['cards', 'list'], testimonials: ['minimal', 'quote', 'side'], homeGallery: ['masonry', 'strip'], contact: ['stacked', 'split'], footer: ['light'], footerCta: ['none'], divider: ['none'], subheader: ['plain', 'split'], stats: ['inline'], process: ['vertical', 'timeline'], highlights: ['strip'] },
   },
   {
     id: 'editorial',
@@ -120,7 +120,7 @@ export const DIRECTIONS = [
     palette: 'cool technical tones (e.g. steel blue, cyan, graphite) as primary, a sharp signal "secondary" (orange, lime, yellow)',
     fonts: [['Barlow', 'Inter'], ['Space Grotesk', 'Inter'], ['Roboto Slab', 'Roboto'], ['Rubik', 'Roboto']],
     style: { theme: ['light'], buttons: ['square', 'rounded'], cards: ['accent'], titles: ['bar'], align: ['left'], scale: ['large'], images: ['square'], titleCase: ['normal', 'upper'], kicker: ['plain', 'dash'], radius: [2, 6], spacing: ['normal', 'compact'], headingWeight: ['600', '700'], uppercase: [true], fill: ['flat', 'deep', 'gradient'], motion: ['slide', 'rise'], hover: ['underline', 'glow'], edges: ['hero', 'all'], rhythm: ['lines', 'alternate'], highlight: ['none', 'color'], decor: ['grid', 'lines'], photoTone: ['natural', 'duotone', 'mono'], photoRatio: ['standard', 'wide'], signature: ['numbers', 'vertical'] },
-    layout: { header: ['topbar', 'classic'], hero: ['left', 'split', 'color'], heroButtons: ['two', 'one'], heroHeight: ['auto', 'compact'], heroPhrases: ['none', 'rotating'], about: ['image-right', 'image-left', 'stacked', 'sandwich'], features: ['cards', 'list', 'bento', 'split'], cta: ['split', 'phone'], services: ['boxed', 'list'], testimonials: ['cards', 'side'], homeGallery: ['carousel', 'strip', 'mosaic'], footer: ['dark'], footerCta: ['none', 'large'], divider: ['tilt', 'triangle', 'arrow'], subheader: ['split', 'photo'], stats: ['inline', 'band'], process: ['timeline', 'cards'], highlights: ['strip', 'marquee'] },
+    layout: { header: ['topbar', 'classic'], hero: ['left', 'split', 'color', 'bento'], heroButtons: ['two', 'one'], heroHeight: ['auto', 'compact'], heroPhrases: ['none', 'rotating'], about: ['image-right', 'image-left', 'stacked', 'sandwich'], features: ['cards', 'list', 'bento', 'split'], cta: ['split', 'phone'], services: ['boxed', 'list'], testimonials: ['cards', 'side'], homeGallery: ['carousel', 'strip', 'mosaic'], footer: ['dark'], footerCta: ['none', 'large'], divider: ['tilt', 'triangle', 'arrow'], subheader: ['split', 'photo'], stats: ['inline', 'band'], process: ['timeline', 'cards'], highlights: ['strip', 'marquee'] },
   },
   {
     id: 'luxury',
@@ -170,7 +170,7 @@ export const DIRECTIONS = [
     palette: 'fresh and calm: a teal, cyan, medical blue or mint primary (deep enough for white text), a soft complementary "secondary" (coral, sky, lime), a very light cool "background"',
     fonts: [['Plus Jakarta Sans', 'Inter'], ['Manrope', 'Open Sans'], ['Outfit', 'DM Sans'], ['Nunito', 'Inter']],
     style: { theme: ['light'], buttons: ['pill', 'rounded'], cards: ['shadow', 'tinted'], titles: ['plain', 'line'], align: ['center', 'left'], scale: ['normal', 'large'], images: ['rounded'], titleCase: ['normal'], kicker: ['pill'], radius: [14, 22], spacing: ['airy', 'normal'], headingWeight: ['700', '600'], uppercase: [false], fill: ['radial', 'flat', 'gradient'], motion: ['rise', 'fade'], hover: ['lift', 'glow'], edges: ['all', 'hero'], rhythm: ['alternate', 'fixed'], highlight: ['color', 'marker'], decor: ['blob', 'dots', 'none'], photoTone: ['natural'], photoRatio: ['standard', 'wide'], signature: ['none', 'numbers'] },
-    layout: { header: ['classic', 'topbar', 'split'], hero: ['split', 'color', 'left', 'card'], heroButtons: ['two', 'link'], heroHeight: ['auto', 'compact'], heroPhrases: ['rotating', 'none'], about: ['image-right', 'badge', 'stacked', 'sandwich'], features: ['cards', 'bento', 'icons'], cta: ['split', 'photo-split', 'phone'], services: ['boxed', 'cards'], testimonials: ['cards', 'side'], homeGallery: ['carousel', 'masonry'], footer: ['light', 'brand'], footerCta: ['none', 'large'], divider: ['curve', 'waves', 'curve-asymmetrical'], subheader: ['plain', 'split'], stats: ['cards', 'inline'], process: ['cards', 'timeline'], highlights: ['strip', 'marquee'] },
+    layout: { header: ['classic', 'topbar', 'split'], hero: ['split', 'color', 'left', 'card', 'mesh', 'bento'], heroButtons: ['two', 'link'], heroHeight: ['auto', 'compact'], heroPhrases: ['rotating', 'none'], about: ['image-right', 'badge', 'stacked', 'sandwich'], features: ['cards', 'bento', 'icons'], cta: ['split', 'photo-split', 'phone'], services: ['boxed', 'cards'], testimonials: ['cards', 'side'], homeGallery: ['carousel', 'masonry'], footer: ['light', 'brand'], footerCta: ['none', 'large'], divider: ['curve', 'waves', 'curve-asymmetrical'], subheader: ['plain', 'split'], stats: ['cards', 'inline'], process: ['cards', 'timeline'], highlights: ['strip', 'marquee'] },
   },
   {
     id: 'playful',
@@ -180,7 +180,7 @@ export const DIRECTIONS = [
     palette: 'cheerful and bright: a vivid primary (e.g. tangerine, grass green, sunny blue, raspberry) with a contrasting playful "secondary" (yellow, pink, turquoise) and a light warm "background"',
     fonts: [['Quicksand', 'Nunito'], ['Rubik', 'DM Sans'], ['Fraunces', 'Nunito'], ['Poppins', 'Quicksand']],
     style: { theme: ['light'], buttons: ['pill'], cards: ['tinted', 'shadow'], titles: ['plain', 'line'], align: ['center'], scale: ['large', 'xl'], images: ['rounded', 'arch'], titleCase: ['normal'], kicker: ['pill'], radius: [20, 30], spacing: ['normal'], headingWeight: ['800', '700'], uppercase: [false], fill: ['flat', 'radial'], motion: ['zoom', 'rise'], hover: ['lift', 'glow'], edges: ['all'], rhythm: ['alternate', 'fixed'], highlight: ['marker', 'color'], decor: ['blob', 'dots'], photoTone: ['natural'], photoRatio: ['standard', 'tall'], signature: ['tilted', 'stamp'] },
-    layout: { header: ['classic', 'bold', 'centered'], hero: ['split', 'color', 'center'], heroButtons: ['two', 'one'], heroHeight: ['auto', 'full'], heroPhrases: ['rotating', 'none'], about: ['collage', 'badge', 'image-left', 'sandwich'], features: ['bento', 'cards', 'center'], cta: ['split', 'phone'], services: ['boxed', 'overlay'], testimonials: ['cards', 'band'], homeGallery: ['masonry', 'carousel'], footer: ['brand', 'light'], footerCta: ['large', 'none'], divider: ['waves', 'zigzag', 'wave-brush', 'mountains'], subheader: ['photo', 'split'], stats: ['cards', 'band'], process: ['cards'], highlights: ['marquee', 'strip'] },
+    layout: { header: ['classic', 'bold', 'centered'], hero: ['split', 'color', 'center', 'mesh'], heroButtons: ['two', 'one'], heroHeight: ['auto', 'full'], heroPhrases: ['rotating', 'none'], about: ['collage', 'badge', 'image-left', 'sandwich'], features: ['bento', 'cards', 'center'], cta: ['split', 'phone'], services: ['boxed', 'overlay'], testimonials: ['cards', 'band'], homeGallery: ['masonry', 'carousel'], footer: ['brand', 'light'], footerCta: ['large', 'none'], divider: ['waves', 'zigzag', 'wave-brush', 'mountains'], subheader: ['photo', 'split'], stats: ['cards', 'band'], process: ['cards'], highlights: ['marquee', 'strip'] },
   },
   {
     id: 'urban',
@@ -191,6 +191,26 @@ export const DIRECTIONS = [
     fonts: [['Bebas Neue', 'Inter'], ['Archivo', 'Space Grotesk'], ['Syne', 'Inter'], ['Oswald', 'DM Sans']],
     style: { theme: ['dark'], buttons: ['square', 'pill'], cards: ['outline', 'accent'], titles: ['plain', 'bar'], align: ['left'], scale: ['xl'], images: ['square', 'rounded'], titleCase: ['upper'], kicker: ['plain', 'dash'], radius: [0, 4], spacing: ['compact', 'normal'], headingWeight: ['800', '700'], uppercase: [true], fill: ['flat', 'deep'], motion: ['slide', 'zoom'], hover: ['glow', 'underline'], edges: ['all', 'hero'], rhythm: ['lines', 'fixed'], highlight: ['outline', 'color'], decor: ['grid', 'wordmark', 'lines'], photoTone: ['mono', 'duotone'], photoRatio: ['tall', 'wide'], signature: ['tilted', 'vertical', 'numbers'] },
     layout: { header: ['transparent', 'bold', 'classic'], hero: ['bottom', 'left', 'slideshow'], heroButtons: ['two', 'link'], heroHeight: ['full', 'auto'], heroPhrases: ['rotating', 'none'], about: ['wide', 'stacked', 'triptych', 'collage'], features: ['bento', 'split', 'list'], cta: ['phone', 'banner'], services: ['overlay', 'list'], testimonials: ['band', 'side', 'quote'], homeGallery: ['strip', 'masonry'], footer: ['dark'], footerCta: ['large'], divider: ['zigzag', 'tilt', 'triangle', 'none'], subheader: ['photo', 'split'], stats: ['band', 'inline'], process: ['timeline', 'vertical'], highlights: ['marquee'] },
+  },
+  {
+    id: 'modern',
+    name: 'Modern digital',
+    summary: 'Soft gradients of the brand colors, photo grids, big rounded cards and airy white space: fresh and contemporary.',
+    brief: 'Modern digital look of today\'s best websites: soft gradient backgrounds of the brand colors, bento grids of photos, large rounded cards with soft shadows, pill buttons and labels, big confident sans-serif titles, a lot of white space.',
+    palette: 'contemporary and luminous: a vivid but refined primary (e.g. electric blue, violet, emerald, coral) and a fresh complementary "secondary", a very light "background" and a deep ink "dark"',
+    fonts: [['Plus Jakarta Sans', 'Inter'], ['Outfit', 'Inter'], ['Space Grotesk', 'DM Sans'], ['Manrope', 'Inter'], ['Syne', 'Manrope']],
+    style: { theme: ['light'], buttons: ['pill', 'rounded'], cards: ['shadow', 'tinted'], titles: ['plain'], align: ['left', 'center'], scale: ['large', 'xl'], images: ['rounded'], titleCase: ['normal'], kicker: ['pill'], radius: [16, 28], spacing: ['airy'], headingWeight: ['700', '600', '800'], uppercase: [false], fill: ['gradient', 'radial'], motion: ['rise', 'zoom'], hover: ['lift', 'glow'], edges: ['hero'], rhythm: ['alternate', 'fixed'], highlight: ['color', 'marker'], decor: ['blob', 'none', 'dots'], photoTone: ['natural', 'duotone'], photoRatio: ['standard', 'wide'], signature: ['none', 'numbers'] },
+    layout: { header: ['classic', 'split', 'topbar'], hero: ['mesh', 'bento', 'split', 'color'], heroButtons: ['two', 'link'], heroHeight: ['auto', 'full'], heroPhrases: ['rotating', 'none'], about: ['badge', 'collage', 'stacked', 'sandwich'], features: ['bento', 'cards'], cta: ['photo-split', 'split'], services: ['boxed', 'overlay', 'cards'], testimonials: ['cards', 'side'], homeGallery: ['masonry', 'mosaic', 'carousel'], footer: ['brand', 'dark'], footerCta: ['large'], divider: ['none', 'curve'], subheader: ['split', 'plain'], stats: ['cards', 'inline'], process: ['cards', 'timeline'], highlights: ['marquee'] },
+  },
+  {
+    id: 'swiss',
+    name: 'Swiss grid',
+    summary: 'A strict grid, huge sans-serif titles aligned left, thin lines and one strong accent: rational, sharp and very modern.',
+    brief: 'Swiss international style: strict grid, huge sans-serif titles aligned left, thin lines between the sections, square corners, generous white space, black and white with ONE strong accent color, photos cropped wide or tall, numbers as graphic elements.',
+    palette: 'almost monochrome: near-black "heading" and "dark", white and very light grey surfaces, ONE strong accent as "primary" / "secondary" (signal red, cobalt blue, signal orange, acid green)',
+    fonts: [['Archivo', 'Inter'], ['Jost', 'Work Sans'], ['Space Grotesk', 'Inter'], ['Barlow', 'Inter']],
+    style: { theme: ['light'], buttons: ['square'], cards: ['outline'], titles: ['plain', 'bar'], align: ['left'], scale: ['xl'], images: ['square'], titleCase: ['normal', 'upper'], kicker: ['plain', 'dash'], radius: [0, 2], spacing: ['airy', 'normal'], headingWeight: ['700', '800', '500'], uppercase: [false, true], fill: ['flat'], motion: ['slide', 'fade'], hover: ['underline', 'still'], edges: ['hero'], rhythm: ['lines'], highlight: ['color', 'outline', 'none'], decor: ['grid', 'lines', 'none', 'wordmark'], photoTone: ['natural', 'mono'], photoRatio: ['wide', 'tall'], signature: ['numbers', 'vertical'] },
+    layout: { header: ['classic', 'split', 'topbar'], hero: ['bento', 'bottom', 'editorial', 'left'], heroButtons: ['link', 'one'], heroHeight: ['full', 'auto'], heroPhrases: ['none'], about: ['wide', 'stacked', 'triptych'], features: ['list', 'split', 'bento'], cta: ['banner', 'phone'], services: ['list', 'overlay'], testimonials: ['minimal', 'quote', 'side'], homeGallery: ['strip', 'mosaic'], footer: ['dark', 'light'], footerCta: ['large', 'none'], divider: ['none'], subheader: ['plain', 'split'], stats: ['inline'], process: ['timeline', 'vertical'], highlights: ['strip', 'marquee'] },
   },
 ];
 
@@ -344,7 +364,11 @@ export const DECISION_WEIGHTS = {
 /** Layouts of optional Home sections: they only make two templates differ when both have the section. */
 const OPTIONAL_LAYOUTS = ['cta', 'stats', 'process', 'highlights'];
 /** Score points (per unit of decision weight) of a choice the industry analysis prefers (one unit of distance = 1000). */
-const PREFER_BONUS = 300;
+const PREFER_BONUS = 150;
+/** Score points per unit of distance to the most similar template of the OTHER categories (the library). */
+const LIBRARY_DISTANCE = 300;
+/** Templates of the other categories compared (the latest ones). */
+const LIBRARY_COMPARED = 40;
 /** Weight of a corner radius difference (full weight from 8px apart). */
 const RADIUS_WEIGHT = 0.5;
 /** Weight of each block to change to turn the Home shape of one template into the other's. */
@@ -358,6 +382,8 @@ const PENALTY = {
   // The same first screen (kind of header, hero, full screen or not) or the same Home shape as another template
   sameFirstScreen: 1e5,
   sameShape: 1e5,
+  // The same first screen as a template of another category
+  sameFirstScreenLibrary: 5000,
   // Two neighbouring Home blocks of the same form (as much as changing the hero layout)
   repeatedBlock: 3000,
 };
@@ -408,7 +434,10 @@ export function designPlan(direction, existing, rng = Math.random, profile = nul
 
   const weightFor = (ch, other) => (ch.group === 'layout' && OPTIONAL_LAYOUTS.includes(ch.key) && !(sections.includes(ch.key) && (other.sections || []).includes(ch.key)) ? 0 : ch.weight);
   // The other templates as they look (similarity.js), computed once
-  const others = existing.map((s) => ({ spec: s, look: effective(s), shape: homeShape(s), screen: firstScreen(s), color: colorAmount(s) }));
+  const view = (s) => ({ spec: s, look: effective(s), shape: homeShape(s), screen: firstScreen(s), color: colorAmount(s) });
+  const others = existing.map(view);
+  // The latest templates of the other categories: a new template also looks different from them
+  const elsewhere = library.slice(0, LIBRARY_COMPARED).map(view);
   /** How different two templates look: decisions as they show (look-alike values count less), corners, Home shape, amount of color. */
   const distance = (cand, other) =>
     choices.reduce((sum, ch) => sum + weightFor(ch, other.spec) * change(ch.group, ch.key, cand.look[ch.group][ch.key], other.look[ch.group]?.[ch.key]), 0) +
@@ -435,7 +464,9 @@ export function designPlan(direction, existing, rng = Math.random, profile = nul
       (others.some((o) => o.screen === cand.screen) ? PENALTY.sameFirstScreen : 0) +
       (others.some((o) => shapeDistance(o.shape, cand.shape) === 0) ? PENALTY.sameShape : 0) +
       repeatedBlocks(cand.shape) * PENALTY.repeatedBlock;
-    return nearest * 1000 + mean * 20 + rarity + suits(cand) - penalty;
+    const libNearest = elsewhere.length ? Math.min(...elsewhere.map((o) => distance(cand, o))) : 0;
+    const libPenalty = elsewhere.some((o) => o.screen === cand.screen) ? PENALTY.sameFirstScreenLibrary : 0;
+    return nearest * 1000 + libNearest * LIBRARY_DISTANCE + mean * 20 + rarity + suits(cand) - penalty - libPenalty;
   };
   let best = null;
   for (let i = 0; i < 400; i++) {
