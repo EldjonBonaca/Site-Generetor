@@ -160,7 +160,7 @@ test('copyright line: agency credit by default, links only in the one typed by t
   const year = new Date().getFullYear();
   assert.equal(
     copyrightText({ language: 'it', site_name: 'Edil Rossi & Figli', vat_number: '01234567890', copyright: '' }),
-    `Creato da <a href="https://localweb.it/" target="_blank" title="Local Web – Agenzia Web Marketing Milano">Local Web – Agenzia Web Marketing Milano</a> Copyrights © ${year} Edil Rossi &amp; Figli - P.IVA 01234567890 | Tutti i diritti riservati.`
+    `Creato da <a style="color:var(--e-global-color-primary);font-weight:600" href="https://localweb.it/" target="_blank" title="Local Web – Agenzia Web Marketing Milano">Local Web – Agenzia Web Marketing Milano</a> Copyrights © ${year} Edil Rossi &amp; Figli - P.IVA 01234567890 | Tutti i diritti riservati.`
   );
   assert.match(copyrightText({ language: 'it', site_name: 'Edil', vat_number: '', copyright: '' }), /- P\.IVA 123456 \|/, 'placeholder until the P.IVA is set');
   assert.equal(
@@ -222,4 +222,16 @@ test('reviews of addon widgets (Template Kits) are texts for the AI', () => {
   assert.ok(keys.includes('review'), keys.join(','));
   assert.ok(keys.includes('client_name') && keys.includes('designation'));
   assert.ok(!keys.includes('rating'));
+});
+
+test('Contact page: the AI gets the presentation written on the About page', async () => {
+  const { relatedContext } = await import('../src/generation/runner.js');
+  const long = 'Siamo una ditta di famiglia attiva dal 1985 a Bergamo, specializzata in ristrutturazioni di case e appartamenti con materiali di qualità.';
+  const pages = [
+    { key: 'about', role: 'about', fields: [{ id: 'a', value: `<p>${long}</p>`, source: 'ai' }, { id: 'b', value: 'Chi siamo', source: 'ai' }] },
+    { key: 'contact', role: 'contact', fields: [] },
+  ];
+  const note = relatedContext(pages, pages[1]);
+  assert.ok(note.includes(long) && !note.includes('<p>'));
+  assert.equal(relatedContext(pages, pages[0]), '');
 });

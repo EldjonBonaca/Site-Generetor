@@ -177,11 +177,20 @@ export function sanitizeCopyright(text) {
  * <site> - P.IVA <vat> | Tutti i diritti riservati." in the site language.
  */
 export function copyrightText(project) {
-  if (project.copyright?.trim()) return sanitizeCopyright(project.copyright.trim());
+  if (project.copyright?.trim()) return colorAgencyLink(sanitizeCopyright(project.copyright.trim()));
   const lang = project.language;
   const name = escapeText(project.site_name || '');
   const vat = escapeText(project.vat_number?.trim() || VAT_PLACEHOLDER);
-  return `${CREATED_BY[lang] || CREATED_BY.en} ${CREDIT} ${lang === 'it' ? 'Copyrights' : 'Copyright'} © ${new Date().getFullYear()} ${name} - ${VAT[lang] || VAT.en} ${vat} | ${RIGHTS[lang] || RIGHTS.en}`;
+  return colorAgencyLink(`${CREATED_BY[lang] || CREATED_BY.en} ${CREDIT} ${lang === 'it' ? 'Copyrights' : 'Copyright'} © ${new Date().getFullYear()} ${name} - ${VAT[lang] || VAT.en} ${vat} | ${RIGHTS[lang] || RIGHTS.en}`);
+}
+
+/**
+ * The link to Local Web in the copyright takes the primary color of the site: the Elementor global
+ * color "Primary", set by the generated templates and by the Template Kits alike.
+ */
+const AGENCY_LINK_STYLE = 'color:var(--e-global-color-primary);font-weight:600';
+function colorAgencyLink(html) {
+  return html.replace(/<a (href="https?:\/\/(?:www\.)?localweb\.it[^"]*")/gi, `<a style="${AGENCY_LINK_STYLE}" $1`);
 }
 
 /** Slug of a site page in the site language ('' for the home page). */

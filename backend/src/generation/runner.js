@@ -160,7 +160,7 @@ async function generateFields({ provider, ctx, page, promptRow, fields, log, ext
 }
 
 /** Fill all AI fields (+ SEO) of a page, in chunks. Mutates `page`. */
-export async function generatePage({ provider, ctx, page, promptRow, log, onlyFieldIds = null, usedKeyphrases = [] }) {
+export async function generatePage({ provider, ctx, page, promptRow, log, onlyFieldIds = null, usedKeyphrases = [], related = '' }) {
   const targets = page.fields.filter((f) => f.source !== 'shared' && (onlyFieldIds ? onlyFieldIds.includes(f.id) : f.source !== 'auto'));
   const wantSeo = !onlyFieldIds ? page.slug !== null : onlyFieldIds.some((id) => id.startsWith('_seo.'));
   const seoFields = wantSeo
@@ -193,7 +193,7 @@ export async function generatePage({ provider, ctx, page, promptRow, log, onlyFi
     // Yoast flags a focus keyphrase already used by another page of the site
     const used = chunk.some((f) => f.id === '_seo.keyphrase') && usedKeyphrases.length ? `\n- Focus keyphrases already used by other pages of the site (choose a different one): ${usedKeyphrases.map((k) => `"${k}"`).join(', ')}.` : '';
     const keyphrase = !chunk.some((f) => f.id === '_seo.keyphrase') && page.seo?.keyphrase ? `\n- The focus keyphrase of this page is "${page.seo.keyphrase}": use it exactly as the SEO rules below say (subheadings, first sentence of the long texts).` : '';
-    const { values, tokens, missing } = await generateFields({ provider, ctx, page, promptRow, fields: chunk, log, extra: extra + partNote + used + keyphrase });
+    const { values, tokens, missing } = await generateFields({ provider, ctx, page, promptRow, fields: chunk, log, extra: extra + related + partNote + used + keyphrase });
     page.tokens += tokens;
     for (const f of page.fields) {
       if (f.id in values) {
@@ -217,6 +217,25 @@ export async function generatePage({ provider, ctx, page, promptRow, log, onlyFi
       }
     }
   }
+}
+
+/** Texts of the About page (the presentation of the business) given to the AI, at most this many characters. */
+const ABOUT_CONTEXT = 1500;
+
+/**
+ * Texts of other pages the AI needs for a page: the Contact page presents the business in the words
+ * of the About page (already written: the pages are generated in menu order).
+ */
+export function relatedContext(pages, page) {
+  if (page.role !== 'contact') return '';
+  const about = pages.find((p) => p.role === 'about');
+  const texts = (about?.fields || [])
+    .map((f) => fieldValue(pages, f))
+    .filter((v) => typeof v === 'string')
+    .map((v) => stripHtml(v).replace(/\s+/g, ' ').trim())
+    .filter((v) => v.length > 80);
+  if (!texts.length) return '';
+  return `\n- Presentation of the business written on the About page of this site: "${texts.join(' ').slice(0, ABOUT_CONTEXT)}". The introduction text of this Contact page takes a short part of it (who we are, experience, what makes the business special) in other words, then invites to get in touch: no generic invitation.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -295,7 +314,7 @@ export async function runGeneration(generationId, { pageKeys = null } = {}) {
       log('info', `Generating "${page.title}" (${page.fields.filter((f) => f.source !== 'auto' && f.source !== 'shared').length} fields)...`);
       try {
         const usedKeyphrases = state.output.pages.filter((p) => p !== page && p.seo?.keyphrase).map((p) => p.seo.keyphrase);
-        await generatePage({ provider, ctx, page, promptRow: sitePromptFor(ctx), log, usedKeyphrases });
+        await generatePage({ provider, ctx, page, promptRow: sitePromptFor(ctx), log, usedKeyphrases, related: relatedContext(state.output.pages, page) });
         page.status = 'done';
         page.error = null;
         log('success', `"${page.title}" done (${page.tokens.toLocaleString('en')} tokens so far on this page).`);
@@ -352,7 +371,7 @@ export async function regenerateField(generationId, pageKey, fieldId) {
   const before = page.tokens;
   log('info', `Regenerating field ${fieldId} of "${page.title}"...`);
   const usedKeyphrases = state.output.pages.filter((p) => p !== page && p.seo?.keyphrase).map((p) => p.seo.keyphrase);
-  await generatePage({ provider, ctx, page, promptRow: sitePromptFor(ctx), log, onlyFieldIds: [fieldId], usedKeyphrases });
+  await generatePage({ provider, ctx, page, promptRow: sitePromptFor(ctx), log, onlyFieldIds: [fieldId], usedKeyphrases, related: relatedContext(state.output.pages, page) });
   state.tokens += page.tokens - before;
   log('success', `Field ${fieldId} regenerated.`);
   save(generationId, state);

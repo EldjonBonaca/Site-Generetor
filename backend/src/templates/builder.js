@@ -1685,7 +1685,8 @@ function contact(b, site) {
   const items = contactItems(site);
   const parts = {
     title: { value: copy.contactTitle, hint: 'title of the contact details section', max: 60 },
-    text: { value: copy.contactText, hint: 'invitation to contact the business (1–2 short sentences)', max: 220 },
+    // Not a generic invitation: a short presentation of the business, as on the About page, then the invitation
+    text: { value: copy.contactText, hint: 'short presentation of the business in the words of the About page (who we are, experience, what makes it special: 2–3 sentences), ending with a short invitation to get in touch; no generic phrases', max: 420 },
   };
   const infoBox = (it, o) => b.iconBox(it.icon, b.L[it.label], it.text, { fixed: true, url: it.url, titleSize: 17, ...o });
   // The form card is always light: the Contact Form 7 fields are styled for light backgrounds
