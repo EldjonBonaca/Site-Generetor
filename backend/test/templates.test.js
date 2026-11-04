@@ -1096,3 +1096,42 @@ test('a category whose suitable directions are all used gets a new one instead o
   // While a suitable direction is unused, it comes first
   assert.equal(pickDirection(existing.slice(0, 4), { suitable, rng: () => 0.5 }).id, 'natural');
 });
+
+test('category analysis with palettes and visual preferences; colors typed by the user are kept', async () => {
+  const { sanitizeProfile, describeProfile } = await import('../src/templates/industry.js');
+  const { designPlan, DIRECTIONS } = await import('../src/templates/directions.js');
+  const { sanitizeBrandColors } = await import('../src/templates/generate.js');
+  const profile = sanitizeProfile({
+    business: 'Pasticcerie artigianali',
+    palettes: [{ name: 'Crema e cacao', primary: '#5a3825', secondary: '#E8C07D', dark: '#2B1A10' }, { name: 'bad', primary: 'red', secondary: '#fff' }],
+    motifs: ['Mani infarinate e dettagli delle decorazioni'],
+    avoid: ['Foto di stock con dolci industriali'],
+    prefer: { style: { photoTone: ['natural', 'nope'], theme: 'light' }, layout: { hero: ['split', 'center'] } },
+    directions: ['friendly', 'boutique'],
+  });
+  assert.deepEqual(profile.palettes, [{ name: 'Crema e cacao', primary: '#5A3825', secondary: '#E8C07D', dark: '#2B1A10' }]);
+  assert.deepEqual(profile.prefer.style, { theme: ['light'], photoTone: ['natural'] });
+  assert.deepEqual(profile.prefer.layout, { hero: ['split', 'center'] });
+  assert.match(describeProfile(profile), /Idee distintive[\s\S]*Mani infarinate[\s\S]*Da evitare/);
+
+  // The first template of the category takes the hero the industry prefers when the direction allows it
+  const direction = DIRECTIONS.find((d) => d.layout.hero.includes('split') && d.layout.hero.length > 2);
+  let preferred = 0;
+  for (let i = 0; i < 10; i++) if (['split', 'center'].includes(designPlan(direction, [], Math.random, profile).layout.hero)) preferred++;
+  assert.ok(preferred >= 8, `preferred hero ${preferred}/10`);
+
+  // The palettes of the analysis are offered to the AI
+  const category = { name: 'Pasticceria' };
+  const { prompt } = buildTemplatePrompt({ category, direction, plan: designPlan(direction, [], Math.random, profile), profile });
+  assert.match(prompt, /Elegant palettes typical of the industry.*"Crema e cacao" primary #5A3825/);
+
+  // Colors typed by the user: valid codes only, kept exactly in the generated template
+  assert.deepEqual(sanitizeBrandColors({ primary: '0a5', secondary: '#c9a227', dark: 'nero', heading: '' }), { primary: '#00AA55', secondary: '#C9A227' });
+  assert.equal(sanitizeBrandColors({ primary: 'x' }), null);
+  const { spec } = await generateTemplateSpec(new MockProvider({}), { category, existing: [{ ...DEFAULT_SPEC, style: { ...DEFAULT_SPEC.style, colors: { ...DEFAULT_SPEC.style.colors, primary: '#0B6E4F' } } }], profile, brandColors: { primary: '#0B6E4F', secondary: 'c9a227' } });
+  assert.equal(spec.style.colors.primary, '#0B6E4F', 'kept even if another template has the same color');
+  assert.equal(spec.style.colors.secondary, '#C9A227');
+  const branded = buildTemplatePrompt({ category, direction, plan: designPlan(direction, [], Math.random, profile), profile, brandColors: { primary: '#0B6E4F' } }).prompt;
+  assert.match(branded, /BRAND COLORS chosen by the user \(mandatory\): "primary" #0B6E4F/);
+  assert.doesNotMatch(branded, /Elegant palettes typical/);
+});

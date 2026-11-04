@@ -45,7 +45,7 @@ const LOOK_LABELS = {
 };
 
 /** Design direction block: what the generator decided and what the AI must avoid. */
-function directionInstructions(category, direction, plan, existing, avoidColors, profile, library = []) {
+function directionInstructions(category, direction, plan, existing, avoidColors, profile, library = [], brand = null) {
   const st = plan.style;
   const look = Object.entries(LOOK_LABELS)
     .map(([k, label]) => `${label} "${st[k]}"`)
@@ -65,6 +65,12 @@ function directionInstructions(category, direction, plan, existing, avoidColors,
   // Palettes of the other categories: a soft hint, so the library does not look all the same
   const elsewhere = [...new Set(library.map((s) => s.style?.colors?.primary).filter(Boolean))].slice(0, 12);
   const libraryColors = elsewhere.length ? `\nPrimary colors of templates of other categories (prefer a different one when it is credible for "${category.name}"): ${elsewhere.join(', ')}.` : '';
+  // Palettes of the industry analysis not taken yet by another template of the category
+  const free = (profile?.palettes || []).filter((p) => !taken.some((c) => similarColor(c, p.primary)));
+  const palettes = free.length
+    ? `\nElegant palettes typical of the industry (from the analysis): ${free.map((p) => `${p.name ? `"${p.name}" ` : ''}primary ${p.primary}, secondary ${p.secondary}${p.dark ? `, dark ${p.dark}` : ''}`).join(' · ')}. Start from the one that best fits the direction and refine it (you may adjust the shades), or create a better one of the same quality.`
+    : '';
+  const palette = brand ? brandInstructions(brand) : `${colors}${palettes}${libraryColors}`;
   const industry = profile
     ? `
 
@@ -82,8 +88,28 @@ Sections of the Home page after the hero, in this order: ${sections}.${
     st.theme === 'dark'
       ? '\nTheme "dark": the pages have a dark background ("dark" color, keep it very deep) with white texts; "heading" and "text" are only used on white elements (contact form), keep them dark.'
       : ''
-  }${others}${colors}${libraryColors}
+  }${others}${palette}
 Write the "description" of the concept and the "tone" so that they match this direction.${signatureInstructions(plan.signatures)}`;
+}
+
+/** The colors given by the user (brand colors of the client): used as they are, the AI designs the others around them. */
+function brandInstructions(brand) {
+  const given = Object.entries(brand).map(([k, v]) => `"${k}" ${v}`).join(', ');
+  const missing = COLOR_KEYS.filter((k) => !brand[k]);
+  return `\nBRAND COLORS chosen by the user (mandatory): ${given}. Use these exact values in "style"."colors" and design ${missing.length ? `the other colors (${missing.join(', ')})` : 'the template'} around them: harmonious, elegant and readable (a light "background" tinted with the primary, a deep "dark" of the same mood). Ignore the palette mood of the direction where it conflicts with them.`;
+}
+
+/** Colors typed by the user: { key: '#RRGGBB' } with the known keys and valid hex values only (#abc and abc accepted), or null. */
+export function sanitizeBrandColors(raw) {
+  const out = {};
+  for (const k of COLOR_KEYS) {
+    const v = typeof raw?.[k] === 'string' ? raw[k].trim() : '';
+    const m = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(v);
+    if (!m) continue;
+    const h = m[1].length === 3 ? m[1].replace(/./g, '$&$&') : m[1];
+    out[k] = `#${h.toUpperCase()}`;
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 /** What each signature detail looks like on the site (the AI chooses one to express its concept). */
@@ -159,7 +185,7 @@ const LABELS = { it: '(nessuna)', en: '(none)' };
  * Final prompt for a category template.
  * @param {object} p  { category, instructions, language, direction, plan, existing: spec[], avoidColors: string[] }
  */
-export function buildTemplatePrompt({ category, instructions = '', language = 'it', direction = null, plan = null, existing = [], avoidColors = [], profile = null, library = [], clientNotes = '' }) {
+export function buildTemplatePrompt({ category, instructions = '', language = 'it', direction = null, plan = null, existing = [], avoidColors = [], profile = null, library = [], clientNotes = '', brandColors = null }) {
   const none = LABELS[language] || LABELS.en;
   const languageLabel = languageName(language);
   const vars = {
@@ -169,7 +195,7 @@ export function buildTemplatePrompt({ category, instructions = '', language = 'i
     LINGUA: languageLabel,
   };
   const body = TEMPLATE_PROMPT.content.replace(/\{\{\s*([A-Z_]+)\s*\}\}/g, (m, name) => (name in vars ? vars[name] : m));
-  const design = direction && plan ? directionInstructions(category, direction, plan, existing, avoidColors, profile, library) : '';
+  const design = direction && plan ? directionInstructions(category, direction, plan, existing, avoidColors, profile, library, brandColors) : '';
   return { prompt: body + design + clientDesignNotes(clientNotes) + technicalInstructions(languageLabel, plan?.sections, plan?.signatures), system: TEMPLATE_SYSTEM_PROMPT };
 }
 
@@ -201,14 +227,17 @@ Follow every instruction above that concerns the design and the texts of the tem
  *   - profile         industry analysis of the category (industry.js), if any
  *   - library         specs of the templates of the other categories (variety across the library)
  *   - clientNotes     notes for the AI of the site the template is generated for (not saved)
+ *   - brandColors     colors typed by the user ({ primary: '#RRGGBB', ... }): kept exactly, the AI designs the others
  *   - rng            random source (tests)
  * @returns {Promise<{ spec, tokens, direction }>}
  */
-export async function generateTemplateSpec(provider, { category, instructions = '', language = 'it', existing = [], direction: requested = '', exclude = [], avoidColors = [], profile = null, library = [], clientNotes = '', rng = Math.random }) {
+export async function generateTemplateSpec(provider, { category, instructions = '', language = 'it', existing = [], direction: requested = '', exclude = [], avoidColors = [], profile = null, library = [], clientNotes = '', brandColors = null, rng = Math.random }) {
+  const brand = sanitizeBrandColors(brandColors);
   const direction = pickDirection(existing, { requested, exclude, suitable: profile?.directions, library, rng });
   const plan = designPlan(direction, existing, rng, profile, library);
-  const { prompt, system } = buildTemplatePrompt({ category, instructions, language, direction, plan, existing, avoidColors, profile, library, clientNotes });
-  const taken = [...existing.map((s) => s.style.colors.primary), ...avoidColors];
+  const { prompt, system } = buildTemplatePrompt({ category, instructions, language, direction, plan, existing, avoidColors, profile, library, clientNotes, brandColors: brand });
+  // With the brand colors of the user, the colors of the other templates do not count
+  const taken = brand ? [] : [...existing.map((s) => s.style.colors.primary), ...avoidColors];
   let tokens = 0;
   let note = '';
   let lastError = null;
@@ -227,6 +256,7 @@ export async function generateTemplateSpec(provider, { category, instructions = 
       const parsed = extractJson(res.text);
       if (!parsed.style && !parsed.copy) throw new Error('The JSON does not contain "style" or "copy".');
       const spec = applyPlan(sanitizeSpec(parsed), direction, plan);
+      if (brand) spec.style.colors = { ...spec.style.colors, ...brand };
       const clash = taken.find((c) => similarColor(c, spec.style.colors.primary));
       // Same color family as another template: ask once more, then accept (fonts, look and layouts already differ)
       if (clash && !fallback && attempt < RETRIES) {

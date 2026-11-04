@@ -48,3 +48,9 @@ La struttura di base del sito resta sempre la stessa; le **sezioni facoltative d
 - Le **recensioni non hanno foto dei clienti**: solo stelle, testo, nome e ruolo/città.
 - Il template deve essere **esteticamente curato**: gerarchia chiara dei titoli, spazi generosi, sezioni alternate chiare/scure o su foto, call to action ben visibili. Scegli varianti di layout che creino ritmo (es. non tutte le sezioni sullo stesso sfondo).
 - Nessun "lorem ipsum" e nessun dato di contatto inventato nei testi di esempio.
+
+## 5. Eleganza e carattere
+- Il template deve sembrare **fatto su misura per questo settore**, non un tema generico con i colori cambiati: usa le idee distintive dell'analisi del settore nei testi, nella descrizione e nella palette, ed evita i cliché indicati.
+- **Palette raffinata**: al massimo un colore deciso più un secondario che lo accompagni; toni profondi e calibrati (es. verde bottiglia, blu notte, terracotta, ottanio) invece dei colori puri da tavolozza (#FF0000, #00FF00, #0000FF); sfondo chiaro appena tinto, mai grigio freddo per default.
+- **Testi di esempio con personalità**: titoli brevi ed evocativi, specifici del settore (mai "Benvenuti nel nostro sito" o "Qualità e professionalità"); ogni sezione dice qualcosa di concreto.
+- Il tono, i colori e i testi devono raccontare la stessa storia della direzione di design.

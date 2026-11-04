@@ -13,7 +13,7 @@ import { extractJson } from '../ai/json.js';
 import { AIError } from '../ai/AIProvider.js';
 import { estimateTokens } from '../generation/prompt-builder.js';
 import { INDUSTRY_PROMPT } from '../generation/site-prompt.js';
-import { OPTIONAL_SECTIONS, REQUIRED_SECTIONS, SECTION_NAMES_IT, sanitizeSections } from './spec.js';
+import { LAYOUTS, OPTIONAL_SECTIONS, REQUIRED_SECTIONS, SECTION_NAMES_IT, STYLE_OPTIONS, sanitizeSections } from './spec.js';
 import { DIRECTIONS } from './directions.js';
 
 const RETRIES = 2;
@@ -25,6 +25,39 @@ const SYSTEM = 'You are a senior web designer and marketing consultant. You alwa
 
 const text = (v, max) => (typeof v === 'string' ? v.replace(/<[^>]*>/g, '').trim().slice(0, max) : '');
 const texts = (v, n, max) => (Array.isArray(v) ? v.map((x) => text(x, max)).filter(Boolean).slice(0, n) : []);
+const hex = (v) => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v.trim()) ? v.trim().toUpperCase() : '');
+
+/**
+ * Visual choices the analysis may prefer for the industry (the planner favours them when the
+ * direction allows them, while still keeping the templates of the category different).
+ */
+export const PREFERABLE = {
+  style: ['theme', 'buttons', 'images', 'photoTone', 'decor', 'highlight'],
+  layout: ['header', 'hero', 'about', 'features', 'services', 'testimonials', 'homeGallery', 'cta'],
+};
+
+/** Preferred values of the industry: { style: { key: [values] }, layout: { key: [values] } }, only known values. */
+function sanitizePrefer(raw) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  const out = { style: {}, layout: {} };
+  for (const [group, keys] of Object.entries(PREFERABLE)) {
+    const allowed = group === 'style' ? STYLE_OPTIONS : LAYOUTS;
+    for (const key of keys) {
+      const v = r[group]?.[key] ?? r[key];
+      const values = [...new Set((Array.isArray(v) ? v : [v]).map(String).filter((x) => allowed[key].includes(x)))].slice(0, 3);
+      if (values.length) out[group][key] = values;
+    }
+  }
+  return out;
+}
+
+/** Palettes typical of the industry: [{ name, primary, secondary, dark }], valid colors only. */
+function sanitizePalettes(raw) {
+  return (Array.isArray(raw) ? raw : [])
+    .map((p) => ({ name: text(p?.name, 40), primary: hex(p?.primary), secondary: hex(p?.secondary), dark: hex(p?.dark) }))
+    .filter((p) => p.primary && p.secondary)
+    .slice(0, 5);
+}
 
 /** Make any AI answer a usable profile. */
 export function sanitizeProfile(raw) {
@@ -42,6 +75,10 @@ export function sanitizeProfile(raw) {
     palette: text(r.palette, 300),
     imagery: text(r.imagery, 300),
     tone: text(r.tone, 200),
+    palettes: sanitizePalettes(r.palettes),
+    motifs: texts(r.motifs, 6, 200),
+    avoid: texts(r.avoid, 6, 160),
+    prefer: sanitizePrefer(r.prefer),
     sections: sanitizeSections(r.sections),
     directions,
   };
@@ -61,9 +98,18 @@ Reply with ONLY one valid JSON object (no markdown, no code fences, no text befo
   "palette": "colors typical of the industry, and colors to avoid",
   "imagery": "kind of photos and icons that work for the industry",
   "tone": "tone of voice typical of the industry",
+  "palettes": [4 × { "name": "short evocative name", "primary": "#RRGGBB", "secondary": "#RRGGBB", "dark": "#RRGGBB" }],
+  "motifs": ["4–6 distinctive visual and narrative ideas that make a site feel made for THIS industry (subjects of the photos, details, words, atmosphere)"],
+  "avoid": ["3–5 clichés and mistakes of the websites of this industry that make them look cheap or generic"],
+  "prefer": { "style": { ${PREFERABLE.style.map((k) => `"${k}": [1–2 values]`).join(', ')} }, "layout": { ${PREFERABLE.layout.map((k) => `"${k}": [1–3 values]`).join(', ')} } },
   "sections": ["ordered ids of the Home sections after the hero"],
   "directions": ["3–6 ids of the design directions that suit the industry, best first"]
 }
+Palettes: 4 elegant, clearly different palettes credible for the industry (e.g. one classic, one modern, one warm, one bold): a primary deep enough for white text, a secondary that makes it stand out for buttons and details, a very deep "dark" of the same mood. Harmonious and refined, never garish.
+"prefer": the visual choices that suit the industry best, only among these values:
+${PREFERABLE.style.map((k) => `- style.${k}: ${STYLE_OPTIONS[k].join(', ')}`).join('\n')}
+${PREFERABLE.layout.map((k) => `- layout.${k}: ${LAYOUTS[k].join(', ')}`).join('\n')}
+(photoTone: natural colors, mono = black and white, duotone = brand colors, faded; hero: center/left text over a photo, split = text beside the photo, card = text in a card over the photo, bottom = text at the bottom of a full photo, editorial = large title beside a tall photo, slideshow = several photos, color = text on the brand color with a framed photo.)
 Section ids: required (always include them) ${REQUIRED_SECTIONS.map((s) => `"${s}" (${SECTION_NAMES_IT[s]})`).join(', ')}; optional ${OPTIONAL_SECTIONS.map((s) => `"${s}" (${SECTION_NAMES_IT[s]})`).join(', ')}.
 Design directions (id: description):
 ${DIRECTIONS.map((d) => `- ${d.id}: ${d.brief}`).join('\n')}`;
@@ -110,6 +156,8 @@ export function describeProfile(profile) {
     profile.palette && `Colori del settore: ${profile.palette}`,
     profile.imagery && `Immagini e icone: ${profile.imagery}`,
     profile.tone && `Tono tipico: ${profile.tone}`,
+    profile.motifs?.length && `Idee distintive del settore (usale nei testi, nella descrizione e nelle scelte di colore):\n${list(profile.motifs)}`,
+    profile.avoid?.length && `Da evitare (cliché che rendono il sito economico o generico):\n${list(profile.avoid)}`,
   ]
     .filter(Boolean)
     .join('\n');

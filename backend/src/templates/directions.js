@@ -180,7 +180,7 @@ export const DIRECTIONS = [
     palette: 'cheerful and bright: a vivid primary (e.g. tangerine, grass green, sunny blue, raspberry) with a contrasting playful "secondary" (yellow, pink, turquoise) and a light warm "background"',
     fonts: [['Quicksand', 'Nunito'], ['Rubik', 'DM Sans'], ['Fraunces', 'Nunito'], ['Poppins', 'Quicksand']],
     style: { theme: ['light'], buttons: ['pill'], cards: ['tinted', 'shadow'], titles: ['plain', 'line'], align: ['center'], scale: ['large', 'xl'], images: ['rounded', 'arch'], titleCase: ['normal'], kicker: ['pill'], radius: [20, 30], spacing: ['normal'], headingWeight: ['800', '700'], uppercase: [false], fill: ['flat', 'radial'], motion: ['zoom', 'rise'], hover: ['lift', 'glow'], edges: ['all'], rhythm: ['alternate', 'fixed'], highlight: ['marker', 'color'], decor: ['blob', 'dots'], photoTone: ['natural'], photoRatio: ['standard', 'tall'], signature: ['tilted', 'stamp'] },
-    layout: { header: ['classic', 'bold', 'centered'], hero: ['split', 'color', 'center'], heroButtons: ['two', 'one'], heroHeight: ['auto', 'full'], heroPhrases: ['rotating'], about: ['collage', 'badge', 'image-left', 'sandwich'], features: ['bento', 'cards', 'center'], cta: ['split', 'phone'], services: ['boxed', 'overlay'], testimonials: ['cards', 'band'], homeGallery: ['masonry', 'carousel'], footer: ['brand', 'light'], footerCta: ['large', 'none'], divider: ['waves', 'zigzag', 'wave-brush', 'mountains'], subheader: ['photo', 'split'], stats: ['cards', 'band'], process: ['cards'], highlights: ['marquee', 'strip'] },
+    layout: { header: ['classic', 'bold', 'centered'], hero: ['split', 'color', 'center'], heroButtons: ['two', 'one'], heroHeight: ['auto', 'full'], heroPhrases: ['rotating', 'none'], about: ['collage', 'badge', 'image-left', 'sandwich'], features: ['bento', 'cards', 'center'], cta: ['split', 'phone'], services: ['boxed', 'overlay'], testimonials: ['cards', 'band'], homeGallery: ['masonry', 'carousel'], footer: ['brand', 'light'], footerCta: ['large', 'none'], divider: ['waves', 'zigzag', 'wave-brush', 'mountains'], subheader: ['photo', 'split'], stats: ['cards', 'band'], process: ['cards'], highlights: ['marquee', 'strip'] },
   },
   {
     id: 'urban',
@@ -343,6 +343,8 @@ export const DECISION_WEIGHTS = {
 };
 /** Layouts of optional Home sections: they only make two templates differ when both have the section. */
 const OPTIONAL_LAYOUTS = ['cta', 'stats', 'process', 'highlights'];
+/** Score points (per unit of decision weight) of a choice the industry analysis prefers (one unit of distance = 1000). */
+const PREFER_BONUS = 300;
 /** Weight of a corner radius difference (full weight from 8px apart). */
 const RADIUS_WEIGHT = 0.5;
 /** Weight of each block to change to turn the Home shape of one template into the other's. */
@@ -419,6 +421,10 @@ export function designPlan(direction, existing, rng = Math.random, profile = nul
   // Hero layouts of the direction no template of the category has yet
   const heroes = choices.find((ch) => ch.key === 'hero').values;
   const freeHero = heroes.some((v) => !existing.some((s) => s.layout?.hero === v));
+  // Choices the industry analysis prefers (industry.js), when the direction allows them: a bonus
+  // smaller than one unit of distance, so the templates of the category stay different
+  const prefer = profile?.prefer || {};
+  const suits = (cand) => choices.reduce((sum, ch) => sum + (prefer[ch.group]?.[ch.key]?.includes(String(cand[ch.group][ch.key])) ? PREFER_BONUS * ch.weight : 0), 0);
   const score = (cand) => {
     const distances = others.map((o) => distance(cand, o));
     const nearest = distances.length ? Math.min(...distances) : 0;
@@ -429,7 +435,7 @@ export function designPlan(direction, existing, rng = Math.random, profile = nul
       (others.some((o) => o.screen === cand.screen) ? PENALTY.sameFirstScreen : 0) +
       (others.some((o) => shapeDistance(o.shape, cand.shape) === 0) ? PENALTY.sameShape : 0) +
       repeatedBlocks(cand.shape) * PENALTY.repeatedBlock;
-    return nearest * 1000 + mean * 20 + rarity - penalty;
+    return nearest * 1000 + mean * 20 + rarity + suits(cand) - penalty;
   };
   let best = null;
   for (let i = 0; i < 400; i++) {

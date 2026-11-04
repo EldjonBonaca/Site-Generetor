@@ -121,6 +121,42 @@ export function IndustryProfile({ category, onAnalyzed }) {
                 {profile.palette}
               </p>
             )}
+            {!!profile.palettes?.length && (
+              <div>
+                <p className="font-medium text-slate-900">{t('Palettes of the industry')}</p>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {profile.palettes.map((p, i) => (
+                    <span key={i} className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600" title={[p.primary, p.secondary, p.dark].filter(Boolean).join(' · ')}>
+                      {[p.primary, p.secondary, p.dark].filter(Boolean).map((c) => (
+                        <span key={c} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ background: c }} />
+                      ))}
+                      {p.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {!!profile.motifs?.length && (
+              <div>
+                <p className="font-medium text-slate-900">{t('Distinctive ideas')}</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-5 text-slate-600">
+                  {profile.motifs.map((c, i) => (
+                    <li key={i}>{c}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {!!profile.avoid?.length && (
+              <div>
+                <p className="font-medium text-slate-900">{t('To avoid')}</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-5 text-slate-600">
+                  {profile.avoid.map((c, i) => (
+                    <li key={i}>{c}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {!profile.palettes?.length && <p className="text-xs text-amber-700">{t('Analysis made before palettes and visual preferences existed: analyze again for templates more tailored to the industry.')}</p>}
           </div>
           <div className="space-y-3">
             {!!profile.conventions.length && (

@@ -270,6 +270,60 @@ const LANGUAGE_OPTIONS = { it: 'Italiano', en: 'English', es: 'Español', fr: 'F
 
 export const variantLabel = (t, section, value) => t(VARIANT_LABELS[`${section}.${value}`] || value);
 
+/** "#abc", "abc", "#AABBCC" or "aabbcc" -> "#AABBCC"; anything else -> null. */
+export function normalizeHex(v) {
+  const m = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(String(v || '').trim());
+  if (!m) return null;
+  return `#${(m[1].length === 3 ? m[1].replace(/./g, '$&$&') : m[1]).toUpperCase()}`;
+}
+
+/**
+ * A color: the picker and its hex code, which can be typed or pasted (e.g. the brand color of the
+ * client). optional: the color can be left empty (the AI chooses it).
+ */
+function ColorCode({ label, value, onChange, optional = false, disabled = false }) {
+  const { t } = useT();
+  const [code, setCode] = useState(value || '');
+  useEffect(() => setCode(value || ''), [value]);
+  // While typing only full codes apply (#abc is expanded when leaving the field)
+  const typed = (v) => {
+    setCode(v);
+    if (/^#?[0-9a-f]{6}$/i.test(v.trim())) onChange(normalizeHex(v));
+    else if (optional && !v.trim()) onChange('');
+  };
+  const left = () => {
+    const hex = normalizeHex(code);
+    if (hex && hex !== value) onChange(hex);
+    setCode(hex || value || '');
+  };
+  const invalid = code.trim() && !normalizeHex(code);
+  return (
+    <div className="flex items-center gap-2 text-xs text-slate-600">
+      <input type="color" value={value || '#FFFFFF'} onChange={(e) => onChange(e.target.value.toUpperCase())} disabled={disabled} className="h-8 w-9 shrink-0 cursor-pointer rounded border border-slate-300" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate">{label}</span>
+        <input
+          value={code}
+          onChange={(e) => typed(e.target.value)}
+          onBlur={left}
+          placeholder={optional ? t('Automatic') : '#RRGGBB'}
+          maxLength={7}
+          disabled={disabled}
+          className={`mt-0.5 w-full rounded border px-1.5 py-0.5 font-mono text-[11px] uppercase ${invalid ? 'border-red-400 text-red-600' : 'border-slate-200 text-slate-700'}`}
+        />
+      </span>
+      {optional && value && !disabled && (
+        <button type="button" onClick={() => onChange('')} className="shrink-0 rounded p-0.5 text-slate-400 hover:text-slate-700" title={t('Remove')}>
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Colors the user can impose on a generated template (the AI designs the others around them). */
+const BRAND_COLOR_KEYS = ['primary', 'secondary', 'accent', 'dark'];
+
 /** Generate a template for `category` with the AI, then save it. `project`: the site it is generated for (optional). */
 export function TemplateGenerator({ open, onClose, category, onSaved, onAnalyzed, project = null }) {
   const { t } = useT();
@@ -286,12 +340,18 @@ export function TemplateGenerator({ open, onClose, category, onSaved, onAnalyzed
   const [direction, setDirection] = useState('');
   // Drafts discarded in this dialog: a new generation avoids their direction and colors
   const [discarded, setDiscarded] = useState([]);
+  // Colors typed by the user (e.g. the brand of the client): empty = chosen by the AI
+  const [useBrand, setUseBrand] = useState(false);
+  const [brand, setBrand] = useState({});
+  const brandColors = useBrand ? Object.fromEntries(Object.entries(brand).filter(([, v]) => v)) : {};
 
   useEffect(() => {
     if (!open) return;
     setDraft(null);
     setDiscarded([]);
     setInstructions('');
+    setUseBrand(false);
+    setBrand({});
     api.get('/template-options').then((o) => setDirections(o.directions || [])).catch(() => {});
     api
       .get('/providers')
@@ -313,6 +373,7 @@ export function TemplateGenerator({ open, onClose, category, onSaved, onAnalyzed
         direction,
         exclude: direction ? [] : previous.map((d) => d.direction.id),
         avoidColors: previous.map((d) => d.spec.style.colors.primary),
+        ...(Object.keys(brandColors).length ? { colors: brandColors } : {}),
         // Generated from a project: the AI also follows the notes for the AI of the site
         ...(project ? { projectId: project.id } : {}),
       });
@@ -405,6 +466,16 @@ export function TemplateGenerator({ open, onClose, category, onSaved, onAnalyzed
                 </Select>
               )}
             </Field>
+            <div className="space-y-2">
+              <Toggle checked={useBrand} onChange={setUseBrand} label={t('Use my colors')} description={t('Type or paste the color codes (e.g. the brand of the client): the AI keeps them and designs the other colors around them.')} />
+              {useBrand && (
+                <div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 p-3">
+                  {BRAND_COLOR_KEYS.map((k) => (
+                    <ColorCode key={k} label={t(COLOR_LABELS[k])} value={brand[k] || ''} onChange={(v) => setBrand((b) => ({ ...b, [k]: v }))} optional disabled={busy} />
+                  ))}
+                </div>
+              )}
+            </div>
             <Field label={t('Language of the sample texts')}>
               {(id) => (
                 <Select id={id} value={language} onChange={(e) => setLanguage(e.target.value)} disabled={busy}>
@@ -606,13 +677,7 @@ export function TemplateEditor({ template, onClose, onSaved, diversifyOnOpen = f
               <p className="mb-2 text-xs text-slate-500">{t('Or change the colors one by one:')}</p>
               <div className="grid grid-cols-2 gap-2">
                 {options.colorKeys.map((k) => (
-                  <label key={k} className="flex items-center gap-2 text-xs text-slate-600">
-                    <input type="color" value={spec.style.colors[k]} onChange={(e) => setColor(k, e.target.value.toUpperCase())} className="h-7 w-9 cursor-pointer rounded border border-slate-300" />
-                    <span className="min-w-0">
-                      <span className="block truncate">{t(COLOR_LABELS[k] || k)}</span>
-                      <span className="font-mono text-[11px] text-slate-400">{spec.style.colors[k]}</span>
-                    </span>
-                  </label>
+                  <ColorCode key={k} label={t(COLOR_LABELS[k] || k)} value={spec.style.colors[k]} onChange={(v) => setColor(k, v)} />
                 ))}
               </div>
             </div>

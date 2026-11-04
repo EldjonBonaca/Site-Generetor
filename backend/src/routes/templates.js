@@ -153,7 +153,8 @@ router.delete('/template-categories/:cid', (req, res) => {
  * saved templates of the category.
  * Body: { providerId, instructions?, language?, direction? (id, else automatic),
  *         exclude? (directions of discarded drafts), avoidColors? (their primary colors),
- *         projectId? (generated from a project: the notes for the AI of the site are followed) }
+ *         projectId? (generated from a project: the notes for the AI of the site are followed),
+ *         colors? ({ primary, secondary, ... } hex codes typed by the user: kept, the AI designs the others) }
  * -> { spec, tokens, generated_by, direction: { id, name, summary }, profile, analyzed }
  */
 router.post('/template-categories/:cid/templates/generate', async (req, res) => {
@@ -180,6 +181,8 @@ router.post('/template-categories/:cid/templates/generate', async (req, res) => 
       library,
       // Generated from a project: the notes for the AI of that site are followed too (not saved with the template)
       clientNotes: req.body?.projectId ? get('SELECT notes FROM projects WHERE id = ?', Number(req.body.projectId))?.notes || '' : '',
+      // Colors typed by the user (e.g. the brand of the client): kept exactly
+      brandColors: req.body?.colors || null,
     });
     res.json({
       spec,
