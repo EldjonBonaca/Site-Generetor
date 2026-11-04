@@ -1268,9 +1268,10 @@ function import_content() {
 	}
 	if (!empty($data['logo']) && isset($images[$data['logo']])) {
 		set_theme_mod('custom_logo', $images[$data['logo']]['id']);
-		// Site icon (favicon): the logo (WordPress makes the icon sizes from a bitmap, not from an SVG)
-		if (!preg_match('/\.svg$/i', $data['logo'])) {
-			update_option('site_icon', $images[$data['logo']]['id']);
+		// Site icon (favicon): the square PNG made from the logo (also for an SVG logo), else the logo itself when it is a bitmap
+		$icon = (!empty($data['siteIcon']) && isset($images[$data['siteIcon']])) ? $data['siteIcon'] : (preg_match('/\.svg$/i', $data['logo']) ? '' : $data['logo']);
+		if ($icon !== '') {
+			update_option('site_icon', $images[$icon]['id']);
 			$messages[] = array('level' => 'info', 'text' => t('faviconSet'));
 		}
 	}

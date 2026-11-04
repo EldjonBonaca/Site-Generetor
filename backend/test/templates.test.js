@@ -1161,3 +1161,34 @@ test('modern heroes (bento, mesh) and directions; first templates of other categ
   }
   assert.equal(new Set(library.map(firstScreen)).size, 6, library.map(firstScreen).join(' / '));
 });
+
+test('new section layouts: compact / framed services, minimal / card call to action, contact panel, FAQ cards; no map button', () => {
+  const sections = ['about', 'features', 'cta', 'services', 'gallery', 'reviews', 'faq'];
+  const json = (x) => JSON.stringify(x);
+  for (const services of ['compact', 'framed']) {
+    const site = buildSite(sanitizeSpec({ layout: { services }, sections }), sampleSite());
+    const slots = [...site.docs.services.marks.values()].filter((m) => m.slot === 'service_list');
+    assert.equal(slots.length, 4, `${services}: one photo per service on the Services page`);
+    assert.ok([...site.docs.home.marks.values()].some((m) => m.slot === 'service_list'), `${services}: photos on Home`);
+  }
+  const minimal = buildSite(sanitizeSpec({ layout: { cta: 'minimal' }, sections }), sampleSite());
+  assert.match(json(minimal.docs.gallery.doc), /"border_width":\{"unit":"px","top":"1"/, 'minimal: thin lines above and below');
+  const card = buildSite(sanitizeSpec({ layout: { cta: 'card' }, sections }), sampleSite());
+  const last = card.docs.gallery.doc.content.at(-1);
+  assert.ok(last.settings.background_overlay_background, 'card: on a photo band');
+
+  const panel = buildSite(sanitizeSpec({ layout: { contact: 'panel' } }), sampleSite());
+  const row = panel.docs.contact.doc.content[1];
+  assert.equal(row.elements[0].settings.css_classes, 'esg-contact-info');
+  assert.ok(row.elements[0].settings.background_background, 'panel: details on a colored panel');
+  for (const contact of ['split', 'stacked', 'panel']) {
+    const doc = buildSite(sanitizeSpec({ layout: { contact } }), sampleSite()).docs.contact.doc;
+    assert.doesNotMatch(json(doc), /Google Maps"|google\.com\/maps\/search/, `${contact}: no "open in Google Maps" button`);
+  }
+
+  const faqCards = buildSite(sanitizeSpec({ layout: { faq: 'cards' }, sections }), sampleSite());
+  assert.doesNotMatch(json(faqCards.docs.home.doc), /"widgetType":"accordion"/);
+  assert.ok([...faqCards.docs.home.marks.values()].filter((m) => /^frequently asked question \d/.test(m.hint || '')).length === 4);
+  const faqAcc = buildSite(sanitizeSpec({ sections }), sampleSite());
+  assert.match(json(faqAcc.docs.home.doc), /"widgetType":"accordion"/, 'default: accordion');
+});

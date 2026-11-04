@@ -30,7 +30,8 @@ export const FAMILIES = {
     heroHeight: { auto: 'normal', compact: 'normal', full: 'full' },
     about: { 'image-left': 'row', 'image-right': 'row', badge: 'row', collage: 'row', wide: 'wide', stacked: 'wide', triptych: 'three', sandwich: 'three' },
     featureCount: { 3: 'few', 4: 'few', 5: 'many', 6: 'many' },
-    services: { cards: 'cards', boxed: 'cards', overlay: 'overlay', list: 'rows' },
+    services: { cards: 'cards', boxed: 'cards', framed: 'cards', overlay: 'overlay', list: 'rows', compact: 'rows' },
+    cta: { banner: 'photo', card: 'photo', split: 'color', phone: 'color', 'photo-split': 'media', minimal: 'plain' },
     testimonials: { cards: 'grid', minimal: 'grid', band: 'band', quote: 'quote', side: 'side' },
     process: { cards: 'cards', timeline: 'line', vertical: 'line' },
     divider: {
@@ -75,14 +76,14 @@ export function effective(design) {
 const SHAPES = {
   about: (l) => ({ wide: 'media-wide', stacked: 'media-wide', triptych: 'three-col', sandwich: 'three-col' })[l.about] || 'media-row',
   features: (l) => ({ icons: 'card-grid', cards: 'photo-band', list: 'side-list', bento: 'tiles', split: 'media-row', center: 'three-col' })[l.features] || 'card-grid',
-  cta: (l) => ({ split: 'color-card', phone: 'color-band', 'photo-split': 'media-band' })[l.cta] || 'photo-band',
-  services: (l) => ({ overlay: 'tiles', list: 'rows' })[l.services] || 'card-grid',
+  cta: (l) => ({ split: 'color-card', phone: 'color-band', 'photo-split': 'media-band', minimal: 'centered', card: 'photo-card' })[l.cta] || 'photo-band',
+  services: (l) => ({ overlay: 'tiles', list: 'rows', compact: 'compact-grid', framed: 'framed-grid' })[l.services] || 'card-grid',
   reviews: (l) => ({ cards: 'card-grid', band: 'color-band', side: 'side-list' })[l.testimonials] || 'centered',
   stats: (l) => ({ band: 'color-band', inline: 'line', cards: 'card-grid' })[l.stats] || 'color-band',
   process: (l) => ({ timeline: 'line', vertical: 'side-list' })[l.process] || 'card-grid',
   highlights: () => 'color-band',
   gallery: (l) => ({ mosaic: 'tiles', strip: 'photo-strip', masonry: 'photo-grid' })[l.homeGallery] || 'carousel',
-  faq: () => 'accordion',
+  faq: (l) => (l.faq === 'cards' ? 'card-grid' : 'accordion'),
 };
 
 /** Shape of the Home page: the hero, then the form of each section in order. design: { layout, sections }. */

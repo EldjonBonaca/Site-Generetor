@@ -48,15 +48,18 @@ export const LAYOUTS = {
   features: ['icons', 'cards', 'list', 'bento', 'split', 'center'],
   // Number of strengths of "why choose us" (each layout takes the nearest count it can arrange: featureCount())
   featureCount: ['4', '3', '5', '6'],
-  // "phone": a colored band with the phone number in large type; "photo-split": a photo beside a colored panel
-  cta: ['banner', 'split', 'phone', 'photo-split'],
-  services: ['cards', 'boxed', 'overlay', 'list'],
+  // "phone": a colored band with the phone number in large type; "photo-split": a photo beside a colored panel;
+  // "minimal": the invitation large on the page color between two thin lines; "card": a light card on a photo band
+  cta: ['banner', 'split', 'phone', 'photo-split', 'minimal', 'card'],
+  // "compact": a small square photo beside number, title and text; "framed": a tall photo, the texts in a card overlapping it
+  services: ['cards', 'boxed', 'overlay', 'list', 'compact', 'framed'],
   // "side": the title and large stars on the left, the reviews one under the other on the right
   testimonials: ['cards', 'minimal', 'band', 'quote', 'side'],
   // Photos of the Home page: a carousel, one large photo + four small ("mosaic"), a strip across the
   // whole width ("strip"), or three columns of photos of staggered heights ("masonry")
   homeGallery: ['carousel', 'mosaic', 'strip', 'masonry'],
-  contact: ['split', 'stacked'],
+  // "panel": the contact details on a colored panel of the brand beside the form
+  contact: ['split', 'stacked', 'panel'],
   footer: ['dark', 'light', 'brand'],
   // Top of the footer: nothing more, or a large invitation to get in touch with the phone number and a button
   footerCta: ['none', 'large'],
@@ -71,6 +74,8 @@ export const LAYOUTS = {
   process: ['cards', 'timeline', 'vertical'],
   // Strip of guarantees: centered on one line, or scrolling endlessly (marquee)
   highlights: ['strip', 'marquee'],
+  // Frequently asked questions: an accordion, or every answer visible in two columns of cards
+  faq: ['accordion', 'cards'],
 };
 
 /** Strengths a template holds, most important first: "why choose us" shows the first featureCount() of them. */

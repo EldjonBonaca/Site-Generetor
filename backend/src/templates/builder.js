@@ -39,18 +39,18 @@ export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
  * Version of the generated structure. Field ids depend on it: a generation made with another
  * version cannot be exported (exporter.js), it has to be generated again.
  */
-export const BUILDER_VERSION = 14;
+export const BUILDER_VERSION = 15;
 
 export const DOC_ROLES = ['home', 'about', 'services', 'gallery', 'contact', 'single_post', 'header', 'footer'];
 
 /** Fixed labels in the site language. */
 const LABELS = {
-  it: { menu: 'Menu', links: 'Link', services: 'Servizi', contacts: 'Contatti', about: 'Chi siamo', readMore: 'Scopri di più', phone: 'Telefono', email: 'Email', address: 'Indirizzo', otherServices: 'Altri servizi', openMap: 'Apri in Google Maps' },
-  en: { menu: 'Menu', links: 'Links', services: 'Services', contacts: 'Contact', about: 'About us', readMore: 'Read more', phone: 'Phone', email: 'Email', address: 'Address', otherServices: 'Other services', openMap: 'Open in Google Maps' },
-  es: { menu: 'Menú', links: 'Enlaces', services: 'Servicios', contacts: 'Contacto', about: 'Quiénes somos', readMore: 'Leer más', phone: 'Teléfono', email: 'Email', address: 'Dirección', otherServices: 'Otros servicios', openMap: 'Abrir en Google Maps' },
-  fr: { menu: 'Menu', links: 'Liens', services: 'Services', contacts: 'Contact', about: 'Qui sommes-nous', readMore: 'En savoir plus', phone: 'Téléphone', email: 'E-mail', address: 'Adresse', otherServices: 'Autres services', openMap: 'Ouvrir dans Google Maps' },
-  de: { menu: 'Menü', links: 'Links', services: 'Leistungen', contacts: 'Kontakt', about: 'Über uns', readMore: 'Mehr erfahren', phone: 'Telefon', email: 'E-Mail', address: 'Adresse', otherServices: 'Weitere Leistungen', openMap: 'In Google Maps öffnen' },
-  pt: { menu: 'Menu', links: 'Links', services: 'Serviços', contacts: 'Contactos', about: 'Quem somos', readMore: 'Saiba mais', phone: 'Telefone', email: 'Email', address: 'Morada', otherServices: 'Outros serviços', openMap: 'Abrir no Google Maps' },
+  it: { menu: 'Menu', links: 'Link', services: 'Servizi', contacts: 'Contatti', about: 'Chi siamo', readMore: 'Scopri di più', phone: 'Telefono', email: 'Email', address: 'Indirizzo', otherServices: 'Altri servizi', },
+  en: { menu: 'Menu', links: 'Links', services: 'Services', contacts: 'Contact', about: 'About us', readMore: 'Read more', phone: 'Phone', email: 'Email', address: 'Address', otherServices: 'Other services', },
+  es: { menu: 'Menú', links: 'Enlaces', services: 'Servicios', contacts: 'Contacto', about: 'Quiénes somos', readMore: 'Leer más', phone: 'Teléfono', email: 'Email', address: 'Dirección', otherServices: 'Otros servicios', },
+  fr: { menu: 'Menu', links: 'Liens', services: 'Services', contacts: 'Contact', about: 'Qui sommes-nous', readMore: 'En savoir plus', phone: 'Téléphone', email: 'E-mail', address: 'Adresse', otherServices: 'Autres services', },
+  de: { menu: 'Menü', links: 'Links', services: 'Leistungen', contacts: 'Kontakt', about: 'Über uns', readMore: 'Mehr erfahren', phone: 'Telefon', email: 'E-Mail', address: 'Adresse', otherServices: 'Weitere Leistungen', },
+  pt: { menu: 'Menu', links: 'Links', services: 'Serviços', contacts: 'Contactos', about: 'Quem somos', readMore: 'Saiba mais', phone: 'Telefone', email: 'Email', address: 'Morada', otherServices: 'Outros serviços', },
 };
 
 const PADDING = { compact: 64, normal: 96, airy: 128 };
@@ -534,6 +534,39 @@ function createDoc(role, spec, site) {
       );
       return box(index % 2 ? [txt, img] : [img, txt], { row: true, justify: 'space-between', gap: 32, anim: o.anim, css: 'esg-svc-row' });
     }
+    // "compact": a small square photo beside the number, the title and the text, in a light card
+    if (spec.layout.services === 'compact') {
+      return box(
+        [
+          box([picture('service_list', { service: index, height: 132, mobileHeight: 110, url: service.url, size: 'medium', round: false })], { width: 34, tablet: 34, mobile: 34, overflow: true, zoom: true, radius: imgRadius }),
+          box(
+            [
+              heading(String(index + 1).padStart(2, '0'), { tag: 'p', size: 13, weight: '700', color: ink.kicker, fixed: true }),
+              heading(service.name, { tag: 'h3', size: 19, url: service.url, fixed: true }),
+              text(desc, { size: 14, hint, max: 130 }),
+            ],
+            { width: 60, tablet: 60, mobile: 60, gap: 6 }
+          ),
+        ],
+        { width: o.width, row: true, gap: 16, align: 'center', justify: 'space-between', card: true, on: o.on, pad: 16, anim: o.anim, lift: true }
+      );
+    }
+    // "framed": a tall photo, the title and the text in a card overlapping its bottom edge
+    if (spec.layout.services === 'framed') {
+      const caption = box(
+        [
+          heading(service.name, { tag: 'h3', size: 21, url: service.url, fixed: true }),
+          text(desc, { size: 15, hint, max: 150 }),
+          button(`${L.readMore} →`, service.url, { variant: 'link', fixed: true }),
+        ],
+        { card: true, on: 'alt', pad: 24, gap: 8, margin: [-70, 18, 0, 18], zIndex: 2 }
+      );
+      return box([box([picture('service_list', { service: index, height: 320, mobileHeight: 260, url: service.url, size: 'medium_large' })], { overflow: true, zoom: true, radius: imgRadius }), caption], {
+        width: o.width,
+        gap: 0,
+        anim: o.anim,
+      });
+    }
     if (spec.layout.services === 'overlay') {
       return box(
         [
@@ -639,8 +672,8 @@ const underHeader = (b) => (b.spec.layout.header === 'transparent' ? 'esg-under'
 const NATURAL_SURFACE = {
   about: () => 'bg',
   features: (l) => (l.features === 'cards' ? 'band' : l.features === 'icons' || l.features === 'center' ? 'alt' : 'bg'),
-  cta: (l) => (l.cta === 'split' || l.cta === 'photo-split' ? 'bg' : 'band'),
-  services: (l) => (l.services === 'boxed' ? 'alt' : 'bg'),
+  cta: (l) => (['split', 'photo-split', 'minimal'].includes(l.cta) ? 'bg' : 'band'),
+  services: (l) => (l.services === 'boxed' || l.services === 'framed' ? 'alt' : 'bg'),
   gallery: () => 'bg',
   reviews: (l) => (l.testimonials === 'band' ? 'band' : l.testimonials === 'cards' ? 'alt' : 'bg'),
   stats: (l) => (l.stats === 'band' ? 'band' : l.stats === 'cards' ? 'alt' : 'bg'),
@@ -877,6 +910,33 @@ function cta(b, site) {
     return b.section([b.box([photo, panel], { row: true, gap: 0, align: 'stretch', overflow: true, radius: b.st.buttons === 'square' ? 0 : Math.min(b.radius + 6, 24) })], {
       bg: surfaceBg(b, 'cta', 'bg'),
       padY: Math.round(b.pad * 0.7),
+    });
+  }
+  // "minimal": no color band, the invitation large and centered on the page color between two thin lines
+  if (variant === 'minimal') {
+    const els = [
+      b.heading(copy.ctaTitle, { size: 46, align: 'center', hl: true, hint: 'call to action title: invite to contact the business (short, at most 8 words)', max: 70 }),
+      b.text(copy.ctaText, { align: 'center', size: 18, hint: 'call to action text (1–2 sentences)', max: 200 }),
+      b.button(copy.ctaButton, site.pages.contact.url, { align: 'center', hint: 'call to action button text (leads to the contact page)', max: 30 }),
+    ];
+    return b.section([b.box(els, { maxWidth: 760, gap: 18, align: 'center', padding: [48, 0, 48, 0], border: [1, 0, 1, 0, b.ink.border], anim: 0 })], {
+      bg: surfaceBg(b, 'cta', 'bg'),
+      align: 'center',
+    });
+  }
+  // "card": a light card in the middle of a photo band
+  if (variant === 'card') {
+    const els = [
+      b.heading(copy.ctaTitle, { size: 36, align: 'center', hl: true, hint: 'call to action title: invite to contact the business (short, at most 8 words)', max: 70 }),
+      b.text(copy.ctaText, { align: 'center', size: 17, hint: 'call to action text (1–2 sentences)', max: 200 }),
+      b.button(copy.ctaButton, site.pages.contact.url, { align: 'center', hint: 'call to action button text (leads to the contact page)', max: 30 }),
+    ];
+    return b.section([b.box(els, { maxWidth: 680, card: true, on: 'photo', pad: 52, gap: 16, align: 'center', anim: 0 })], {
+      slot: 'photo',
+      overlay: [rgba(b.c.dark, 0.35), rgba(b.c.dark, 0.55), 180],
+      align: 'center',
+      padY: Math.round(b.pad * 1.2),
+      band: true,
     });
   }
   if (banner) {
@@ -1254,7 +1314,7 @@ function featuredServices(b, site) {
   const { copy, layout } = b.spec;
   if (!site.services.length) return null;
   const shown = site.services.slice(0, 3);
-  const natural = layout.services === 'boxed' ? 'alt' : 'bg';
+  const natural = NATURAL_SURFACE.services(layout);
   const left = b.st.align === 'left' || b.st.titles === 'bar';
   return b.section(
     [
@@ -1476,6 +1536,25 @@ function processSteps(b) {
 /** Frequently asked questions (accordion). */
 function faq(b) {
   const { copy } = b.spec;
+  const parts = {
+    kicker: { value: copy.faqKicker, hint: 'small label of the FAQ section', max: 30 },
+    title: { value: copy.faqTitle, hint: 'title of the frequently asked questions section', max: 60 },
+  };
+  const left = b.st.align === 'left' || b.st.titles === 'bar';
+  const bg = surfaceBg(b, 'faq', 'alt');
+  // "cards": every question with its answer always visible, in two columns of cards
+  if (b.spec.layout.faq === 'cards') {
+    const cards = copy.faq.map((x, i) =>
+      b.box(
+        [
+          b.heading(x.q, { tag: 'h3', size: 19, hint: `frequently asked question ${i + 1} of 4 of the customers of this business`, max: 120 }),
+          b.text(x.a, { size: 15, hint: `answer to question ${i + 1} (1–3 sentences, no invented prices)`, max: 400 }),
+        ],
+        { width: b.columns(2), tablet: 100, card: true, on: surfaceOn(b, 'faq', 'alt'), pad: 30, gap: 10, anim: (i % 2) * 120 }
+      )
+    );
+    return b.section([intro(b, parts, left ? { align: 'left' } : {}), b.box(cards, { row: true, gap: 24, align: 'stretch', justify: 'space-between' })], { bg, align: left ? 'flex-start' : 'center', gap: 40 });
+  }
   const accordion = b.widget('accordion', {
     tabs: copy.faq.map((x) => ({ _id: b.id(), tab_title: x.q, tab_content: `<p>${escapeHtml(x.a)}</p>` })),
     selected_icon: { value: 'fas fa-plus', library: 'fa-solid' },
@@ -1499,12 +1578,6 @@ function faq(b) {
     b.mark(accordion, `tabs.${i}.tab_title`, { hint: `frequently asked question ${i + 1} of 4 of the customers of this business`, max: 120 });
     b.mark(accordion, `tabs.${i}.tab_content`, { hint: `answer to question ${i + 1} (1–3 sentences, no invented prices)`, max: 400 });
   });
-  const parts = {
-    kicker: { value: copy.faqKicker, hint: 'small label of the FAQ section', max: 30 },
-    title: { value: copy.faqTitle, hint: 'title of the frequently asked questions section', max: 60 },
-  };
-  const left = b.st.align === 'left' || b.st.titles === 'bar';
-  const bg = surfaceBg(b, 'faq', 'alt');
   if (left) return b.section([b.box([intro(b, parts, { align: 'left' })], { width: 34 }), b.box([accordion], { width: 60, anim: 0 })], { row: true, bg, align: 'flex-start' });
   return b.section([intro(b, parts), b.box([accordion], { maxWidth: 860, anim: 0 })], { bg, align: 'center', gap: 40 });
 }
@@ -1699,10 +1772,19 @@ function contact(b, site) {
     ...(stacked ? { maxWidth: 860 } : { width: 52 }),
     anim: 0,
   });
-  // The address opens in Google Maps (also an outgoing link for search engines)
-  const mapButton = site.mapLink ? [b.button(b.L.openMap, site.mapLink, { variant: 'outline', outlineColor: b.ink.heading, align: stacked && b.st.align === 'center' ? 'center' : 'left', fixed: true })] : [];
   const out = [subheader(b, site, 'contact', b.ink.alt)];
-  if (stacked) {
+  // "panel": the details on a colored panel of the brand, the form card beside it
+  if (layout.contact === 'panel') {
+    const panel = b.box([intro(b, parts, { align: 'left', light: true }), ...items.map((it) => infoBox(it, { position: 'left', light: true }))], {
+      width: 42,
+      ...b.fill(),
+      pad: 44,
+      gap: 22,
+      radius: b.st.buttons === 'square' ? 0 : Math.min(b.radius + 6, 24),
+      css: 'esg-contact-info',
+    });
+    out.push(b.section([panel, form], { row: true, bg: b.ink.alt, align: 'stretch' }));
+  } else if (stacked) {
     out.push(
       b.section(
         [
@@ -1711,7 +1793,6 @@ function contact(b, site) {
             items.map((it, i) => b.box([infoBox(it)], { width: b.columns(items.length), card: true, on: 'alt', pad: 28, anim: i * 120, lift: true })),
             { row: true, gap: 24, align: 'stretch', justify: 'center' }
           ),
-          ...mapButton,
           form,
         ],
         { bg: b.ink.alt, align: 'center', gap: 40 }
@@ -1720,7 +1801,7 @@ function contact(b, site) {
   } else {
     out.push(
       // The details never take more than half of the row: long texts wrap instead of running over the form
-      b.section([b.box([intro(b, parts, { align: 'left' }), ...items.map((it) => infoBox(it, { position: 'left' })), ...mapButton], { width: 42, gap: 22, css: 'esg-contact-info' }), form], {
+      b.section([b.box([intro(b, parts, { align: 'left' }), ...items.map((it) => infoBox(it, { position: 'left' }))], { width: 42, gap: 22, css: 'esg-contact-info' }), form], {
         row: true,
         bg: b.ink.alt,
         align: 'flex-start',

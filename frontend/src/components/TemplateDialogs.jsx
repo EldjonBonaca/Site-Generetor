@@ -96,6 +96,7 @@ export const SECTION_LABELS = {
   stats: 'Key numbers',
   process: 'How we work',
   highlights: 'Strip of guarantees',
+  faq: 'Frequently asked questions',
 };
 
 const VARIANT_LABELS = {
@@ -189,6 +190,13 @@ const VARIANT_LABELS = {
   'process.vertical': 'Vertical timeline beside the title',
   'highlights.strip': 'Centered strip',
   'highlights.marquee': 'Scrolling strip',
+  'cta.minimal': 'Large invitation between two thin lines',
+  'cta.card': 'Light card over a photo',
+  'services.compact': 'Compact cards with a small photo',
+  'services.framed': 'Tall photo with a card over its edge',
+  'contact.panel': 'Details on a colored panel beside the form',
+  'faq.accordion': 'Accordion',
+  'faq.cards': 'Answers visible in two columns of cards',
 };
 
 /** Look of the whole site (spec.style options). */

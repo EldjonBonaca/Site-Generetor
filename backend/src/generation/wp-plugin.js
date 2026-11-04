@@ -238,7 +238,7 @@ function contactFormInfo(ctx) {
  *   siteCss (CSS of the whole site, saved in the Additional CSS of WordPress)
  * @returns {{ fileName: string, buffer: Buffer }}
  */
-export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, category, globalStyles, requiredPlugins = [], siteCss = '' }) {
+export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, category, globalStyles, requiredPlugins = [], siteCss = '', siteIcon = null }) {
   const { project } = ctx;
   const slug = pluginSlug(project);
   const hash = crypto.createHash('md5').update(`${project.id}:${slug}`).digest('hex').slice(0, 8);
@@ -251,7 +251,9 @@ export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, c
     return `elementor/${key}.json`;
   };
 
-  const imageEntries = images.map((img) => {
+  // The site icon (square PNG made from the logo) is imported with the other images
+  const all = siteIcon ? [...images, { file: siteIcon, alt: '', photo: false }] : images;
+  const imageEntries = all.map((img) => {
     const buffer = fs.readFileSync(path.join(imagesDir, img.file));
     add(`images/${img.file}`, buffer);
     return {
@@ -270,6 +272,7 @@ export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, c
     ui,
     images: imageEntries,
     logo: images.find((i) => i.logo)?.file || null,
+    siteIcon,
     category,
     menu: ctx.menu,
     // Links that stay site-relative (Cookie / Privacy Policy of the copyright line): every other internal link becomes absolute

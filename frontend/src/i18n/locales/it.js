@@ -429,6 +429,13 @@ export default {
   'Huge business name in the footer': "Nome dell'attività gigante nel footer",
   'Centered strip': 'Fascia centrata',
   'Scrolling strip': 'Fascia scorrevole',
+  'Large invitation between two thin lines': 'Grande invito tra due linee sottili',
+  'Light card over a photo': 'Card chiara su una foto',
+  'Compact cards with a small photo': 'Card compatte con foto piccola',
+  'Tall photo with a card over its edge': 'Foto alta con una card sul bordo',
+  'Details on a colored panel beside the form': 'Dati su un pannello colorato accanto al modulo',
+  'Accordion': 'A fisarmonica',
+  'Answers visible in two columns of cards': 'Risposte visibili in card su due colonne',
   'Strip of guarantees': 'Fascia di garanzie',
   // Larger layouts
   'Transparent over the photos': 'Trasparente sopra le foto',

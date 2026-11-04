@@ -19,6 +19,7 @@ import { normalizeUrl } from '../ai/json.js';
 import { languageName } from './prompt-builder.js';
 import { buildWxr } from './wxr.js';
 import { buildPlugin, PLUGIN_IMAGE_SCHEME } from './wp-plugin.js';
+import { siteIconFromLogo } from '../lib/site-icon.js';
 import { docsText } from './export-docs.js';
 import { docToHtml, seoScore } from './seo-score.js';
 import { fieldValue } from './runner.js';
@@ -76,6 +77,24 @@ async function exportImages(ctx, destDir) {
     result.set(img.id, { name, url: baseUrl + name, alt: img.alt_text || '' });
   }
   return result;
+}
+
+/**
+ * Site icon (favicon) from the logo: a square PNG next to the other images (also for an SVG logo,
+ * which WordPress cannot use as an icon). File name or null (no logo, or it could not be read).
+ */
+async function exportSiteIcon(ctx, exported, destDir) {
+  const logo = ctx.images.find((i) => i.role === 'logo');
+  const base = logo && exported.get(logo.id);
+  if (!base) return null;
+  try {
+    const png = await siteIconFromLogo(path.join(config.storageDir, logo.file_path), logo.mime);
+    const name = `${path.basename(base.name, path.extname(base.name))}-icon.png`;
+    fs.writeFileSync(path.join(destDir, name), png);
+    return name;
+  } catch {
+    return null;
+  }
 }
 
 const cropKey = (imageId, kind) => `${imageId}:${kind}`;
@@ -566,6 +585,7 @@ export async function exportGeneration(generationId) {
   const exported = await exportImages(ctx, path.join(outRoot, 'images'));
   await exportCrops(ctx, pages, exported, path.join(outRoot, 'images'));
   exportKitGraphics(ctx, pages, exported, path.join(outRoot, 'images'));
+  const siteIcon = await exportSiteIcon(ctx, exported, path.join(outRoot, 'images'));
   const built = buildPageDocs(ctx, pages, exported, links, output.pages);
   const posts = buildPosts(ctx, pages, exported);
 
@@ -596,7 +616,7 @@ export async function exportGeneration(generationId) {
 
   // WordPress plugin: creates the same site on activation, with the images bundled
   const input = pluginInput(ctx, pages, output.pages, posts, exported, links, category, path.join(outRoot, 'images'));
-  const plugin = buildPlugin(input);
+  const plugin = buildPlugin({ ...input, siteIcon });
   fs.writeFileSync(path.join(outRoot, plugin.fileName), plugin.buffer);
   const pluginDir = path.join(config.outputDir, String(gen.id), 'plugin');
   fs.mkdirSync(pluginDir, { recursive: true });

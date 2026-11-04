@@ -273,3 +273,38 @@ test('SVG logos: editor exports are cleaned and measured, active content is reje
     await assert.rejects(inspectImage(Buffer.from(bad), 'x.svg'), /active content|not a valid/);
   }
 });
+
+test('site icon from the logo: square PNG, the symbol of a wide logo, SVG logos too', async () => {
+  const { default: sharp } = await import('sharp');
+  const { siteIconFromLogo, ICON_SIZE } = await import('../src/lib/site-icon.js');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esg-icon-'));
+  // Wide logo: a red square symbol (100 px), a gap, then the name (a dark bar), on a transparent background
+  const wide = path.join(dir, 'wide.svg');
+  fs.writeFileSync(wide, '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="140"><rect x="10" y="20" width="100" height="100" fill="#ff0000"/><rect x="160" y="50" width="420" height="40" fill="#222222"/></svg>');
+  const icon = await siteIconFromLogo(wide, 'image/svg+xml');
+  const meta = await sharp(icon).metadata();
+  assert.deepEqual([meta.format, meta.width, meta.height, meta.hasAlpha], ['png', ICON_SIZE, ICON_SIZE, true]);
+  const { data, info } = await sharp(icon).raw().toBuffer({ resolveWithObject: true });
+  const at = (x, y) => [...data.subarray((y * info.width + x) * 4, (y * info.width + x) * 4 + 4)];
+  const center = at(256, 256);
+  assert.ok(center[0] > 200 && center[1] < 60 && center[3] > 200, `the symbol fills the icon: ${center}`);
+  assert.equal(at(4, 4)[3], 0, 'transparent margin');
+
+  // Square-ish PNG logo: the whole logo, centered
+  const square = path.join(dir, 'square.png');
+  await sharp({ create: { width: 300, height: 260, channels: 4, background: { r: 0, g: 0, b: 255, alpha: 1 } } }).png().toFile(square);
+  const sq = await siteIconFromLogo(square, 'image/png');
+  const s = await sharp(sq).raw().toBuffer({ resolveWithObject: true });
+  const c = [...s.data.subarray((256 * 512 + 256) * 4, (256 * 512 + 256) * 4 + 4)];
+  assert.ok(c[2] > 200 && c[3] > 200);
+});
+
+test('site icon: a logo made only of words keeps all of it', async () => {
+  const { symbolColumns } = await import('../src/lib/site-icon.js');
+  // 400 x 50: a first word 150 px wide, a 20 px gap, a second word (a symbol is about square, a word is not)
+  const w = 400, h = 50, data = Buffer.alloc(w * h * 4);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (x < 150 || x >= 170) data[(y * w + x) * 4 + 3] = 255;
+  assert.equal(symbolColumns(data, w, h, 4, [0, 0, 0, 0]), null);
+  for (let y = 0; y < h; y++) for (let x = 50; x < 150; x++) data[(y * w + x) * 4 + 3] = 0; // now a 50 px square on the left
+  assert.deepEqual(symbolColumns(data, w, h, 4, [0, 0, 0, 0]), [0, 50]);
+});

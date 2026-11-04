@@ -389,7 +389,9 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   // Yoast SEO: installed by the plugin, focus keyphrase / title / description on pages and articles
   assert.ok(site.posts.every((x) => x.seo.keyphrase) && site.pages.every((x) => x.seo.keyphrase), 'every page and article has a focus keyphrase');
   assert.ok(php.includes("'slug' => 'wordpress-seo'") && php.includes("'_yoast_wpseo_focuskw'") && php.includes("'wpseo_titles'"), 'Yoast SEO installed and filled in');
-  assert.equal(site.images.length, 13, '6 images + hero / subheader crops + 5 carousel crops');
+  assert.equal(site.images.length, 14, '6 images + hero / subheader crops + 5 carousel crops + the site icon');
+  assert.equal(site.siteIcon, site.logo.replace(/\.[^.]+$/, '-icon.png'), 'site icon (favicon) made from the logo');
+  assert.ok(site.images.some((i) => i.file === site.siteIcon && i.mime === 'image/png'));
   assert.equal(site.images.filter((i) => i.photo).length, 5, 'every image except the logo is a gallery photo');
   assert.equal(site.logo, site.images.find((i) => !i.photo && !/-(hero|subheader|carousel)\./.test(i.file)).file);
   // Each article is designed: hero with its featured image, its content, the OTHER services in the sidebar, no comments

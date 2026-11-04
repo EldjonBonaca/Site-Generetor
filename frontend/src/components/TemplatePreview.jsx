@@ -114,8 +114,8 @@ export function TemplatePreview({ spec, compact = false, className }) {
   const NATURAL = {
     about: 'bg',
     features: l.features === 'cards' ? 'band' : l.features === 'icons' || l.features === 'center' ? 'alt' : 'bg',
-    cta: l.cta === 'split' || l.cta === 'photo-split' ? 'bg' : 'band',
-    services: l.services === 'boxed' ? 'alt' : 'bg',
+    cta: ['split', 'photo-split', 'minimal'].includes(l.cta) ? 'bg' : 'band',
+    services: l.services === 'boxed' || l.services === 'framed' ? 'alt' : 'bg',
     gallery: 'bg',
     reviews: l.testimonials === 'band' ? 'band' : l.testimonials === 'cards' ? 'alt' : 'bg',
     stats: l.stats === 'band' ? 'band' : l.stats === 'cards' ? 'alt' : 'bg',
@@ -654,6 +654,26 @@ export function TemplatePreview({ spec, compact = false, className }) {
           {btn(c.secondary, copy.ctaButton)}
         </div>
       </div>
+    ) : l.cta === 'minimal' ? (
+      // The invitation large and centered on the page color, between two thin lines
+      <div className="px-4 py-2" style={{ background: sbg('cta') }}>
+        <div className="mx-auto flex w-4/5 flex-col items-center gap-1.5 border-y py-3 text-center" style={{ borderColor: ink.border }}>
+          <p style={{ ...head, fontSize: 11 * scale, textTransform: upper }} className="leading-tight">
+            {hl(copy.ctaTitle)}
+          </p>
+          {btn(mainBg, copy.ctaButton)}
+        </div>
+      </div>
+    ) : l.cta === 'card' ? (
+      // A light card in the middle of a photo band
+      <div className="flex justify-center px-4 py-4" style={photoBg(`linear-gradient(180deg, ${c.dark}59, ${c.dark}8c)`)}>
+        <div className="flex w-3/5 flex-col items-center gap-1.5 p-2.5 text-center" style={card('photo')}>
+          <p style={{ ...head, fontSize: 9 * scale, textTransform: upper }} className="leading-tight">
+            {hl(copy.ctaTitle)}
+          </p>
+          {btn(mainBg, copy.ctaButton)}
+        </div>
+      </div>
     ) : l.cta === 'photo-split' ? (
       // A photo beside a colored panel
       <div className="px-4 py-2" style={{ background: sbg('cta') }}>
@@ -701,7 +721,28 @@ export function TemplatePreview({ spec, compact = false, className }) {
       ) : (
       <div className="mt-2 grid grid-cols-3 gap-2">
         {[0, 1, 2].map((i) =>
-          l.services === 'overlay' ? (
+          l.services === 'compact' ? (
+            // A small square photo beside the number and the title
+            <div key={i} className="flex items-center gap-1 p-1" style={card(son('services'))}>
+              <Photo className="size-6" style={{ borderRadius: imgR }} />
+              <div className="flex-1 space-y-0.5">
+                <p className="text-[5px] font-bold" style={{ color: ink.kicker }}>
+                  0{i + 1}
+                </p>
+                <div className="h-1 w-3/4 rounded-full" style={{ background: ink.heading }} />
+                <Lines n={1} color={ink.text} />
+              </div>
+            </div>
+          ) : l.services === 'framed' ? (
+            // A tall photo, the texts in a card overlapping its bottom edge
+            <div key={i} className="text-left">
+              <Photo className="h-14 w-full" style={{ borderRadius: imgR }} />
+              <div className="relative z-10 mx-1.5 -mt-4 space-y-1 p-1.5" style={card('alt')}>
+                <div className="h-1.5 w-2/3 rounded-full" style={{ background: ink.heading }} />
+                <Lines n={1} color={ink.text} />
+              </div>
+            </div>
+          ) : l.services === 'overlay' ? (
             <div key={i} className="flex h-16 flex-col justify-end p-1.5" style={{ ...photoBg(`linear-gradient(180deg, ${c.dark}11, ${c.dark}ee)`), borderRadius: imgR }}>
               <div className="h-1.5 w-2/3 rounded-full bg-white" />
               <p className="mt-1 text-[5px] font-semibold" style={{ color: c.secondary }}>
@@ -939,7 +980,22 @@ export function TemplatePreview({ spec, compact = false, className }) {
         </div>
       </div>
     );
-  const faqList = (
+  const faqList = l.faq === 'cards' ? (
+    // Every answer visible, in two columns of cards
+    <div className={cx('px-4', pad)} style={{ background: sbg('faq') }}>
+      {title(copy.faqKicker, copy.faqTitle)}
+      <div className="mt-2 grid grid-cols-2 gap-1.5">
+        {copy.faq.map((x, i) => (
+          <div key={i} className="space-y-0.5 p-1.5 text-left" style={card(son('faq'))}>
+            <p className="truncate text-[6px]" style={head}>
+              {x.q}
+            </p>
+            <Lines n={2} color={ink.text} />
+          </div>
+        ))}
+      </div>
+    </div>
+  ) : (
     <div className={cx('px-4', pad, left && 'flex gap-3')} style={{ background: sbg('faq') }}>
       <div className={left ? 'w-1/3' : ''}>{title(copy.faqKicker, copy.faqTitle)}</div>
       <div className={cx('space-y-1', left ? 'flex-1' : 'mx-auto mt-2 w-4/5')}>
@@ -975,7 +1031,7 @@ export function TemplatePreview({ spec, compact = false, className }) {
     );
   const SECTIONS = { about, features: why, cta, services, gallery, reviews, stats, process: processSteps, faq: faqList, highlights: highlightsStrip };
   // "edges: all": the colored and photo bands get the hero edge shape towards the plain sections next to them
-  const bands = new Set([l.features === 'cards' && 'features', (l.cta === 'banner' || l.cta === 'phone') && 'cta', band && 'reviews', l.stats === 'band' && 'stats'].filter(Boolean));
+  const bands = new Set([l.features === 'cards' && 'features', ['banner', 'phone', 'card'].includes(l.cta) && 'cta', band && 'reviews', l.stats === 'band' && 'stats'].filter(Boolean));
   const bandEdges = st.edges === 'all' && l.divider !== 'none';
 
   // --- Footer ---
