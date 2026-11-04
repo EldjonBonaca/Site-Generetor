@@ -235,3 +235,41 @@ test('Contact page: the AI gets the presentation written on the About page', asy
   assert.ok(note.includes(long) && !note.includes('<p>'));
   assert.equal(relatedContext(pages, pages[0]), '');
 });
+
+test('SVG logos: editor exports are cleaned and measured, active content is rejected', async () => {
+  const { inspectImage, prepareUpload } = await import('../src/lib/upload.js');
+  // Typical Illustrator export: XML prolog, comment, DOCTYPE with entities, foreignObject fallback, i:pgf data
+  const illustrator = `﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 27.0.0, SVG Export Plug-In -->
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd" [
+  <!ENTITY ns_ai "http://ns.adobe.com/AdobeIllustrator/10.0/">
+]>
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:i="&ns_ai;" x="0px" y="0px" viewBox="0 0 400 120" xml:space="preserve">
+<switch><foreignObject requiredExtensions="&ns_ai;" x="0" y="0" width="1" height="1"></foreignObject>
+<g i:extraneous="self"><path fill="#C8102E" d="M0 0h400v120H0z"/><text x="10" y="80" font-family="'Montserrat'">Logo on top</text></g></switch>
+<i:pgf id="adobe_illustrator_pgf"><![CDATA[eJzs]]></i:pgf>
+</svg>`;
+  const info = await inspectImage(Buffer.from(illustrator), 'logo.svg');
+  assert.equal(info.mime, 'image/svg+xml');
+  assert.deepEqual([info.width, info.height], [400, 120]);
+  const clean = info.buffer.toString('utf8');
+  assert.doesNotMatch(clean, /foreignObject|ENTITY|i:pgf|<!--/);
+  assert.match(clean, /<path fill="#C8102E"/);
+
+  const up = await prepareUpload({ buffer: Buffer.from(illustrator), originalname: 'Logo Azienda.SVG' });
+  assert.equal(up.info.mime, 'image/svg+xml');
+  assert.equal(up.info.width, 400);
+  assert.doesNotMatch(up.buffer.toString('utf8'), /foreignObject/);
+
+  const sized = await inspectImage(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="180px" viewBox="0 0 360 90"/>'), 'a.svg');
+  assert.deepEqual([sized.width, sized.height], [180, 45]);
+
+  for (const bad of [
+    '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>',
+    '<svg xmlns="http://www.w3.org/2000/svg"><a href="javascript:alert(1)"><rect/></a></svg>',
+    '<svg xmlns="http://www.w3.org/2000/svg"><foreignObject><body xmlns="http://www.w3.org/1999/xhtml"><iframe/></body></foreignObject></svg>'.replace('</foreignObject>', ''),
+  ]) {
+    await assert.rejects(inspectImage(Buffer.from(bad), 'x.svg'), /active content|not a valid/);
+  }
+});

@@ -722,11 +722,51 @@ function import_image(array $img) {
 	}
 	if ($img['mime'] !== 'image/svg+xml') {
 		wp_update_attachment_metadata($id, wp_generate_attachment_metadata($id, $dest));
+	} else {
+		// WordPress does not measure SVGs: without a size the logo (custom logo, image widgets) can show at 0 px
+		$size = svg_size((string) file_get_contents($dest));
+		$meta = array('file' => _wp_relative_upload_path($dest), 'sizes' => array());
+		if ($size) {
+			$meta['width'] = $size[0];
+			$meta['height'] = $size[1];
+		}
+		wp_update_attachment_metadata($id, $meta);
 	}
 	if ($img['alt'] !== '') {
 		update_post_meta($id, '_wp_attachment_image_alt', wp_slash($img['alt']));
 	}
 	return $id;
+}
+
+/** array(width, height) in px of an SVG (width / height of the root element, else its viewBox), or null. */
+function svg_size($svg) {
+	if (!preg_match('/<svg\b[^>]*>/i', $svg, $root)) {
+		return null;
+	}
+	$attr = function ($name) use ($root) {
+		return preg_match('/\s' . $name . '\s*=\s*["\']([^"\']*)["\']/i', $root[0], $m) ? $m[1] : '';
+	};
+	$px = function ($v) {
+		if (!preg_match('/^\s*([\d.]+)\s*(px|pt|pc|mm|cm|in)?\s*$/i', $v, $m)) {
+			return 0;
+		}
+		$units = array('px' => 1, 'pt' => 4 / 3, 'pc' => 16, 'mm' => 96 / 25.4, 'cm' => 96 / 2.54, 'in' => 96);
+		return (int) round((float) $m[1] * $units[strtolower(isset($m[2]) && $m[2] !== '' ? $m[2] : 'px')]);
+	};
+	$w = $px($attr('width'));
+	$h = $px($attr('height'));
+	$box = preg_split('/[\s,]+/', trim($attr('viewBox')));
+	if (count($box) === 4 && (float) $box[2] > 0 && (float) $box[3] > 0) {
+		if (!$w && !$h) {
+			$w = (int) round((float) $box[2]);
+			$h = (int) round((float) $box[3]);
+		} elseif (!$h) {
+			$h = (int) round($w * (float) $box[3] / (float) $box[2]);
+		} elseif (!$w) {
+			$w = (int) round($h * (float) $box[2] / (float) $box[3]);
+		}
+	}
+	return ($w > 0 && $h > 0) ? array($w, $h) : null;
 }
 
 /** file name => array(id, url) of the imported images. */
