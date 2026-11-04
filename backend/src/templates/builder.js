@@ -39,7 +39,7 @@ export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
  * Version of the generated structure. Field ids depend on it: a generation made with another
  * version cannot be exported (exporter.js), it has to be generated again.
  */
-export const BUILDER_VERSION = 13;
+export const BUILDER_VERSION = 14;
 
 export const DOC_ROLES = ['home', 'about', 'services', 'gallery', 'contact', 'single_post', 'header', 'footer'];
 
@@ -1894,7 +1894,7 @@ function uaeMenu(b, site, o) {
 
 /** Logo image, or the site name when the project has no logo. */
 function brand(b, site, o = {}) {
-  if (site.hasLogo) return b.picture('logo', { width: o.width || 180, mobileWidth: o.mobileWidth, align: o.align || 'left', size: 'medium', round: false });
+  if (site.hasLogo) return b.picture('logo', { width: o.width || 180, mobileWidth: o.mobileWidth, align: o.align || 'left', size: o.size || 'medium', round: false });
   return b.heading(site.siteName, { tag: 'p', size: 24, align: o.align || 'left', color: o.color || b.ink.kicker, fixed: true });
 }
 
@@ -2097,6 +2097,7 @@ function headerCss(b) {
   return `.esg-header{position:relative;z-index:100}
 .esg-header .esg-hd-brand,.esg-header .esg-hd-cta{flex:0 0 auto!important;width:auto!important;max-width:none}
 .esg-header .esg-hd-nav{flex:1 1 auto!important;width:auto!important;min-width:0}
+.esg-ft-brand .elementor-widget-image img{max-width:100%;max-height:130px;object-fit:contain;object-position:left center}
 .esg-nav .hfe-nav-menu__layout-horizontal .hfe-nav-menu{flex-wrap:nowrap}
 .esg-nav a.hfe-menu-item{white-space:nowrap}
 @media (max-width:1024px){
@@ -2238,11 +2239,12 @@ function footer(b, site) {
   // Social networks of the site (optional) below the logo
   const social = site.socials?.length ? [socialIcons(b, site.socials, { bg: light ? rgba(b.c.primary, 0.1) : 'rgba(255,255,255,0.1)', color: light ? b.c.primaryText : '#FFFFFF' })] : [];
   const cols = [
-    b.box([brand(b, site, { color: titleColor }), ...social], { width: 22, gap: 20 }),
-    b.box([...colTitle(b.L.links), list(menuItems(site))], { width: 22, gap: 12 }),
+    // The logo larger than in the header (a square logo is kept within a maximum height: footer CSS)
+    b.box([brand(b, site, { color: titleColor, width: 260, mobileWidth: 220, size: 'large' }), ...social], { width: 28, gap: 22, css: 'esg-ft-brand' }),
+    b.box([...colTitle(b.L.links), list(menuItems(site))], { width: 20, gap: 12 }),
   ];
-  if (site.services.length) cols.push(b.box([...colTitle(b.L.services), list(site.services.map((s) => ({ text: s.name, url: s.url })))], { width: 22, gap: 12 }));
-  cols.push(b.box([...colTitle(b.L.contacts), list(contactItems(site))], { width: 22, gap: 12 }));
+  if (site.services.length) cols.push(b.box([...colTitle(b.L.services), list(site.services.map((s) => ({ text: s.name, url: s.url })))], { width: 20, gap: 12 }));
+  cols.push(b.box([...colTitle(b.L.contacts), list(contactItems(site))], { width: 20, gap: 12 }));
   // "wordmark" decor: the business name huge and faint across the bottom of the footer, cropped at the edges
   const wordmark = [];
   if (b.st.decor === 'wordmark') {
