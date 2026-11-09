@@ -276,7 +276,7 @@ export const styleLabel = (t, key, value) => t(STYLE_VALUE_LABELS[`${key}.${valu
 
 const COLOR_LABELS = { primary: 'Primary', secondary: 'Secondary (buttons)', accent: 'Accent', heading: 'Titles', text: 'Text', background: 'Light background', dark: 'Dark (footer, overlays)' };
 const SPACING_LABELS = { compact: 'Compact', normal: 'Normal', airy: 'Airy' };
-const LANGUAGE_OPTIONS = { it: 'Italiano', en: 'English', es: 'Español', fr: 'Français', de: 'Deutsch', pt: 'Português' };
+export const LANGUAGE_OPTIONS = { it: 'Italiano', en: 'English', es: 'Español', fr: 'Français', de: 'Deutsch', pt: 'Português' };
 
 export const variantLabel = (t, section, value) => t(VARIANT_LABELS[`${section}.${value}`] || value);
 

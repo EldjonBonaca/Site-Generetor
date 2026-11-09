@@ -139,7 +139,7 @@ const SECTION_LISTS = {
   highlights: '"highlights": [4 short guarantees typical of the category, max 40 chars each]',
 };
 
-function technicalInstructions(languageLabel, sections = null, signatures = null) {
+export function technicalInstructions(languageLabel, sections = null, signatures = null) {
   const optionalKeys = Object.values(SECTION_COPY).flat();
   const copyShape = Object.entries(COPY_KEYS)
     .filter(([k]) => !optionalKeys.includes(k) || Object.entries(SECTION_COPY).some(([sec, keys]) => keys.includes(k) && (!sections || sections.includes(sec))))

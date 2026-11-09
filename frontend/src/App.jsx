@@ -1,6 +1,6 @@
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { Bot, FolderKanban, Images, LayoutTemplate, Languages, LogOut, Package, Plug, UserRound } from 'lucide-react';
+import { Bot, FolderKanban, Globe, Images, LayoutTemplate, Languages, LogOut, Package, Plug, UserRound } from 'lucide-react';
 import { api } from './api.js';
 import { useT, LOCALES } from './i18n/index.jsx';
 import { cx } from './components/ui.jsx';
@@ -9,6 +9,7 @@ import ProjectsPage from './pages/ProjectsPage.jsx';
 import ProjectWizard from './pages/ProjectWizard.jsx';
 import TemplatesPage from './pages/TemplatesPage.jsx';
 import TemplateKitsPage from './pages/TemplateKitsPage.jsx';
+import FromSitePage from './pages/FromSitePage.jsx';
 import PluginsPage from './pages/PluginsPage.jsx';
 import GalleryPage from './pages/GalleryPage.jsx';
 import ProvidersPage from './pages/ProvidersPage.jsx';
@@ -49,6 +50,7 @@ export default function App() {
     { to: '/projects', label: t('Projects'), icon: FolderKanban },
     { to: '/gallery', label: t('Gallery'), icon: Images },
     { to: '/templates', label: t('Templates'), icon: LayoutTemplate },
+    { to: '/from-site', label: t('From a website'), icon: Globe },
     { to: '/template-kits', label: t('Template Kit'), icon: Package },
     { to: '/settings/providers', label: t('AI Providers'), icon: Bot },
     { to: '/settings/plugins', label: t('Plugins'), icon: Plug },
@@ -94,6 +96,7 @@ export default function App() {
             <Route path="/projects/:id/*" element={<ProjectWizard />} />
             <Route path="/gallery" element={<GalleryPage />} />
             <Route path="/templates" element={<TemplatesPage />} />
+            <Route path="/from-site" element={<FromSitePage />} />
             <Route path="/template-kits" element={<TemplateKitsPage />} />
             <Route path="/settings/providers" element={<ProvidersPage />} />
             <Route path="/settings/plugins" element={<PluginsPage />} />

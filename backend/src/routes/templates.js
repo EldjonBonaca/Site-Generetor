@@ -21,6 +21,7 @@ import { COLOR_KEYS, FONTS, ICONS, LAYOUTS, SPACINGS, STYLE_OPTIONS, WEIGHTS, sa
 import { compareTemplates, directionById, directionList, diversify } from '../templates/directions.js';
 import { generateTemplateSpec } from '../templates/generate.js';
 import { analyzeCategory, sanitizeProfile } from '../templates/industry.js';
+import { analyzeReference, fetchReference, generateFromReference } from '../templates/reference.js';
 import { touch } from './projects.js';
 import { canEditTemplate, canUseTemplate, forbidden, requireOwnProvider } from '../lib/owner.js';
 
@@ -192,6 +193,32 @@ router.post('/template-categories/:cid/templates/generate', async (req, res) => 
       profile,
       analyzed: analysisTokens > 0,
     });
+  } catch (err) {
+    if (err instanceof AIError) throw new HttpError(502, err.message);
+    throw err;
+  }
+});
+
+/**
+ * Template that follows a reference website (not saved): the server reads the site (page + CSS),
+ * measures its design and the AI turns it into a template of the category, with new sample texts.
+ * Body: { providerId, url, language?, instructions? }
+ * -> { spec, tokens, generated_by, reference: { url, title, colors, fonts, radius, darkPages, menu, outline } }
+ */
+router.post('/template-categories/:cid/templates/from-site', async (req, res) => {
+  const cat = requireCategory(req.params.cid);
+  const row = requireProvider(req.body?.providerId, req.user);
+  const page = await fetchReference(req.body?.url);
+  const analysis = analyzeReference(page);
+  try {
+    const { spec, tokens } = await generateFromReference(createProvider(row), {
+      category: cat,
+      analysis,
+      language: language(req.body?.language),
+      instructions: String(req.body?.instructions ?? '').slice(0, 2000),
+    });
+    const { report, ...reference } = analysis;
+    res.json({ spec, tokens, generated_by: `${row.name} · ${row.model}`, reference: { ...reference, outline: reference.outline.slice(0, 60) } });
   } catch (err) {
     if (err instanceof AIError) throw new HttpError(502, err.message);
     throw err;

@@ -1213,3 +1213,65 @@ test('global colors: the palette in the Elementor kit, the documents and the sit
   assert.match(site.siteCss, /var\(--e-global-color-primary,#1F4E79\)/);
   assert.doesNotMatch(site.siteCss, /#1F4E79(?!\))/, 'no fixed primary color left in the CSS');
 });
+
+test('template from a reference website: safe fetch, analysis of the design, template with its colors', async () => {
+  const { fetchReference, analyzeReference, generateFromReference, isPrivateAddress, referenceUrl } = await import('../src/templates/reference.js');
+  assert.ok(isPrivateAddress('127.0.0.1') && isPrivateAddress('10.1.2.3') && isPrivateAddress('192.168.1.5') && isPrivateAddress('169.254.169.254') && isPrivateAddress('::1'));
+  assert.ok(!isPrivateAddress('93.184.216.34'));
+  assert.equal(referenceUrl('esempio.it/chi-siamo#top').href, 'https://esempio.it/chi-siamo');
+  assert.throws(() => referenceUrl('ftp://x.it'), /http/);
+
+  const html = `<!doctype html><html lang="it"><head><title>Idraulica Bianchi – Pronto intervento</title>
+<meta name="description" content="Idraulici a Torino">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&family=Lato&display=swap">
+<link rel="stylesheet" href="/wp-content/uploads/elementor/css/post-5.css">
+<style>body{background:#ffffff}</style></head><body>
+<header><div class="top"><a href="tel:+39011">011 123</a></div><nav><a href="/">Home</a><a href="/servizi">Servizi</a><a href="/contatti">Contatti</a></nav></header>
+<section class="elementor-top-section elementor-background-overlay"><div class="swiper"><h1>Pronto intervento idraulico</h1></div></section>
+<section class="x"><h2>Chi siamo</h2><img src="a.jpg"></section>
+<div class="elementor-widget-counter"><h3>25 anni</h3></div>
+<div class="elementor-testimonial"><h2>Dicono di noi</h2></div>
+<div class="elementor-accordion"><h2>Domande frequenti</h2></div>
+<form class="wpcf7-form"></form>
+<footer>© Bianchi</footer><script>var x = 1</script></body></html>`;
+  const css = `.elementor-kit-5{--e-global-color-primary:#0A6E8A;--e-global-color-secondary:#F4B400;--e-global-color-text:#3A3A3A;--e-global-typography-primary-font-family:"Montserrat"}
+.elementor-button{border-radius:50px;background-color:#0A6E8A}h2{text-transform:uppercase;color:#0A6E8A}`;
+  const calls = [];
+  const fakeFetch = async (url) => {
+    calls.push(url);
+    const body = url.endsWith('.css') ? css : html;
+    return new Response(body, { status: 200, headers: { 'content-type': url.endsWith('.css') ? 'text/css' : 'text/html' } });
+  };
+  const publicDns = async () => [{ address: '93.184.216.34', family: 4 }];
+  const page = await fetchReference('idraulicabianchi.it', { fetchImpl: fakeFetch, lookup: publicDns });
+  assert.deepEqual(calls, ['https://idraulicabianchi.it/', 'https://idraulicabianchi.it/wp-content/uploads/elementor/css/post-5.css']);
+  const a = analyzeReference(page);
+  assert.equal(a.title, 'Idraulica Bianchi – Pronto intervento');
+  assert.equal(a.language, 'it');
+  assert.deepEqual(a.colors.globals, { primary: '#0A6E8A', secondary: '#F4B400', text: '#3A3A3A' });
+  assert.equal(a.fonts[0], 'Montserrat');
+  assert.ok(a.fonts.includes('Lato'));
+  assert.equal(a.radius, 50);
+  assert.ok(a.uppercase);
+  assert.deepEqual(a.menu, ['Home', 'Servizi', 'Contatti']);
+  for (const item of ['H1: Pronto intervento idraulico', '[slider]', '[counters / key numbers]', '[reviews / testimonials]', '[FAQ / accordion]', '[contact form]', '[FOOTER]']) assert.ok(a.outline.includes(item), `${item} in ${a.outline.join(' / ')}`);
+  assert.match(a.report, /top bar with phone/);
+  assert.doesNotMatch(a.report, /var x/, 'no scripts');
+
+  // A private address is never fetched, also after a redirect
+  await assert.rejects(fetchReference('http://intranet.example', { fetchImpl: fakeFetch, lookup: async () => [{ address: '192.168.0.10' }] }), /local network/);
+  const redirect = async () => new Response('', { status: 302, headers: { location: 'http://127.0.0.1/admin' } });
+  await assert.rejects(fetchReference('https://evil.example', { fetchImpl: redirect, lookup: async (h) => [{ address: h === '127.0.0.1' ? '127.0.0.1' : '93.184.216.34' }] }), /local network/);
+
+  // The AI answer becomes a template with the global colors of the reference, kept exactly
+  const { spec } = await generateFromReference(new MockProvider({}), { category: { name: 'Idraulici' }, analysis: a, language: 'it' });
+  assert.equal(spec.style.colors.primary, '#0A6E8A');
+  assert.equal(spec.style.colors.secondary, '#F4B400');
+  assert.ok(buildSite(spec, sampleSite()).docs.home.doc.content.length > 3, 'an ordinary template: the site builds');
+});
+
+test('reference website: the default colors of a new Elementor kit are not the brand', async () => {
+  const { referenceColors } = await import('../src/templates/reference.js');
+  assert.equal(referenceColors({ colors: { globals: { primary: '#6EC1E4', secondary: '#54595F', text: '#7A7A7A', accent: '#61CE70' } } }), null);
+  assert.deepEqual(referenceColors({ colors: { globals: { primary: '#0A6E8A', accent: '#61CE70' } } }), { primary: '#0A6E8A' });
+});
