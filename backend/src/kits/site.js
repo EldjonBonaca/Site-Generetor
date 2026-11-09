@@ -24,6 +24,8 @@
  * or single post template is built by the template builder with the kit colors.
  */
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { analyzeDocument, getRoot, getAtPath, isGalleryArray, looksLikePhone, EMAIL_IN_TEXT } from '../elementor/analyze.js';
 import { buildSite } from '../templates/builder.js';
 import { sanitizeSpec } from '../templates/spec.js';
@@ -31,6 +33,7 @@ import { stripHtml } from '../lib/util.js';
 import { mapIframe, siteMap } from '../lib/maps.js';
 import { socialOf } from '../lib/socials.js';
 import { loadKitTemplate } from './read.js';
+import { KIT_SITE_CSS } from './from-site.js';
 import { SECTION_TYPES } from './analysis.js';
 
 /** Options of analyzeDocument for kit documents (texts of HTML widgets, counters and prices are demo content too). */
@@ -490,6 +493,16 @@ const hasContactForm = (content) => {
  *   'composed' (a page the kit does not have) or 'builder';
  *   origin = the document before the generator touched it (for the structure check of the export)
  */
+/** site.css of a kit made from a website (next to its manifest), or null. */
+function kitSiteCss(kit) {
+  if (!kit.dir) return null;
+  for (const dir of [kit.dir, ...fs.readdirSync(kit.dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => path.join(kit.dir, d.name))]) {
+    const file = path.join(dir, KIT_SITE_CSS);
+    if (fs.existsSync(file) && fs.existsSync(path.join(dir, 'manifest.json'))) return fs.readFileSync(file, 'utf8');
+  }
+  return null;
+}
+
 export function buildKitSite(kit, site, custom = {}) {
   const cache = new Map();
   const load = (id) => {
@@ -577,8 +590,10 @@ export function buildKitSite(kit, site, custom = {}) {
     docs[role] = { ...prepareDocument(doc, role, sections, site, kit.demoImages), origin, source, templateTitle: id ? titleOf(id) : null };
     delete docs[role].doc._role;
   }
-  // A header made by the template builder (the kit has none) needs the site CSS of the builder
-  const siteCss = docs.header?.source === 'builder' ? builder.siteCss : null;
+  // A header made by the template builder (the kit has none) needs the site CSS of the builder; a kit made
+  // from a website (kits/from-site.js) brings the Elementor CSS of that site
+  const kitCss = kitSiteCss(kit);
+  const siteCss = [kitCss, docs.header?.source === 'builder' ? builder.siteCss : null].filter(Boolean).join('\n') || null;
   return { docs, globalStyles: kit.info.globalStyles || null, siteCss, analyzeOptions: KIT_ANALYZE_OPTIONS };
 }
 

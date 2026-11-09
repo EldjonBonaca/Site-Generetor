@@ -71,7 +71,7 @@ async function assertPublicHost(url, lookup) {
 }
 
 /** GET with the safety limits: public hosts only (checked again on every redirect), max size and time. */
-async function safeGet(start, { maxBytes, fetchImpl, lookup, accept }) {
+export async function safeGet(start, { maxBytes, fetchImpl = fetch, lookup = dns.lookup, accept = "*/*" }) {
   let url = start;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     await assertPublicHost(url, lookup);

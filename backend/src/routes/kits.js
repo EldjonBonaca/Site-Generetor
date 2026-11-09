@@ -25,6 +25,7 @@ import { analyzeKit, heuristicAnalysis, effectiveRoles, describeGlobalStyles, KI
 import { touch } from './projects.js';
 import { loadContext, pageTitle } from '../generation/plan.js';
 import { kitLayouts, sectionTemplates, validLayout } from '../kits/site.js';
+import { crawlSite, writeKitFromSite } from '../kits/from-site.js';
 
 const router = Router();
 
@@ -181,6 +182,53 @@ router.post('/template-kits', upload.single('file'), async (req, res) => {
     }
   }
   res.status(201).json({ ...serialize(requireKit(id), true), analysis_error: analysisError });
+});
+
+/** Read a kit folder and save it on the kit row (heuristic roles; the demo images are measured in the background). */
+function registerKitDir(id, extracted, preferredName) {
+  const info = readKit(extracted);
+  if (!info.templates.some((t) => t.valid)) {
+    throw badRequest('No Elementor template found in this zip: upload the Template Kit zip (manifest.json + templates/*.json) or an Elementor export.');
+  }
+  const name = String(preferredName || info.title || 'Template Kit').trim().slice(0, 200) || 'Template Kit';
+  const row = { id, name, dir: path.relative(config.storageDir, extracted).replace(/\\/g, '/') };
+  const analysis = heuristicAnalysis(info.templates, outlines(row, info));
+  run('UPDATE template_kits SET name = ?, dir = ?, format = ?, info_json = ?, analysis_json = ? WHERE id = ?', name, row.dir, info.format, JSON.stringify(info), JSON.stringify(analysis), id);
+  measureDemoImages({ dir: extracted, info });
+}
+
+/**
+ * A kit with the exact structure of a website built with Elementor (kits/from-site.js): its pages,
+ * header and footer as Elementor templates, its Elementor CSS, colors and fonts. The texts and the
+ * photos are the ones of the project that uses it. Body: { url, name?, providerId? (AI analysis) }
+ * -> the kit + { from_site: { pages, header, footer, notes } }
+ */
+router.post('/template-kits/from-site', async (req, res) => {
+  const providerRow = req.body?.providerId ? requireOwnProvider(req.body.providerId, req.user) : null;
+  const site = await crawlSite(req.body?.url);
+  const host = new URL(site.url).hostname.replace(/^www\./, '');
+  const { lastInsertRowid } = run('INSERT INTO template_kits (name, file_name, uploaded_by) VALUES (?, ?, ?)', host.slice(0, 200), site.url.slice(0, 255), req.user || null);
+  const id = Number(lastInsertRowid);
+  const dir = path.join(config.kitsDir, String(id));
+  let result;
+  try {
+    const extracted = path.join(dir, 'kit');
+    result = writeKitFromSite(site, extracted);
+    registerKitDir(id, extracted, String(req.body?.name || '').trim() || `${host} – ${result.title}`);
+  } catch (err) {
+    run('DELETE FROM template_kits WHERE id = ?', id);
+    fs.rmSync(dir, { recursive: true, force: true });
+    throw err;
+  }
+  let analysisError = null;
+  if (providerRow) {
+    try {
+      await analyzeAndSave(requireKit(id), providerRow);
+    } catch (err) {
+      analysisError = err.message;
+    }
+  }
+  res.status(201).json({ ...serialize(requireKit(id), true), analysis_error: analysisError, from_site: { url: site.url, pages: result.pages, header: result.header, footer: result.footer, notes: result.notes } });
 });
 
 /** AI analysis (again). Body: { providerId } */
