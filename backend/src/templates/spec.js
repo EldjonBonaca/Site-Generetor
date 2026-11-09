@@ -320,6 +320,29 @@ const icon = (v, fallback) => {
  * Make any AI answer (or user edit) a valid spec: unknown values fall back to the defaults,
  * colors must be hex, fonts / icons / layouts come from the allowed lists, texts are trimmed.
  */
+/** Labels of a figure counted in years (of experience, of activity…), in the languages of the sites. */
+const YEARS_LABEL = /\b(anni|anno|years?|años|año|ans|années|jahre|jahren|anos)\b|esperienz|experienc|experiencia|expérience|erfahrung|in attivit|sul mercato|on the market/i;
+/** Highest believable number of years for a business (an older one says "dal 1890", not "130 anni"). */
+export const MAX_YEARS = 60;
+
+/**
+ * A key figure made believable for its label: years of experience never above MAX_YEARS (e.g.
+ * "1200+" -> "25+"), a percentage never above 100. The corrected value, or null when it is fine.
+ * numeric: a bare number (counter widget).
+ */
+export function believableFigure(value, label, numeric = false) {
+  const text = String(value ?? '');
+  const m = /\d[\d.,\s]*/.exec(text);
+  if (!m) return null;
+  const digits = m[0].trimEnd();
+  const n = Number(digits.replace(/[.,\s]/g, ''));
+  let wanted = null;
+  if (YEARS_LABEL.test(String(label ?? '').replace(/<[^>]+>/g, ' ')) && n > MAX_YEARS) wanted = 25;
+  else if (text.includes('%') && n > 100) wanted = 100;
+  if (wanted === null) return null;
+  return numeric ? String(wanted) : text.replace(digits, String(wanted));
+}
+
 export function sanitizeSpec(raw) {
   const r = raw && typeof raw === 'object' ? raw : {};
   const d = DEFAULT_SPEC;
@@ -330,7 +353,11 @@ export function sanitizeSpec(raw) {
   const list = (arr, n, map) => Array.from({ length: n }, (_, i) => map((Array.isArray(arr) ? arr : [])[i] || {}, i));
   copy.features = list(copyIn.features, MAX_FEATURES, (f, i) => ({ title: str(f.title, 50, d.copy.features[i].title), text: str(f.text, 160, d.copy.features[i].text) }));
   copy.reviews = list(copyIn.reviews, 3, (rv, i) => ({ name: str(rv.name, 50, d.copy.reviews[i].name), role: str(rv.role, 50, d.copy.reviews[i].role), text: str(rv.text, 300, d.copy.reviews[i].text) }));
-  copy.stats = list(copyIn.stats, 4, (x, i) => ({ value: str(x.value, 12, d.copy.stats[i].value), label: str(x.label, 40, d.copy.stats[i].label) }));
+  copy.stats = list(copyIn.stats, 4, (x, i) => {
+    const value = str(x.value, 12, d.copy.stats[i].value);
+    const label = str(x.label, 40, d.copy.stats[i].label);
+    return { value: believableFigure(value, label) ?? value, label };
+  });
   copy.steps = list(copyIn.steps, 4, (x, i) => ({ title: str(x.title, 50, d.copy.steps[i].title), text: str(x.text, 160, d.copy.steps[i].text) }));
   copy.faq = list(copyIn.faq, 4, (x, i) => ({ q: str(x.q, 120, d.copy.faq[i].q), a: str(x.a, 400, d.copy.faq[i].a) }));
   copy.highlights = list(copyIn.highlights, 4, (x, i) => str(x, 40, d.copy.highlights[i]));

@@ -227,7 +227,7 @@ export function analyzeDocument(doc, { prefix = 'page', heroName = null, htmlTex
           section: topIndex,
           label: `${widget} · ${key.replace(/_/g, ' ')}`,
           maxLength: format === 'link' ? 200 : format === 'number' ? 10 : Math.max(20, Math.round(plainLen * 1.4)),
-          ...(format === 'number' ? { hint: 'a number only (digits, no words or symbols)' } : {}),
+          ...(format === 'number' ? { hint: 'a number only (digits, no words or symbols), believable for its label: years of experience at most 50, a percentage at most 100' } : {}),
         });
         if (format !== 'link' && format !== 'number') collectContacts(original);
       };

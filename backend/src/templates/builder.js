@@ -1404,7 +1404,7 @@ function homeGallery(b, site) {
 
 /** AI hints of key figure i (shared: the same figure on the Home and About pages and in the photo badge). */
 const statHints = (i) => ({
-  value: { hint: `key figure ${i + 1} of 4 of the business (e.g. "20+" years, "24h" response time): short, realistic for this business — the client will check it`, max: 12, share: `stat${i + 1}.value` },
+  value: { hint: `key figure ${i + 1} of 4 of the business (e.g. "20+" years, "24h" response time): short, realistic for this business — the client will check it; years of experience at most 50, percentages at most 100%`, max: 12, share: `stat${i + 1}.value` },
   label: { hint: `label of key figure ${i + 1} (2–4 words)`, max: 40, share: `stat${i + 1}.label` },
 });
 

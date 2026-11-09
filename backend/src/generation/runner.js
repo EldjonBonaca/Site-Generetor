@@ -11,6 +11,7 @@ import { buildPagePrompt, estimateTokens } from './prompt-builder.js';
 import { loadContext, buildPages, analyzePage, classifyField, siteLinks, fallbackLink } from './plan.js';
 import { sitePromptFor } from './site-prompt.js';
 import { sleep, stripHtml } from '../lib/util.js';
+import { believableFigure } from '../templates/spec.js';
 
 const CHUNK_SIZE = 45; // max fields per AI call, keeps answers reliable on long pages
 const CONTENT_RETRIES = 2; // retries when the JSON is invalid/incomplete
@@ -61,6 +62,9 @@ export function initPages(ctx) {
           original: f.original,
           value: cls.source === 'auto' ? cls.value : null,
           source: cls.source,
+          // Key figures (fixKeyFigures): the figure and its label are paired by these
+          ...(f.share ? { share: f.share } : {}),
+          ...(f.widget === 'counter' ? { key: f.key, ref: f.ref } : {}),
         };
         if (f.share && cls.source === 'ai') {
           const owner = owners.get(f.share);
@@ -217,6 +221,35 @@ export async function generatePage({ provider, ctx, page, promptRow, log, onlyFi
       }
     }
   }
+  const fixed = fixKeyFigures(page);
+  if (fixed) log('warn', `${page.title}: ${fixed} key figure(s) not believable (e.g. too many years of experience) corrected: check them with the client.`);
+}
+
+/**
+ * Key figures written by the AI made believable (believableFigure: e.g. 1200 years of experience -> 25). Pairs: the figures of the templates (shared keys
+ * statN.value / statN.label) and the counters of Template Kits (ending_number + title of one widget).
+ * Returns the number of figures corrected.
+ */
+export function fixKeyFigures(page) {
+  const pairs = [];
+  const byShare = new Map(page.fields.filter((f) => f.share && f.source !== 'shared').map((f) => [f.share, f]));
+  for (const [share, value] of byShare) {
+    const m = /^(stat\d+)\.value$/.exec(share);
+    if (m && byShare.get(`${m[1]}.label`)) pairs.push([value, byShare.get(`${m[1]}.label`)]);
+  }
+  const elOf = (f) => String(f.ref || '').split(':')[0];
+  for (const n of page.fields.filter((f) => f.widget === 'counter' && f.key === 'ending_number')) {
+    const title = page.fields.find((f) => f.widget === 'counter' && f.key === 'title' && elOf(f) === elOf(n));
+    if (title) pairs.push([n, title]);
+  }
+  let fixed = 0;
+  for (const [valueField, labelField] of pairs) {
+    const better = believableFigure(valueField.value, labelField.value ?? labelField.original, valueField.format === 'number');
+    if (better === null) continue;
+    valueField.value = better;
+    fixed++;
+  }
+  return fixed;
 }
 
 /** Texts of the About page (the presentation of the business) given to the AI, at most this many characters. */

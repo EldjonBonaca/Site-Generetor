@@ -308,3 +308,28 @@ test('site icon: a logo made only of words keeps all of it', async () => {
   for (let y = 0; y < h; y++) for (let x = 50; x < 150; x++) data[(y * w + x) * 4 + 3] = 0; // now a 50 px square on the left
   assert.deepEqual(symbolColumns(data, w, h, 4, [0, 0, 0, 0]), [0, 50]);
 });
+
+test('key figures: 1200 years of experience or 300% are corrected, believable figures stay', async () => {
+  const { believableFigure } = await import('../src/templates/spec.js');
+  const { fixKeyFigures } = await import('../src/generation/runner.js');
+  assert.equal(believableFigure('1200+', 'Anni di esperienza'), '25+');
+  assert.equal(believableFigure('1.200', 'Years of experience'), '25');
+  assert.equal(believableFigure('1200', 'Anni di esperienza', true), '25');
+  assert.equal(believableFigure('30+', 'Anni di esperienza'), null);
+  assert.equal(believableFigure('1200+', 'Clienti soddisfatti'), null, 'customers can be many');
+  assert.equal(believableFigure('300%', 'Clienti soddisfatti'), '100%');
+  assert.equal(believableFigure('24h', 'Tempo di risposta'), null);
+
+  const page = {
+    fields: [
+      { id: 'a', share: 'stat1.value', value: '1200+', source: 'ai' },
+      { id: 'b', share: 'stat1.label', value: 'Anni di esperienza', source: 'ai' },
+      { id: 'c', share: 'stat2.value', value: '850', source: 'ai' },
+      { id: 'd', share: 'stat2.label', value: 'Lavori completati', source: 'ai' },
+      { id: 'k1', widget: 'counter', key: 'ending_number', ref: 'x1:ending_number', format: 'number', value: '1500', source: 'ai' },
+      { id: 'k2', widget: 'counter', key: 'title', ref: 'x1:title', value: 'Anni nel settore', source: 'ai' },
+    ],
+  };
+  assert.equal(fixKeyFigures(page), 2);
+  assert.deepEqual(page.fields.map((f) => f.value), ['25+', 'Anni di esperienza', '850', 'Lavori completati', '25', 'Anni nel settore']);
+});
