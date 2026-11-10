@@ -441,10 +441,40 @@ const STATE_CLASS = /(^|[-_])(active|open|opened|show|shown|visible|hidden|anima
 /** Does a selector only use classes the pages have (or classes set by scripts)? used: Set of classes, null = everything. */
 function selectorUsed(selector, used) {
   if (!used) return true;
-  for (const m of selector.replace(/\[[^\]]*\]/g, '').matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) {
+  // Classes inside :is() / :where() / :not() / :has() do not decide (one of a list is enough, :not wants it absent)
+  let plain = selector.replace(/\[[^\]]*\]/g, '');
+  for (let k = 0; k < 5 && /\([^()]*\)/.test(plain); k++) plain = plain.replace(/\([^()]*\)/g, '');
+  for (const m of plain.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) {
     if (!used.has(m[1]) && !STATE_CLASS.test(m[1])) return false;
   }
   return true;
+}
+
+/**
+ * The selectors of a selector list, split at its own commas only: not the ones inside :is() / :where() /
+ * :not() or [attr="a,b"] (a selector cut there would leave a parenthesis open, which makes the browser
+ * drop all the CSS after it).
+ */
+export function splitSelectors(list) {
+  const out = [];
+  let depth = 0;
+  let quote = '';
+  let start = 0;
+  for (let i = 0; i < list.length; i++) {
+    const ch = list[i];
+    if (quote) {
+      if (ch === '\\') i++;
+      else if (ch === quote) quote = '';
+    } else if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === '(' || ch === '[') depth++;
+    else if (ch === ')' || ch === ']') depth = Math.max(0, depth - 1);
+    else if (ch === ',' && depth === 0) {
+      out.push(list.slice(start, i));
+      start = i + 1;
+    }
+  }
+  out.push(list.slice(start));
+  return out;
 }
 
 /** Classes used in some HTML. */
@@ -465,16 +495,36 @@ export function keepRulesFor(css, ids, used = null, seen = new Set(), scope = ''
   let out = '';
   let i = 0;
   const n = css.length;
+  // Position of the next character `ch` outside quoted strings (content:"{" is not a block)
+  const next = (ch, from) => {
+    let quote = '';
+    for (let k = from; k < n; k++) {
+      const c = css[k];
+      if (quote) {
+        if (c === '\\') k++;
+        else if (c === quote) quote = '';
+      } else if (c === '"' || c === "'") quote = c;
+      else if (c === ch) return k;
+    }
+    return -1;
+  };
   while (i < n) {
-    const open = css.indexOf('{', i);
+    const open = next('{', i);
     if (open < 0) break;
-    const head = css.slice(i, open).trim();
-    // Matching closing brace (nested blocks)
+    // A stray "}" before the selector (broken source): not part of it
+    const head = css.slice(i, open).replace(/^[\s};]+/, '').trim();
+    // Matching closing brace (nested blocks), outside strings
     let depth = 1;
     let j = open + 1;
+    let quote = '';
     while (j < n && depth) {
-      if (css[j] === '{') depth++;
-      else if (css[j] === '}') depth--;
+      const c = css[j];
+      if (quote) {
+        if (c === '\\') j++;
+        else if (c === quote) quote = '';
+      } else if (c === '"' || c === "'") quote = c;
+      else if (c === '{') depth++;
+      else if (c === '}') depth--;
       j++;
     }
     const body = css.slice(open + 1, j - 1);
@@ -489,8 +539,7 @@ export function keepRulesFor(css, ids, used = null, seen = new Set(), scope = ''
       out += once(`${head}{${body}}`);
       continue;
     }
-    const selectors = head
-      .split(',')
+    const selectors = splitSelectors(head)
       .map((s) => s.trim())
       .filter((s) => {
         const named = [...s.matchAll(/\.elementor-element-([0-9a-z]{6,8})\b/g)].map((m) => m[1]);
@@ -684,7 +733,14 @@ export function writeKitFromSite(site, dir) {
 
   const styles = globalStylesFromCss(css);
   if (styles) fs.writeFileSync(path.join(dir, 'site-settings.json'), JSON.stringify({ settings: styles }));
-  fs.writeFileSync(path.join(dir, 'site.css'), `${fontImports(css, site.fontLinks).join('\n')}\n${themeVariables(css, site.vars)}${css}`);
+  // Add-on widgets kept as HTML: their scripts (moving rows, sliders) do not run on the new site, so what
+  // they place beyond the edge of the page is cut instead of widening the whole page
+  // Their blocks hidden until a script reveals them (on load / on scroll) are shown as they are
+  const addonSafety = notes.size
+    ? '\n.elementor-widget-html{max-width:100%;overflow-x:clip}' +
+      '\n.elementor-widget-html :is([class*="--load"],[class*="scroll-reveal"],[class*="-reveal "],.wow,[data-aos],.elementor-invisible,.reveal,.is-hidden-until-load){opacity:1!important;visibility:visible!important}'
+    : '';
+  fs.writeFileSync(path.join(dir, 'site.css'), `${fontImports(css, site.fontLinks).join('\n')}\n${themeVariables(css, site.vars)}${css}${addonSafety}`);
   // Elementor frontend of the other site, for the preview only (kits/preview.js)
   if (site.coreCss?.length) fs.writeFileSync(path.join(dir, 'preview.css'), adaptCss(site.coreCss, ids, used).css);
   const title = (site.pages[0].root.querySelector('title')?.text || new URL(site.url).hostname).replace(/\s+/g, ' ').trim().slice(0, 150);

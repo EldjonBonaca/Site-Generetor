@@ -178,3 +178,15 @@ test('global styles and CSS helpers', () => {
   const { backgrounds } = adaptCss([{ base: 'https://a.example/x/', text: '.elementor-1 .elementor-element.elementor-element-abc1234::before{background-image:url(a.jpg)}' }], new Map([['abc1234', {}]]));
   assert.equal(backgrounds.size, 0, 'overlays / pseudo elements are not photos of the element');
 });
+
+test('CSS filter: commas inside :where() / :is() / attributes and braces inside strings keep the rules whole', async () => {
+  const { keepRulesFor, splitSelectors } = await import('../src/kits/from-site.js');
+  assert.deepEqual(splitSelectors(':root :where(.a, .b), .c[data-x="1,2"], h1'), [':root :where(.a, .b)', ' .c[data-x="1,2"]', ' h1']);
+  const used = new Set(['a', 'c']);
+  const out = keepRulesFor(':root :where(.a, .unused){color:red}.x:after{content:"}"}h1{font-weight:900}.c{margin:0}', new Map(), used);
+  assert.match(out, /:root :where\(\.a, \.unused\)\{color:red\}/, 'the selector is kept whole (classes inside :where() do not remove it)');
+  assert.match(out, /h1\{font-weight:900\}/, 'the rules after a brace inside a string are read');
+  assert.match(out, /\.c\{margin:0\}/);
+  // Every parenthesis of the result is closed
+  assert.equal((out.match(/\(/g) || []).length, (out.match(/\)/g) || []).length);
+});
