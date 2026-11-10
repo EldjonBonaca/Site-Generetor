@@ -55,7 +55,7 @@ const about = page(
   <div class="elementor-column elementor-col-50 elementor-top-column elementor-element elementor-element-c01a001" data-id="c01a001" data-element_type="column"><div class="elementor-widget-wrap elementor-element-populated">
    <div class="elementor-element elementor-element-b000001 elementor-widget elementor-widget-heading" data-id="b000001" data-element_type="widget" data-widget_type="heading.default"><div class="elementor-widget-container"><h2 class="elementor-heading-title">Chi siamo</h2></div></div>
   </div></div>
-  <div class="elementor-column elementor-col-50 elementor-top-column elementor-element elementor-element-c01a002" data-id="c01a002" data-element_type="column"><div class="elementor-widget-wrap"></div></div>
+  <div class="elementor-column elementor-col-50 elementor-top-column elementor-element elementor-element-c01a002" data-id="c01a002" data-element_type="column"><div class="elementor-widget-wrap"><div class="deco"></div></div></div>
  </div></section>`
 );
 
@@ -104,7 +104,7 @@ test('an Elementor website becomes a Template Kit with the same structure, its C
   assert.deepEqual([h1.widgetType, h1.settings.title, h1.settings.header_size], ['heading', 'Impianti idraulici a Torino', 'h1']);
   assert.equal(txt.settings.editor, '<p>Dal 1990 al vostro servizio.</p>');
   assert.equal(btn.settings.text, 'Chiedi un preventivo');
-  assert.equal(btn.settings.link.url, 'https://ref.example/contatti/');
+  assert.equal(btn.settings.link.url, '/contatti/', 'links to the pages of the site: relative (pages of the new site)');
   assert.ok(row.isInner && row.settings.content_width === 'full');
   const [box, counter, img, addon] = row.elements;
   assert.deepEqual([box.settings.title_text, box.settings.selected_icon.value], ['Pronto intervento', 'fas fa-wrench']);

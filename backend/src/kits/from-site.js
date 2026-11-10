@@ -54,18 +54,22 @@ export function menuPages(root, home) {
   return out;
 }
 
-/** Elementor CSS of a page: its stylesheets (post-<id>.css, global.css, local Google Fonts) and its inline Elementor styles. */
+const SKIP_CSS = /\/plugins\/elementor(-pro)?\/assets\/|\/elementor\/css\/custom-|font-?awesome|dashicons|admin-bar|fonts\.googleapis|fonts\.bunny|\/wp-admin\//i;
+
+/** Elementor CSS of a page:its stylesheets (post-<id>.css, global.css, local Google Fonts) and its inline Elementor styles. */
 function cssSources(root, pageUrl) {
+  // Every stylesheet of the site (Elementor CSS of the pages, add-on widgets, theme; also the files merged by
+  // cache plugins: LiteSpeed, WP Rocket, Autoptimize…), except what the new site already has: the frontend of
+  // Elementor / Elementor Pro (custom-*.css: its breakpoints), Font Awesome, WordPress admin, Google Fonts
   const links = root
     .querySelectorAll('link')
-    .filter((l) => /stylesheet/i.test(l.getAttribute('rel') || ''))
+    .filter((l) => /stylesheet/i.test(l.getAttribute('rel') || '') || (/preload/i.test(l.getAttribute('rel') || '') && /style/i.test(l.getAttribute('as') || '')))
     .map((l) => l.getAttribute('href'))
-    // Not the custom-*.css of Elementor Pro (its frontend for the breakpoints of that site: the new site has its own)
-    .filter((h) => h && /\/elementor\/css\/(post-\d+|global)[^/]*\.css/i.test(h))
+    .filter((h) => h && /\.css(\?|$)|\/css\?|litespeed\/css|cache\/(min|autoptimize|minify)/i.test(h) && !SKIP_CSS.test(h))
     .map((h) => new URL(h, pageUrl).href);
   const inline = root
     .querySelectorAll('style')
-    .filter((s) => /elementor-(post|global|frontend-inline|kit)|^elementor/i.test(s.getAttribute('id') || '') || /\.elementor-element-[0-9a-f]{6,8}|--e-global-/.test(s.innerHTML))
+    .filter((s) => !/admin-bar|wp-emoji|dashicons/i.test(s.getAttribute('id') || ''))
     .map((s) => s.innerHTML);
   return { links, inline };
 }
@@ -394,7 +398,33 @@ const URL_IN_CSS = /url\(\s*(['"]?)([^'")]+)\1\s*\)/gi;
  * stays only for the ids of the kit; rules of other pages, popups and menus are dropped. The other
  * rules (kit, widgets, @font-face, @keyframes) stay. Nested @media / @supports blocks are filtered too.
  */
-export function keepRulesFor(css, ids) {
+/** Classes set by scripts (open menus, sliders, animations, sticky headers...): never in the HTML of the page, still needed. */
+const STATE_CLASS = /(^|[-_])(active|open|opened|show|shown|visible|hidden|animated|animate|animation|sticky|hover|focus|current|selected|loaded|loading|init|initialized|fixed|scrolled|toggled|expanded|collapsed|in|out|enter|leave|done|ready|prev|next|disabled|dragging)($|[-_])|^(is|has)-|swiper|slick|owl|elementor|^e-|aos|fade|zoom|slide|mfp|lightbox|dialog|modal|popup|menu|tab|accordion|toggle|wpcf7|ui-|lazy|lity|fancybox|splide|tippy|ps-/i;
+
+/** Does a selector only use classes the pages have (or classes set by scripts)? used: Set of classes, null = everything. */
+function selectorUsed(selector, used) {
+  if (!used) return true;
+  for (const m of selector.replace(/\[[^\]]*\]/g, '').matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) {
+    if (!used.has(m[1]) && !STATE_CLASS.test(m[1])) return false;
+  }
+  return true;
+}
+
+/** Classes used in some HTML. */
+export function usedClasses(html) {
+  const out = new Set();
+  for (const m of html.matchAll(/\sclass\s*=\s*["']([^"']*)["']/gi)) for (const c of m[1].split(/\s+/)) if (c) out.add(c);
+  return out;
+}
+
+export function keepRulesFor(css, ids, used = null, seen = new Set(), scope = '') {
+  // The same rule in several stylesheets (each page of a cached site has its own merged file): once
+  const once = (rule) => {
+    const key = scope + rule;
+    if (seen.has(key)) return '';
+    seen.add(key);
+    return rule;
+  };
   let out = '';
   let i = 0;
   const n = css.length;
@@ -414,12 +444,12 @@ export function keepRulesFor(css, ids) {
     i = j;
     if (!head) continue;
     if (/^@(media|supports|container|layer)\b/i.test(head)) {
-      const inner = keepRulesFor(body, ids);
+      const inner = keepRulesFor(body, ids, used, seen, head);
       if (inner.trim()) out += `${head}{${inner}}`;
       continue;
     }
     if (head.startsWith('@')) {
-      out += `${head}{${body}}`;
+      out += once(`${head}{${body}}`);
       continue;
     }
     const selectors = head
@@ -427,9 +457,9 @@ export function keepRulesFor(css, ids) {
       .map((s) => s.trim())
       .filter((s) => {
         const named = [...s.matchAll(/\.elementor-element-([0-9a-z]{6,8})\b/g)].map((m) => m[1]);
-        return !named.length || named.every((id) => ids.has(id));
+        return (!named.length || named.every((id) => ids.has(id))) && selectorUsed(s, used);
       });
-    if (selectors.length) out += `${selectors.join(',')}{${body}}`;
+    if (selectors.length) out += once(`${selectors.join(',')}{${body}}`);
   }
   return out;
 }
@@ -443,11 +473,12 @@ export function keepRulesFor(css, ids) {
  *    photos of the project) and removed from the CSS; the other urls become absolute.
  * Returns { css, backgrounds: Map(id -> url) }.
  */
-export function adaptCss(sources, ids) {
+export function adaptCss(sources, ids, used = null) {
+  const seen = new Set();
   const backgrounds = new Map();
   const parts = [];
   for (const { base, text } of sources) {
-    let css = keepRulesFor(text.replace(/\/\*[\s\S]*?\*\//g, ''), ids);
+    let css = keepRulesFor(text.replace(/\/\*[\s\S]*?\*\//g, ''), ids, used, seen);
     // Background photos of the converted elements: into their settings
     css = css.replace(/([^{}]+)\{([^{}]*)\}/g, (rule, selector, body) => {
       if (!/background(-image)?\s*:[^;]*url\(/i.test(body)) return rule;
@@ -578,16 +609,23 @@ export function writeKitFromSite(site, dir) {
   const all = [...docs.map((d) => d.doc), header, footer].filter(Boolean);
   const ids = new Map();
   for (const d of all) collectIds(d.content, ids);
-  const { css, backgrounds } = adaptCss(site.css, ids);
+  // Only the CSS of the classes the pages use (the stylesheets of a whole theme / add-on are large)
+  const used = usedClasses(site.pages.map((p) => p.html).join('\n'));
+  const { css, backgrounds } = adaptCss(site.css, ids, used);
   for (const d of all) {
     applyBackgrounds(d.content, backgrounds);
     d.notes.forEach((n) => notes.add(n));
   }
 
   fs.mkdirSync(path.join(dir, 'templates'), { recursive: true });
+  // Links to the pages of the other site (menu, buttons, HTML of the add-on widgets) become links of the new
+  // site (/about-us/); its files (photos, documents in wp-content) keep their full address
+  const host = new URL(site.url).hostname.replace(/^www\./, '').replace(/\./g, '\\.');
+  const ownLinks = new RegExp(`https?:\\/\\/(?:www\\.)?${host}(?=\\/(?!wp-content\\/|wp-includes\\/)|["'#?\\s])`, 'gi');
   const write = (name, title, type, doc) => {
     const file = `templates/${name}.json`;
-    fs.writeFileSync(path.join(dir, file), JSON.stringify({ version: '0.4', title, type, content: doc.content, page_settings: { hide_title: 'yes' } }));
+    const json = JSON.stringify({ version: '0.4', title, type, content: doc.content, page_settings: { hide_title: 'yes' } }).replace(ownLinks, '');
+    fs.writeFileSync(path.join(dir, file), json.replace(/"url":""/g, '"url":"/"').replace(/href=\\"\\"/g, 'href=\\"/\\"'));
     templates.push({ name: title, source: file, type, metadata: { template_type: type } });
   };
   docs.forEach((d, i) => write(`page-${i + 1}`, d.title, 'page', d.doc));
