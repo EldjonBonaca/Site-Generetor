@@ -257,7 +257,16 @@ export function analyzeDocument(doc, { prefix = 'page', heroName = null, htmlTex
       };
 
       // --- text + link fields (widgets only) --------------------------------
-      if (htmlText && widget === 'html' && typeof settings.html === 'string' && !HTML_CODE.test(settings.html) && HAS_LETTER.test(settings.html.replace(/<[^>]+>/g, ' '))) {
+      // Markup copied from a website (elementor/html-parts.js): its texts and links are the parts kept beside
+      // the HTML, each one a field (the images of the parts are slots, found below like any image setting)
+      const parts = widget === 'html' && Array.isArray(settings.esg_parts) ? settings.esg_parts : null;
+      if (parts) {
+        parts.forEach((part, i) => {
+          if (!part || typeof part !== 'object') return;
+          if (typeof part.text === 'string' && isKnownTextValue(part.text)) addField([...sPath, 'esg_parts', i, 'text'], part.text, 'text', `text${i + 1}`);
+          else if (part.link) maybeLink([...sPath, 'esg_parts', i, 'link'], 'link', part.link, `link${i + 1}`);
+        });
+      } else if (htmlText && widget === 'html' && typeof settings.html === 'string' && !HTML_CODE.test(settings.html) && HAS_LETTER.test(settings.html.replace(/<[^>]+>/g, ' '))) {
         addField([...sPath, 'html'], settings.html, 'html', 'html', 'html');
       }
       if (numbers && NUMERIC_KEYS[widget]) {

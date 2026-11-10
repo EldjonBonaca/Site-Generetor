@@ -231,7 +231,7 @@ router.post('/template-kits/from-site', async (req, res) => {
       analysisError = err.message;
     }
   }
-  res.status(201).json({ ...serialize(requireKit(id), true), analysis_error: analysisError, from_site: { url: site.url, pages: result.pages, header: result.header, footer: result.footer, notes: result.notes } });
+  res.status(201).json({ ...serialize(requireKit(id), true), analysis_error: analysisError, from_site: { url: site.url, pages: result.pages, html_pages: result.htmlPages, header: result.header, footer: result.footer, notes: result.notes } });
 });
 
 /** AI analysis (again). Body: { providerId } */

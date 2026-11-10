@@ -716,4 +716,8 @@ export default {
   "Preview": "Anteprima",
   "Preview of the structure": "Anteprima della struttura",
   "The copied page as it is imported into Elementor, with the CSS of the website. The texts and photos of the website appear here only as placeholders: the AI writes the texts of the client and the photos are the ones of the project. Scripts of the website (sliders, animations) do not run in the preview.": "La pagina copiata come viene importata in Elementor, con il CSS del sito. I testi e le foto del sito qui sono solo segnaposto: l'AI scrive i testi del cliente e le foto sono quelle del progetto. Gli script del sito (slider, animazioni) non funzionano nell'anteprima.",
+  "Every page of the website with its sections, CSS, colors and fonts becomes a Template Kit: Elementor widgets for websites built with Elementor, the same HTML block by block for the others.": "Ogni pagina del sito con le sue sezioni, il CSS, i colori e i font diventa un Template Kit: widget di Elementor per i siti realizzati con Elementor, lo stesso HTML blocco per blocco per gli altri.",
+  "{n} from their HTML": "{n} dal loro HTML",
+  "header not made with Elementor: the site gets the header of the generator, with the colors and fonts of the website": "header non realizzato con Elementor: il sito usa l'header del generatore, con i colori e i font del sito",
+  "footer not copied": "footer non copiato",
 };

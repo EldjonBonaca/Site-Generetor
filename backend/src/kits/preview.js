@@ -7,6 +7,8 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { compileParts } from '../elementor/html-parts.js';
+
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const attr = (s) => esc(s).replace(/"/g, '&quot;');
 const url = (v) => (v && typeof v === 'object' ? v.url : v) || '';
@@ -58,7 +60,7 @@ const WIDGETS = {
   'star-rating': (s) => `<div class="elementor-star-rating__wrapper"><div class="elementor-star-rating">${'★'.repeat(Math.round(Number(s.rating) || 5))}</div></div>`,
   divider: () => '<div class="elementor-divider"><span class="elementor-divider-separator"></span></div>',
   spacer: () => '<div class="elementor-spacer"><div class="elementor-spacer-inner"></div></div>',
-  html: (s) => s.html || '',
+  html: (s) => compileParts(s),
   google_maps: (s) => `<div class="elementor-custom-embed" style="background:#e5e7eb;height:300px;display:flex;align-items:center;justify-content:center;color:#475569">Google Maps · ${esc(s.address)}</div>`,
   video: () => '<div class="elementor-wrapper" style="background:#0f172a;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;color:#fff">▶ Video</div>',
 };

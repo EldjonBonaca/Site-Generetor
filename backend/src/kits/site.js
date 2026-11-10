@@ -247,10 +247,18 @@ function prepareForms(doc, info, site) {
         el.settings = { shortcode: site.contactShortcode, ...Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith('_'))) };
         forms++;
       } else if (type === 'google_maps') s.address = mapOf(site).query;
-      else if (type === 'html' && MAP_HTML.test(s.html || '')) s.html = mapIframe(mapOf(site).src);
+      // Copied markup with a map inside: only the address of its map changes, the section stays
+      else if (type === 'html' && Array.isArray(s.esg_parts) && MAP_HTML.test(s.html || '')) {
+        if (mapOf(site).src) s.html = replaceMapSrc(s.html, mapOf(site).src);
+      } else if (type === 'html' && MAP_HTML.test(s.html || '')) s.html = mapIframe(mapOf(site).src);
     });
   }
   return { forms, swaps };
+}
+
+/** The address of the map iframes inside a piece of HTML (the rest of the markup stays). */
+function replaceMapSrc(html, src) {
+  return html.replace(/(<iframe\b[^>]*\ssrc=["'])[^"']*(?:google\.[a-z.]+\/maps|maps\.google|openstreetmap)[^"']*(["'])/gi, (m, a, b) => `${a}${src}${b}`);
 }
 
 /** URL of the first link of a list item (social icon, icon list row…), or ''. */

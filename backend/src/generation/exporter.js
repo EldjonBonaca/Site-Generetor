@@ -20,6 +20,7 @@ import { languageName } from './prompt-builder.js';
 import { buildWxr } from './wxr.js';
 import { buildPlugin, PLUGIN_IMAGE_SCHEME } from './wp-plugin.js';
 import { siteIconFromLogo } from '../lib/site-icon.js';
+import { compileDocument } from '../elementor/html-parts.js';
 import { docsText } from './export-docs.js';
 import { docToHtml, seoScore } from './seo-score.js';
 import { fieldValue } from './runner.js';
@@ -284,6 +285,8 @@ function buildPageDocs(ctx, pages, exported, links, allPages = pages) {
       applyImages(doc, slots, imageAssignment(ctx, page, slots, slotRoles, exported));
       // Safety net for AI-written texts: tel:/mailto: links and stray emails become the site's ones
       replaceContacts(doc, { phone: ctx.project.phone, phone2: ctx.project.phone2, email: ctx.project.email });
+      // Markup copied from a website: its texts, images and links (now the ones of the project) go back into the HTML
+      compileDocument(doc);
       doc.title = page.title;
       return { page, doc, missing };
     });

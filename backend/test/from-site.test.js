@@ -164,10 +164,85 @@ test('preview of a kit page: the Elementor markup of the structure, its CSS, no 
   assert.match(renderDocument([{ id: 'x1', elType: 'widget', widgetType: 'button', settings: { text: '<b>Go</b>', link: { url: '/' } } }]), /&lt;b&gt;Go&lt;\/b&gt;/);
 });
 
-test('a website not built with Elementor is refused with an explanation', async () => {
-  const plain = async () => new Response('<html><body><h1>Hello</h1><nav><a href="/x">x</a></nav></body></html>', { headers: { 'content-type': 'text/html' } });
-  const site = await crawlSite('plain.example', { fetchImpl: plain, lookup });
-  assert.throws(() => writeKitFromSite(site, fs.mkdtempSync(path.join(os.tmpdir(), 'esg-kit-'))), /not built with Elementor/);
+test('a website not built with Elementor is copied from its HTML: sections with the same markup, texts / images / links as parts', async () => {
+  const { compileDocument } = await import('../src/elementor/html-parts.js');
+  const { applyFieldValues, applyImages } = await import('../src/elementor/apply.js');
+  const pageHtml = `<!doctype html><html lang="it"><head><title>Studio Verdi</title><link rel="stylesheet" href="/style.css">
+<style>body.home .hero h1{font-size:60px}.unused-rule{color:red}</style></head>
+<body class="home page-id-7"><div id="page" class="site">
+<header class="site-header"><a href="/">Studio Verdi</a><nav><a href="/">Home</a><a href="/chi-siamo/">Chi siamo</a></nav><form role="search"><input name="s"></form></header>
+<main id="content"><div class="entry">
+ <section class="hero" style="background-image:url('/img/hero.jpg')"><h1>Architetti a <span class="hl">Bologna</span></h1><p>Progettiamo case dal 1998.</p><a class="btn" href="https://plain.example/contatti/">Contattaci</a><script>alert(1)</script></section>
+ <section class="about"><img class="photo" src="data:image/gif;base64,AAAA" data-src="/img/team.jpg" alt="team"><h2 onclick="x()">Chi siamo</h2><p>Uno studio di <strong>dieci</strong> persone.</p></section>
+ <section class="contact"><h2>Scrivici</h2><form action="/send"><input name="name"><input name="email"><textarea name="msg"></textarea><button>Invia</button></form></section>
+</div></main>
+<footer class="site-footer"><p>© 2024 Studio Verdi</p><a href="https://www.facebook.com/verdi">Facebook</a></footer>
+<div id="cookie-banner">Usiamo i cookie</div></div></body></html>`;
+  const fetchPlain = async (url) => {
+    const u = new URL(url);
+    if (u.pathname === '/style.css') return new Response('.hero{padding:80px 0}.site{max-width:1200px}.not-on-the-page{color:red}', { headers: { 'content-type': 'text/css' } });
+    return u.pathname === '/' ? new Response(pageHtml, { headers: { 'content-type': 'text/html' } }) : new Response('', { status: 404 });
+  };
+  const site = await crawlSite('plain.example', { fetchImpl: fetchPlain, lookup });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esg-kit-'));
+  const out = writeKitFromSite(site, dir);
+  assert.deepEqual([out.pages, out.htmlPages, out.header, out.footer], [1, 1, false, true], 'the page and the footer from the HTML; the header is built by the generator');
+
+  const info = readKit(dir);
+  const home = loadKitTemplate(dir, info.templates.find((t) => t.suggestedRole === 'home').id);
+  assert.equal(home.content.length, 3, 'one top-level section per block of the page');
+  const [hero, about, contact] = home.content.map((sec) => sec.elements[0]);
+  assert.equal(home.content[0].settings.css_classes, 'esg-sec');
+  // Same markup, inside the wrappers of the page (body classes included); no script, no event handler, no cookie banner, no site header
+  assert.match(hero.settings.html, /^<div class="esg-body home page-id-7"><div id="page" class="site esg-shell"><main id="content" class="esg-shell"><div class="entry esg-shell"><section class="hero" style="background-image:\{\{esg:g/);
+  const all = JSON.stringify(home);
+  assert.doesNotMatch(all, /alert\(1\)|onclick|cookie|site-header|role=\\"search\\"/);
+  // Parts: one text for a sentence with a highlighted word, the image with its real address, the link relative
+  const texts = hero.settings.esg_parts.filter((p) => 'text' in p).map((p) => p.text);
+  assert.deepEqual(texts, ['Architetti a <span class="hl">Bologna</span>', 'Progettiamo case dal 1998.', 'Contattaci']);
+  assert.equal(hero.settings.esg_parts.find((p) => p.bg_image).bg_image.url, 'https://plain.example/img/hero.jpg', 'the background photo of an inline style: absolute');
+  assert.equal(hero.settings.esg_parts.find((p) => p.link).link.url, '/contatti/');
+  assert.equal(about.settings.esg_parts.find((p) => p.image).image.url, 'https://plain.example/img/team.jpg');
+  assert.match(contact.settings.html, /<form/, 'the contact form stays (the kit pipeline puts the form of the site in its place)');
+
+  // The analyzer: texts and links are fields, images are slots
+  const a = analyzeDocument(home, { prefix: 'home', htmlText: true, numbers: true });
+  assert.ok(a.fields.some((f) => f.original === 'Progettiamo case dal 1998.' && f.format === 'text'));
+  assert.ok(a.fields.some((f) => f.format === 'html' && /Architetti/.test(f.original)));
+  assert.ok(a.fields.some((f) => f.format === 'link' && f.original === '/contatti/'));
+  assert.deepEqual(a.slots.map((s) => s.kind).sort(), ['background', 'image']);
+  assert.ok(!a.fields.some((f) => /esg-body|\{\{esg/.test(f.original)), 'the markup itself is never a field');
+
+  // Filled like any template, then compiled back into plain HTML widgets
+  const doc = structuredClone(home);
+  const filled = analyzeDocument(doc, { prefix: 'home', htmlText: true, numbers: true });
+  const title = filled.fields.find((f) => /Architetti/.test(f.original));
+  const text = filled.fields.find((f) => f.original === 'Progettiamo case dal 1998.');
+  applyFieldValues(doc, filled.fields, { [title.id]: 'Idraulici a <span class="hl">Roma</span>', [text.id]: 'Pronto intervento 24h <b>sempre</b>' });
+  applyImages(doc, filled.slots, Object.fromEntries(filled.slots.map((s) => [s.id, { url: `https://cdn.example/${s.kind}.webp`, alt: 'Foto "nuova"' }])));
+  compileDocument(doc);
+  const html = doc.content.map((sec) => sec.elements[0].settings.html).join('');
+  assert.ok(doc.content.every((sec) => !('esg_parts' in sec.elements[0].settings)));
+  assert.doesNotMatch(html, /\{\{esg/);
+  assert.match(html, /<h1>Idraulici a <span class="hl">Roma<\/span><\/h1><p>Pronto intervento 24h sempre<\/p>/, 'html text keeps its tags, plain text loses them');
+  assert.match(html, /style="background-image:url\('https:\/\/cdn\.example\/background\.webp'\)"/);
+  assert.match(html, /<img class="photo" src="https:\/\/cdn\.example\/image\.webp" alt="Foto &quot;nuova&quot;">/);
+
+  // CSS: the rules of the page only, body.home also matches the wrapper of the blocks; the capture rules
+  const css = fs.readFileSync(path.join(dir, 'site.css'), 'utf8');
+  assert.match(css, /:is\(body,\.esg-body\)\.home \.hero h1\{font-size:60px\}/);
+  assert.match(css, /\.hero\{padding:80px 0\}/);
+  assert.doesNotMatch(css, /not-on-the-page|unused-rule/);
+  assert.match(css, /\.e-con\.esg-sec\{/);
+  // The footer: one section, its copyright and social link as parts
+  const footer = loadKitTemplate(dir, info.templates.find((t) => t.suggestedRole === 'footer').id);
+  assert.ok(footer.content[0].elements[0].settings.esg_parts.some((p) => p.link?.url === 'https://www.facebook.com/verdi'));
+});
+
+test('a page built by scripts (nothing in its HTML) is refused with an explanation', async () => {
+  const empty = async () => new Response('<html><body><div id="root"></div><script src="/app.js"></script></body></html>', { headers: { 'content-type': 'text/html' } });
+  const site = await crawlSite('spa.example', { fetchImpl: empty, lookup });
+  assert.throws(() => writeKitFromSite(site, fs.mkdtempSync(path.join(os.tmpdir(), 'esg-kit-'))), /built by scripts/);
 });
 
 test('global styles and CSS helpers', () => {

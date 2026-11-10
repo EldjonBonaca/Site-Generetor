@@ -152,7 +152,7 @@ export default function FromSitePage() {
               </p>
               <p className="mt-1 text-xs text-slate-600">
                 {m === 'exact'
-                  ? t('Every page, section, column and widget of the website, with its CSS, colors and fonts: becomes a Template Kit. Only for websites built with Elementor.')
+                  ? t('Every page of the website with its sections, CSS, colors and fonts becomes a Template Kit: Elementor widgets for websites built with Elementor, the same HTML block by block for the others.')
                   : t('A template of the generator with the colors, fonts and sections of the website, for any website.')}
               </p>
             </button>
@@ -205,8 +205,9 @@ export default function FromSitePage() {
             <Card title={kit.name}>
               <div className="space-y-3 text-sm text-slate-700">
                 <p>
-                  {t('{n} pages copied', { n: kit.from_site.pages })} · {kit.from_site.header ? t('header copied') : t('header of the theme: not copied (the site gets the header of the generator)')} ·{' '}
-                  {kit.from_site.footer ? t('footer copied') : t('footer of the theme: not copied')}
+                  {t('{n} pages copied', { n: kit.from_site.pages })}
+                  {kit.from_site.html_pages > 0 && ` (${t('{n} from their HTML', { n: kit.from_site.html_pages })})`} · {kit.from_site.header ? t('header copied') : t('header not made with Elementor: the site gets the header of the generator, with the colors and fonts of the website')} ·{' '}
+                  {kit.from_site.footer ? t('footer copied') : t('footer not copied')}
                 </p>
                 <ul className="space-y-1 text-xs text-slate-600">
                   {Object.entries(kit.roles)

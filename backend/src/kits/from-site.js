@@ -19,8 +19,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parse } from 'node-html-parser';
-import { referenceUrl, safeGet } from '../templates/reference.js';
+import { analyzeReference, referenceUrl, safeGet } from '../templates/reference.js';
 import { badRequest } from '../lib/util.js';
+import { CAPTURE_CSS, captureContent, captureElement, cleanPage, findSiteFooter, findSiteHeader, htmlWidget, stableId } from './html-capture.js';
 
 const MAX_PAGES = 8;
 const MAX_HTML = 3_000_000;
@@ -90,6 +91,12 @@ export function undoLazyLoading(root, base) {
     for (const name of ['data-src', 'data-lazy-src', 'data-orig-src', 'data-original', 'data-litespeed-src', 'data-lazy', 'data-srcset', 'data-lazy-srcset', 'data-sizes', 'data-lazy-sizes', 'data-lazyloaded', 'data-ll-status']) el.removeAttribute(name);
     const cls = el.getAttribute('class');
     if (cls && /\b(lazyload|lazy|lazyloading|litespeed-loaded|ls-is-cached)\b/.test(cls)) el.setAttribute('class', cls.replace(/\b(lazyload|lazyloading|lazy)\b/g, 'lazyloaded').trim());
+  }
+  // Images of inline styles: absolute (a relative address would point to the new site)
+  for (const el of root.querySelectorAll('[style]')) {
+    const style = el.getAttribute('style');
+    if (!/url\(/i.test(style)) continue;
+    el.setAttribute('style', style.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, (m, q, u) => (/^data:/i.test(u) ? m : `url('${abs(u.replace(/&amp;/g, '&'))}')`)));
   }
   // Background photos kept in data-bg / data-lazy-bg / data-background (shown by a script)
   for (const el of root.querySelectorAll('[data-bg], [data-lazy-bg], [data-background], [data-bg-image], [data-background-image]')) {
@@ -389,7 +396,7 @@ function convertElement(node, base, notes) {
       if (widgetType === 'shortcode') {
         // A shortcode of the other site (form, slider...) cannot work here: its output is kept as HTML
         notes.add('shortcode');
-        return { id, elType: 'widget', widgetType: 'html', settings: { html: content._rendered }, elements: [] };
+        return htmlWidget(id, content._rendered);
       }
       return { id, elType: 'widget', widgetType, settings: { ...settings, ...content }, elements: [] };
     }
@@ -398,7 +405,7 @@ function convertElement(node, base, notes) {
     notes.add(widgetType);
     const html = node.querySelector('.elementor-widget-container')?.innerHTML ?? node.innerHTML;
     const classes = [`elementor-widget-${widgetType}`, ...own].join(' ');
-    return { id, elType: 'widget', widgetType: 'html', settings: { html, _css_classes: classes }, elements: [] };
+    return htmlWidget(id, html, classes);
   }
   const children = childElements(node).map((c) => convertElement(c, base, notes));
   if (elType === 'container') {
@@ -431,7 +438,7 @@ function convertElement(node, base, notes) {
   // Elements of newer Elementor versions (atomic e-div-block, e-flexbox...): a container; when their
   // content is not made of Elementor elements, it is kept as it is in an HTML widget (the same look)
   notes.add(elType);
-  const inside = children.length ? children : node.innerHTML.trim() ? [{ id: `${id.slice(0, 5)}h${(children.length + 1).toString(16)}`, elType: 'widget', widgetType: 'html', settings: { html: node.innerHTML.trim() }, elements: [] }] : [];
+  const inside = children.length ? children : node.innerHTML.trim() ? [htmlWidget(stableId(id, 'h'), node.innerHTML.trim())] : [];
   return { id, elType: 'container', isInner: true, settings: { content_width: 'full', ...settings }, elements: inside };
 }
 
@@ -451,7 +458,7 @@ export function pageDocuments(root, base) {
   const convert = (d) => {
     const notes = new Set();
     const content = childElements(d).map((el) => convertElement(el, base, notes));
-    return content.length ? { postId: d.getAttribute('data-elementor-id'), content, notes } : null;
+    return content.length ? { postId: d.getAttribute('data-elementor-id'), content, notes, node: d } : null;
   };
   for (const d of docs) {
     const k = kind(d);
@@ -461,7 +468,8 @@ export function pageDocuments(root, base) {
   if (!out.page) {
     const others = docs.filter((d) => !kind(d) && !['popup', 'loop-item'].includes(d.getAttribute('data-elementor-type')));
     const largest = others.sort((a, b) => b.querySelectorAll('[data-element_type]').length - a.querySelectorAll('[data-element_type]').length)[0];
-    if (largest) out.page = convert(largest) || undefined;
+    // (a small one is a widget area or a saved section, not the page: the page is then copied from its HTML)
+    if (largest && largest.querySelectorAll('[data-element_type]').length >= 8) out.page = convert(largest) || undefined;
   }
   for (const k of Object.keys(out)) if (!out[k]) delete out[k];
   return out;
@@ -590,7 +598,8 @@ export function keepRulesFor(css, ids, used = null, seen = new Set(), scope = ''
       continue;
     }
     const selectors = splitSelectors(head)
-      .map((s) => s.trim())
+      // body.home .x: also the wrapper of the copied blocks, which carries the classes of the <body> of the page
+      .map((s) => s.trim().replace(/(^|[\s>+~(])body(?=[.#[:])/g, '$1:is(body,.esg-body)'))
       .filter((s) => {
         const named = [...s.matchAll(/\.elementor-element-([0-9a-z]{6,8})\b/g)].map((m) => m[1]);
         // Not the lazy loading of the background photos of the other site (hidden until its script runs): the
@@ -745,15 +754,27 @@ export function writeKitFromSite(site, dir) {
   let header = null;
   let footer = null;
   const docs = [];
+  let htmlPages = 0;
   site.pages.forEach((page, i) => {
+    cleanPage(page.root);
     const found = pageDocuments(page.root, page.url.href);
     header ||= found.header;
-    footer ||= found.footer;
+    const siteHeader = findSiteHeader(page.root);
+    const siteFooter = findSiteFooter(page.root);
+    // A footer that is not made with Elementor is copied from its HTML (the header is not: html-capture.js)
+    if (!footer) footer = found.footer || captureElement(page.root, siteFooter, `${page.url.pathname}|footer`);
     if (found.page) docs.push({ title: pageTitle(page, i), doc: found.page });
+    else {
+      // A page (or the body of a page) that is not made of Elementor elements: copied from its HTML, block by block
+      const exclude = [siteHeader, siteFooter, found.header?.node, found.footer?.node, ...page.root.querySelectorAll('[data-elementor-type="popup"]')];
+      const doc = captureContent(page.root, page.url.pathname, exclude);
+      if (doc) {
+        docs.push({ title: pageTitle(page, i), doc });
+        htmlPages++;
+      }
+    }
   });
-  if (!docs.length) {
-    throw badRequest('This website is not built with Elementor: its structure cannot be copied exactly. Use "Similar" mode instead (it follows its colors, fonts and sections).');
-  }
+  if (!docs.length) throw badRequest('Nothing could be read on this website: its pages are built by scripts in the browser, so their content is not in the page the server receives.');
   const all = [...docs.map((d) => d.doc), header, footer].filter(Boolean);
   const ids = new Map();
   for (const d of all) collectIds(d.content, ids);
@@ -781,7 +802,9 @@ export function writeKitFromSite(site, dir) {
   if (header) write('header', 'Header', 'header', header);
   if (footer) write('footer', 'Footer', 'footer', footer);
 
-  const styles = globalStylesFromCss(css);
+  // Global colors and fonts: the ones of the Elementor kit of the site, else its most used ones (they give
+  // the header the generator builds, and the parts it adds, the look of the site)
+  const styles = globalStylesFromCss(css) || measuredStyles(site);
   if (styles) fs.writeFileSync(path.join(dir, 'site-settings.json'), JSON.stringify({ settings: styles }));
   // Add-on widgets kept as HTML: their scripts (moving rows, sliders) do not run on the new site, so what
   // they place beyond the edge of the page scrolls sideways inside the widget instead of widening the whole page
@@ -790,12 +813,30 @@ export function writeKitFromSite(site, dir) {
     ? '\n.elementor-widget-html{max-width:100%;overflow-x:auto;scrollbar-width:thin}' +
       '\n.elementor-widget-html :is([class*="--load"],[class*="scroll-reveal"],[class*="-reveal "],.wow,[data-aos],.elementor-invisible,.reveal,.is-hidden-until-load){opacity:1!important;visibility:visible!important}'
     : '';
-  fs.writeFileSync(path.join(dir, 'site.css'), `${fontImports(css, site.fontLinks).join('\n')}\n${themeVariables(css, site.vars)}${css}${addonSafety}`);
+  fs.writeFileSync(path.join(dir, 'site.css'), `${fontImports(css, site.fontLinks).join('\n')}\n${themeVariables(css, site.vars)}${css}${addonSafety}${CAPTURE_CSS}`);
   // Elementor frontend of the other site, for the preview only (kits/preview.js)
   if (site.coreCss?.length) fs.writeFileSync(path.join(dir, 'preview.css'), adaptCss(site.coreCss, ids, used).css);
   const title = (site.pages[0].root.querySelector('title')?.text || new URL(site.url).hostname).replace(/\s+/g, ' ').trim().slice(0, 150);
   fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ title, source: site.url, templates }, null, 1));
-  return { title, pages: docs.length, header: Boolean(header), footer: Boolean(footer), notes: [...notes], dir };
+  return { title, pages: docs.length, htmlPages, header: Boolean(header), footer: Boolean(footer), notes: [...notes], dir };
+}
+
+/** Elementor kit settings from the colors and fonts the site uses the most (a site without Elementor global styles). */
+function measuredStyles(site) {
+  const page = site.pages[0];
+  const a = analyzeReference({ url: site.url, html: page.html, css: site.css.map((c) => c.text).join('\n').slice(0, 3_000_000), fontLinks: site.fontLinks });
+  const brand = a.colors.top.filter((c) => !c.neutral).map((c) => c.color);
+  const dark = a.colors.top.find((c) => c.neutral && parseInt(c.color.slice(1, 3), 16) < 110)?.color || '#333333';
+  if (!brand.length && !a.fonts.length) return null;
+  const color = (id, value) => ({ _id: id, title: id[0].toUpperCase() + id.slice(1), color: value });
+  const font = (id, family, weight) => ({ _id: id, title: id[0].toUpperCase() + id.slice(1), typography_typography: 'custom', typography_font_family: family, typography_font_weight: weight });
+  const [heading, body = heading] = a.fonts;
+  return {
+    system_colors: brand.length ? [color('primary', brand[0]), color('secondary', brand[1] || brand[0]), color('text', dark), color('accent', brand[2] || brand[1] || brand[0])] : [],
+    custom_colors: [],
+    system_typography: heading ? [font('primary', heading, '700'), font('secondary', heading, '600'), font('text', body, '400'), font('accent', body, '600')] : [],
+    custom_typography: [],
+  };
 }
 
 /** CSS of a kit made from a website (Elementor CSS of the site + its fonts), next to its manifest. */
