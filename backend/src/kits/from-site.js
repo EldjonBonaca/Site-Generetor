@@ -575,6 +575,12 @@ export function globalStylesFromCss(css) {
     fonts.set(m[1], f);
   }
   const SYSTEM = ['primary', 'secondary', 'text', 'accent'];
+  // The colors and fonts of a new Elementor kit: a site that still has them styles its pages in other
+  // ways (theme, CSS of the elements), they are not its palette
+  const DEFAULT_COLORS = { primary: '#6EC1E4', secondary: '#54595F', text: '#7A7A7A', accent: '#61CE70' };
+  const DEFAULT_FONTS = { primary: 'Roboto', secondary: 'Roboto Slab', text: 'Roboto', accent: 'Roboto' };
+  for (const [id, value] of Object.entries(DEFAULT_COLORS)) if (String(colors.get(id) || '').toUpperCase() === value) colors.delete(id);
+  for (const [id, family] of Object.entries(DEFAULT_FONTS)) if (fonts.get(id)?.['font-family'] === family) fonts.delete(id);
   const color = (id, value) => ({ _id: id, title: id[0].toUpperCase() + id.slice(1), color: value });
   const font = (id, f) => ({ _id: id, title: id[0].toUpperCase() + id.slice(1), typography_typography: 'custom', ...(f['font-family'] ? { typography_font_family: f['font-family'] } : {}), ...(f['font-weight'] ? { typography_font_weight: f['font-weight'] } : {}) });
   if (!colors.size && !fonts.size) return null;

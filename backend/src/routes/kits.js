@@ -80,6 +80,8 @@ function serialize(row, full = false) {
     page_count: info.templates.filter((t) => t.valid).length,
     roles: Object.fromEntries(KIT_ROLES.filter((r) => r !== 'ignore').map((r) => [r, info.templates.find((t) => roles[t.id] === r)?.title || null])),
     cover,
+    // Without screenshots (a kit copied from a website): its Home page is shown live (preview)
+    preview_template: (home?.valid && home.id) || info.templates.find((t) => t.valid && !['header', 'footer', 'ignore'].includes(roles[t.id]))?.id || null,
     styles: stylesSummary(info.globalStyles),
     required_plugins: info.requiredPlugins || [],
     pro_widgets: info.proWidgets || [],
@@ -301,7 +303,9 @@ router.get('/template-kits/:id/preview', (req, res) => {
   if (!tpl) throw notFound('Template');
   const load = (id) => (id ? loadKitTemplate(kitDir(row), id) : null);
   const role = roles[tpl.id];
-  const themePart = (r) => (role === r ? null : load(info.templates.find((t) => roles[t.id] === r)?.id));
+  // A page between the header and the footer of the kit; a header or footer alone
+  const alone = ['header', 'footer'].includes(role) || ['header', 'footer'].includes(tpl.type);
+  const themePart = (r) => (alone ? null : load(info.templates.find((t) => roles[t.id] === r)?.id));
   const html = previewPage({ dir: kitDir(row), info }, { header: themePart('header'), page: load(tpl.id), footer: themePart('footer') }, `${row.name} – ${tpl.title}`);
   res.set({ 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': PREVIEW_CSP, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store' });
   res.send(html);

@@ -27,9 +27,42 @@ export const kitPreviewUrl = (kit, templateId) => `/api/template-kits/${kit.id}/
 export const kitScreenshotUrl =(kit, path) => `/api/template-kits/${kit.id}/screenshot?path=${encodeURIComponent(path)}`;
 
 /** Screenshot of the kit home page, or its colors when the kit has no screenshot. */
+/**
+ * A page of the kit shown live and scaled down (the preview of its structure, at desktop width): for kits
+ * without screenshots, e.g. a kit copied from a website. Not interactive; the preview runs no scripts.
+ */
+export function KitPagePreview({ kit, templateId, className, width = 1440 }) {
+  const [box, setBox] = useState(null);
+  const [scale, setScale] = useState(0);
+  useEffect(() => {
+    if (!box) return undefined;
+    const update = () => setScale(box.clientWidth / width);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [box, width]);
+  return (
+    <div ref={setBox} className={cx('relative overflow-hidden bg-white', className)}>
+      {scale > 0 && (
+        <iframe
+          title={templateId}
+          src={kitPreviewUrl(kit, templateId)}
+          sandbox="allow-popups"
+          loading="lazy"
+          tabIndex={-1}
+          className="pointer-events-none absolute top-0 left-0 border-0"
+          style={{ width, height: box.clientHeight / scale, transform: `scale(${scale})`, transformOrigin: '0 0' }}
+        />
+      )}
+    </div>
+  );
+}
+
 export function KitCover({ kit, className }) {
   const colors = kit.styles?.colors?.map((c) => c.color) || [];
   if (kit.cover) return <img src={kitScreenshotUrl(kit, kit.cover)} alt="" loading="lazy" className={cx('aspect-[16/10] w-full bg-slate-100 object-cover object-top', className)} />;
+  if (kit.preview_template) return <KitPagePreview kit={kit} templateId={kit.preview_template} className={cx('aspect-[16/10] w-full', className)} />;
   return (
     <div
       className={cx('flex aspect-[16/10] w-full items-center justify-center', className)}
@@ -227,6 +260,11 @@ export function KitDetailsDialog({ kitId, onClose, onChanged }) {
                 <li key={tpl.id} className={cx('flex flex-col gap-3 p-3 sm:flex-row', !tpl.valid && 'opacity-60')}>
                   {tpl.screenshot ? (
                     <img src={kitScreenshotUrl(kit, tpl.screenshot)} alt="" loading="lazy" className="h-20 w-32 shrink-0 rounded border border-slate-200 bg-slate-50 object-cover object-top" />
+                  ) : tpl.valid ? (
+                    // No screenshot (kit copied from a website): the page itself, larger, opens the full preview
+                    <a href={kitPreviewUrl(kit, tpl.id)} target="_blank" rel="noreferrer" title={t('Preview')} className="block shrink-0">
+                      <KitPagePreview kit={kit} templateId={tpl.id} className={cx('w-full rounded border border-slate-200 sm:w-64', tpl.type === 'header' || tpl.type === 'footer' ? 'h-24' : 'h-48')} />
+                    </a>
                   ) : (
                     <div className="flex h-20 w-32 shrink-0 items-center justify-center rounded border border-dashed border-slate-200 text-slate-300">
                       <Package className="size-6" />

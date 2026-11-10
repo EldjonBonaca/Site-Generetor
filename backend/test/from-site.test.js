@@ -172,6 +172,9 @@ test('a website not built with Elementor is refused with an explanation', async 
 
 test('global styles and CSS helpers', () => {
   assert.equal(globalStylesFromCss('body{}'), null);
+  // The colors and fonts of a new Elementor kit are not the palette of the site
+  assert.equal(globalStylesFromCss('.elementor-kit-5{--e-global-color-primary:#6EC1E4;--e-global-color-secondary:#54595F;--e-global-color-text:#7A7A7A;--e-global-color-accent:#61CE70;--e-global-typography-primary-font-family:"Roboto"}'), null);
+  assert.deepEqual(globalStylesFromCss('x{--e-global-color-primary:#6EC1E4;--e-global-color-accent:#FF5500}').system_colors.map((c) => c._id), ['accent']);
   const { backgrounds } = adaptCss([{ base: 'https://a.example/x/', text: '.elementor-1 .elementor-element.elementor-element-abc1234::before{background-image:url(a.jpg)}' }], new Map([['abc1234', {}]]));
   assert.equal(backgrounds.size, 0, 'overlays / pseudo elements are not photos of the element');
 });
