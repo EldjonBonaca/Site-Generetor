@@ -442,35 +442,55 @@ function convertElement(node, base, notes) {
   return { id, elType: 'container', isInner: true, settings: { content_width: 'full', ...settings }, elements: inside };
 }
 
-/** The Elementor documents of a page: its content, and the header / footer made with Elementor (theme builder or Header Footer plugins). */
+/**
+ * The Elementor documents of a page: its content, and the header / footer made with Elementor (theme
+ * builder of Elementor Pro, or the header / footer plugins: Header Footer Elementor, ElementsKit, UAE...).
+ *
+ * The page itself is the document whose id is the id of the page (class "elementor-page-12" / "page-id-12"
+ * of the <body>): a header made with a plugin is an ordinary "wp-post" document too, and comes first.
+ * The documents before it are the header, the ones after it the footer.
+ */
 export function pageDocuments(root, base) {
   const docs = root.querySelectorAll('[data-elementor-type]').filter((d) => !d.parentNode?.closest?.('[data-elementor-type]'));
   const PAGE_TYPES = ['wp-page', 'wp-post', 'page', 'single-page', 'single-post', 'single'];
-  const kind = (d) => {
+  const NOT_PARTS = ['popup', 'loop-item', 'section', 'container', 'widget', 'kit'];
+  const size = (d) => d.querySelectorAll('[data-element_type]').length;
+  /** header / footer by what the document says or where it sits (its own type, a <header> / <footer>, the wrapper of a plugin). */
+  const marked = (d) => {
     const t = d.getAttribute('data-elementor-type');
-    if (t === 'header' || d.closest('header') || /elementor-location-header|ehf-header|hfe-header/.test(d.getAttribute('class') || '')) return 'header';
-    if (t === 'footer' || d.closest('footer') || /elementor-location-footer|ehf-footer|hfe-footer/.test(d.getAttribute('class') || '')) return 'footer';
-    if (PAGE_TYPES.includes(t)) return 'page';
-    // Popups, loop items, saved sections, mega-menu contents: parts of the site, not its pages
+    if (t === 'header' || t === 'footer') return t;
+    for (let n = d; n && n.nodeType === 1 && (n.rawTagName || '').toLowerCase() !== 'body'; n = n.parentNode) {
+      const tag = (n.rawTagName || '').toLowerCase();
+      const cls = `${n.getAttribute('class') || ''} ${n.getAttribute('id') || ''}`;
+      if (tag === 'header' || /elementor-location-header|ehf-header|hfe-header|ekit-template-content-header|uael-header|site-header|masthead/i.test(cls)) return 'header';
+      if (tag === 'footer' || /elementor-location-footer|ehf-footer|hfe-footer|ekit-template-content-footer|uael-footer|site-footer|colophon/i.test(cls)) return 'footer';
+    }
     return null;
   };
-  const out = {};
   const convert = (d) => {
+    if (!d) return undefined;
     const notes = new Set();
     const content = childElements(d).map((el) => convertElement(el, base, notes));
-    return content.length ? { postId: d.getAttribute('data-elementor-id'), content, notes, node: d } : null;
+    return content.length ? { postId: d.getAttribute('data-elementor-id'), content, notes, node: d } : undefined;
   };
-  for (const d of docs) {
-    const k = kind(d);
-    if (k && !out[k]) out[k] = convert(d) || undefined;
+  const largest = (list) => [...list].sort((a, b) => size(b) - size(a))[0];
+
+  const bodyClass = root.querySelector('body')?.getAttribute('class') || '';
+  const pageId = /\belementor-page-(\d+)\b/.exec(bodyClass)?.[1] || /\b(?:page-id|postid)-(\d+)\b/.exec(bodyClass)?.[1];
+  const parts = docs.filter((d) => !NOT_PARTS.includes(d.getAttribute('data-elementor-type')));
+  let main = (pageId && parts.find((d) => d.getAttribute('data-elementor-id') === pageId && !marked(d))) || null;
+  // No document with the id of the page: the first page document that is not a header or a footer
+  if (!main) main = parts.find((d) => PAGE_TYPES.includes(d.getAttribute('data-elementor-type')) && !marked(d)) || null;
+  // A page built with the theme builder: the largest other document (a small one is a widget area, not the page)
+  if (!main) {
+    const other = largest(docs.filter((d) => !marked(d) && !['popup', 'loop-item'].includes(d.getAttribute('data-elementor-type'))));
+    if (other && size(other) >= 8) main = other;
   }
-  // A page built with the theme builder (no "wp-page" document): its largest other document inside <main> / the body
-  if (!out.page) {
-    const others = docs.filter((d) => !kind(d) && !['popup', 'loop-item'].includes(d.getAttribute('data-elementor-type')));
-    const largest = others.sort((a, b) => b.querySelectorAll('[data-element_type]').length - a.querySelectorAll('[data-element_type]').length)[0];
-    // (a small one is a widget area or a saved section, not the page: the page is then copied from its HTML)
-    if (largest && largest.querySelectorAll('[data-element_type]').length >= 8) out.page = convert(largest) || undefined;
-  }
+  const at = main ? docs.indexOf(main) : -1;
+  const others = parts.filter((d) => d !== main);
+  const header = largest(others.filter((d) => marked(d) === 'header')) || (main ? largest(others.filter((d) => !marked(d) && docs.indexOf(d) < at)) : null);
+  const footer = largest(others.filter((d) => marked(d) === 'footer')) || (main ? largest(others.filter((d) => !marked(d) && docs.indexOf(d) > at && d !== header)) : null);
+  const out = { page: convert(main), header: convert(header), footer: convert(footer) };
   for (const k of Object.keys(out)) if (!out[k]) delete out[k];
   return out;
 }

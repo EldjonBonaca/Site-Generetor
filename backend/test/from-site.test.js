@@ -283,3 +283,26 @@ test('lazy loading undone: the real addresses of images and background photos, a
   assert.equal(b.getAttribute('src'), 'https://ref.example/pagina/b.png');
   assert.match(root.querySelector('.tile').getAttribute('style'), /color:red;background-image:url\('https:\/\/ref\.example\/wp-content\/uploads\/bg\.jpg'\)/);
 });
+
+test('header / footer made with a plugin (ElementsKit, HFE): the page is the document with the id of the page, not the first one', async () => {
+  const { pageDocuments } = await import('../src/kits/from-site.js');
+  const { parse } = await import('node-html-parser');
+  const el = (id, text) => `<div class="elementor-element elementor-element-${id} e-con e-parent" data-id="${id}" data-element_type="container"><div class="elementor-element elementor-element-${id}9 elementor-widget elementor-widget-heading" data-id="${id}9" data-element_type="widget" data-widget_type="heading.default"><div class="elementor-widget-container"><h2 class="elementor-heading-title">${text}</h2></div></div></div>`;
+  const root = parse(`<html><body class="home page page-id-12 elementor-page elementor-page-12">
+<div class="ekit-template-content-markup ekit-template-content-header"><div data-elementor-type="wp-post" data-elementor-id="155" class="elementor elementor-155">${el('aaa0001', 'Menu')}</div></div>
+<div data-elementor-type="wp-page" data-elementor-id="12" class="elementor elementor-12">${el('bbb0001', 'Soccorso stradale')}${el('bbb0002', 'Servizi')}</div>
+<div class="ekit-template-content-markup ekit-template-content-footer"><div data-elementor-type="wp-post" data-elementor-id="166" class="elementor elementor-166">${el('ccc0001', 'Contatti')}</div></div>
+</body></html>`);
+  const found = pageDocuments(root, 'https://x.example/');
+  assert.deepEqual([found.header.postId, found.page.postId, found.footer.postId], ['155', '12', '166']);
+  assert.equal(found.page.content.length, 2);
+
+  // No marker at all (a header plugin without its own wrapper): what comes before the page is the header, what comes after the footer
+  const bare = parse(`<html><body class="page-id-12 elementor-page-12">
+<div data-elementor-type="wp-post" data-elementor-id="155" class="elementor">${el('aaa0001', 'Menu')}</div>
+<div data-elementor-type="wp-page" data-elementor-id="12" class="elementor">${el('bbb0001', 'Pagina')}</div>
+<div data-elementor-type="wp-post" data-elementor-id="166" class="elementor">${el('ccc0001', 'Piede')}</div>
+<div data-elementor-type="popup" data-elementor-id="900" class="elementor">${el('ddd0001', 'Popup')}</div></body></html>`);
+  const b = pageDocuments(bare, 'https://x.example/');
+  assert.deepEqual([b.header.postId, b.page.postId, b.footer.postId], ['155', '12', '166'], 'the popup is not the footer');
+});
