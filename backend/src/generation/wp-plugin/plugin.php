@@ -245,6 +245,93 @@ function render_page() {
 				return images(lineEl, r.progress[0]);
 			});
 		};
+		var wait = function (ms) {
+			return new Promise(function (resolve) { setTimeout(resolve, ms); });
+		};
+		var until = function (test, timeout) {
+			var start = Date.now();
+			return new Promise(function (resolve, reject) {
+				(function tick() {
+					var ok = false;
+					try { ok = test(); } catch (e) { ok = false; }
+					if (ok) return resolve();
+					if (Date.now() - start > timeout) return reject(new Error('timeout'));
+					setTimeout(tick, 500);
+				})();
+			});
+		};
+		/**
+		 * One page or article opened in its WordPress editor (off screen): Yoast SEO analyzes it there (at
+		 * least 5 seconds, then until its score is set), then it is saved like a click on "Update", which
+		 * stores the scores (the green bullets of the lists of pages and articles).
+		 */
+		var openAndSave = function (item) {
+			return new Promise(function (resolve, reject) {
+				var frame = document.createElement('iframe');
+				frame.setAttribute('aria-hidden', 'true');
+				frame.style.cssText = 'position:fixed;left:-10000px;top:0;width:1280px;height:900px;border:0';
+				var finish = function (err) {
+					clearTimeout(timer);
+					frame.remove();
+					if (err) reject(err); else resolve();
+				};
+				var timer = setTimeout(function () { finish(new Error('timeout')); }, 120000);
+				var opened = false;
+				frame.addEventListener('load', function () {
+					if (opened) return;
+					opened = true;
+					var win = frame.contentWindow;
+					var doc = win.document;
+					var scored = function () {
+						var el = doc.getElementById('yoast_wpseo_linkdex');
+						return el && Number(el.value) > 0;
+					};
+					wait(5000).then(function () {
+						return until(scored, 30000).catch(function () {});
+					}).then(function () {
+						var data = win.wp && win.wp.data;
+						if (data && doc.body.classList.contains('block-editor-page') && data.dispatch('core/editor')) {
+							var editor = data.select('core/editor');
+							return Promise.resolve(data.dispatch('core/editor').savePost()).then(function () {
+								return wait(1000);
+							}).then(function () {
+								return until(function () {
+									var boxes = data.select('core/edit-post');
+									return !editor.isSavingPost() && !(boxes && boxes.isSavingMetaBoxes && boxes.isSavingMetaBoxes());
+								}, 45000);
+							});
+						}
+						// Classic editor: the form is sent by its "Update" button, the editor loads again when it is saved
+						var update = doc.getElementById('publish');
+						if (!update) throw new Error('editor not found');
+						return new Promise(function (saved) {
+							frame.addEventListener('load', function () { saved(); });
+							update.click();
+						});
+					}).then(function () { finish(); }, finish);
+				});
+				frame.src = item.url;
+				document.body.appendChild(frame);
+			});
+		};
+		var seoPass = function (items) {
+			if (!items || !items.length) return Promise.resolve();
+			var status = line('');
+			var failed = 0;
+			var next = function (i) {
+				if (i >= items.length) {
+					status.textContent = fmt(cfg.ui.seoPassDone, { n: items.length - failed, total: items.length });
+					status.className = failed ? 'esg-warning' : 'esg-success';
+					return Promise.resolve();
+				}
+				status.textContent = fmt(cfg.ui.seoPass, { done: i + 1, total: items.length, title: items[i].title });
+				return openAndSave(items[i]).catch(function () {
+					failed++;
+					line(fmt(cfg.ui.seoPassFailed, { title: items[i].title }), 'warning');
+				}).then(function () { return next(i + 1); });
+			};
+			return next(0);
+		};
 		var run = function () {
 			button.disabled = true;
 			log.innerHTML = '';
@@ -267,6 +354,9 @@ function render_page() {
 				status.className = 'esg-success';
 				document.getElementById('esg-links').innerHTML = r.linksHtml;
 				button.textContent = cfg.ui.rerun;
+				// Yoast SEO computes its scores in the editor: every page and article is opened and saved there
+				return seoPass(r.seo);
+			}).then(function () {
 				// The site does not need this plugin any more: it removes itself (or asks to be removed)
 				var cleaning = line(cfg.ui.cleaning);
 				return step('cleanup').catch(function () {
@@ -334,6 +424,24 @@ function created_links(array $state) {
 	return $links;
 }
 
+/**
+ * Pages and articles whose Yoast SEO scores must be computed: Yoast analyzes a text only in its editor,
+ * so the page of this plugin opens each one there and saves it (openAndSave). Nothing without Yoast SEO.
+ */
+function seo_pass_items(array $state) {
+	if (!defined('WPSEO_VERSION')) {
+		return array();
+	}
+	$items = array();
+	foreach (array_merge($state['pages'], $state['posts']) as $id) {
+		$url = get_post($id) ? get_edit_post_link($id, 'raw') : '';
+		if ($url) {
+			$items[] = array('id' => (int) $id, 'title' => get_the_title($id), 'url' => $url);
+		}
+	}
+	return $items;
+}
+
 function render_links(array $links) {
 	if (!$links) {
 		return;
@@ -373,6 +481,7 @@ function ajax_step() {
 			ob_start();
 			render_links(created_links(state()));
 			$result['linksHtml'] = ob_get_clean();
+			$result['seo'] = seo_pass_items(state());
 			wp_send_json_success($result);
 		}
 		if ($step === 'cleanup') {

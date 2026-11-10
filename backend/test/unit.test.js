@@ -343,3 +343,19 @@ test('WordPress plugin: Akismet installed or only activated, Hello Dolly deleted
   // ensure_plugin: a plugin whose folder exists is not downloaded again, only activated
   assert.match(php, /if \(!file_exists\(WP_PLUGIN_DIR \. '\/' \. \$plugin\['file'\]\) && !\(\$folder && is_dir\(WP_PLUGIN_DIR \. '\/' \. \$folder\)\)\) \{/);
 });
+
+test('WordPress plugin: Yoast SEO scores, every page and article opened in the editor, analyzed, then saved', () => {
+  const php = fs.readFileSync(new URL('../src/generation/wp-plugin/plugin.php', import.meta.url), 'utf8');
+  // The server gives the list only with Yoast SEO, after the content is created
+  assert.match(php, /\$result\['seo'\] = seo_pass_items\(state\(\)\);/);
+  assert.match(php, /function seo_pass_items\(array \$state\) \{\s+if \(!defined\('WPSEO_VERSION'\)\) \{\s+return array\(\);/);
+  // The page: at least 5 seconds, then until the score of Yoast is set, then saved; before the plugin removes itself
+  assert.match(php, /wait\(5000\)\.then\(function \(\) \{\s+return until\(scored, 30000\)/);
+  assert.match(php, /getElementById\('yoast_wpseo_linkdex'\)/);
+  assert.match(php, /dispatch\('core\/editor'\)\.savePost\(\)/);
+  assert.match(php, /getElementById\('publish'\)/);
+  assert.ok(php.indexOf('return seoPass(r.seo);') < php.indexOf("return step('cleanup')"), 'the SEO pass runs before the plugin removes itself');
+  // The admin script is valid JavaScript
+  const js = /<script>\s*(\(function \(\) \{[\s\S]*?\}\)\(\);)\s*<\/script>/.exec(php)[1].replace(/<\?php echo wp_json_encode\(\$config\); \?>/, '{}');
+  assert.doesNotThrow(() => new Function(js));
+});
