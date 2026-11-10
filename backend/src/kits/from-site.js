@@ -54,7 +54,54 @@ export function menuPages(root, home) {
   return out;
 }
 
-const SKIP_CSS = /\/plugins\/elementor(-pro)?\/assets\/|\/elementor\/css\/custom-|font-?awesome|dashicons|admin-bar|fonts\.googleapis|fonts\.bunny|\/wp-admin\//i;
+/**
+ * Lazy loading undone on a parsed page: cache and performance plugins (LiteSpeed, WP Rocket, Smush,
+ * lazysizes...) put the real address of images, iframes and background photos in data-* attributes
+ * and a script moves it back. The copy has no such script: the real addresses are restored (absolute),
+ * so every image shows, also inside the add-on widgets kept as HTML.
+ */
+export function undoLazyLoading(root, base) {
+  const abs = (u) => {
+    try {
+      return new URL(u, base).href;
+    } catch {
+      return u;
+    }
+  };
+  const absSet = (set) =>
+    set
+      .split(',')
+      .map((part) => {
+        const [u, ...size] = part.trim().split(/\s+/);
+        return u ? [abs(u), ...size].join(' ') : '';
+      })
+      .filter(Boolean)
+      .join(', ');
+  const first = (el, names) => names.map((n) => el.getAttribute(n)).find((v) => v && !/^data:/i.test(v));
+  for (const el of root.querySelectorAll('img, source, iframe, video')) {
+    const src = first(el, ['data-src', 'data-lazy-src', 'data-orig-src', 'data-original', 'data-litespeed-src', 'data-lazy']);
+    const current = el.getAttribute('src');
+    if (src) el.setAttribute('src', abs(src));
+    else if (current && !/^data:/i.test(current)) el.setAttribute('src', abs(current));
+    const srcset = first(el, ['data-srcset', 'data-lazy-srcset']) || el.getAttribute('srcset');
+    if (srcset && !/^data:/i.test(srcset)) el.setAttribute('srcset', absSet(srcset));
+    const sizes = first(el, ['data-sizes', 'data-lazy-sizes']);
+    if (sizes && sizes !== 'auto') el.setAttribute('sizes', sizes);
+    for (const name of ['data-src', 'data-lazy-src', 'data-orig-src', 'data-original', 'data-litespeed-src', 'data-lazy', 'data-srcset', 'data-lazy-srcset', 'data-sizes', 'data-lazy-sizes', 'data-lazyloaded', 'data-ll-status']) el.removeAttribute(name);
+    const cls = el.getAttribute('class');
+    if (cls && /\b(lazyload|lazy|lazyloading|litespeed-loaded|ls-is-cached)\b/.test(cls)) el.setAttribute('class', cls.replace(/\b(lazyload|lazyloading|lazy)\b/g, 'lazyloaded').trim());
+  }
+  // Background photos kept in data-bg / data-lazy-bg / data-background (shown by a script)
+  for (const el of root.querySelectorAll('[data-bg], [data-lazy-bg], [data-background], [data-bg-image], [data-background-image]')) {
+    const raw = first(el, ['data-bg', 'data-lazy-bg', 'data-background', 'data-bg-image', 'data-background-image']);
+    if (!raw) continue;
+    const url = /url\(/i.test(raw) ? raw.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, (m, q, u) => `url('${abs(u)}')`) : `url('${abs(raw)}')`;
+    const style = el.getAttribute('style') || '';
+    if (!/background-image/i.test(style)) el.setAttribute('style', `${style}${style && !/;\s*$/.test(style) ? ';' : ''}background-image:${url}`);
+  }
+}
+
+const SKIP_CSS =/\/plugins\/elementor(-pro)?\/assets\/|\/elementor\/css\/custom-|font-?awesome|dashicons|admin-bar|fonts\.googleapis|fonts\.bunny|\/wp-admin\//i;
 
 /** Elementor CSS of a page:its stylesheets (post-<id>.css, global.css, local Google Fonts) and its inline Elementor styles. */
 function cssSources(root, pageUrl) {
@@ -92,12 +139,15 @@ export async function crawlSite(address, opts = {}) {
   const start = referenceUrl(address);
   const first = await safeGet(start, { ...opts, maxBytes: MAX_HTML, accept: 'text/html' });
   const homeRoot = parse(first.text);
+  undoLazyLoading(homeRoot, first.url);
   const pages = [{ url: first.url, label: 'Home', html: first.text, root: homeRoot }];
   for (const p of menuPages(homeRoot, first.url).slice(0, MAX_PAGES - 1)) {
     try {
       const res = await safeGet(p.url, { ...opts, maxBytes: MAX_HTML, accept: 'text/html' });
       if (pages.some((x) => x.url.href === res.url.href)) continue;
-      pages.push({ url: res.url, label: p.label, html: res.text, root: parse(res.text) });
+      const root = parse(res.text);
+      undoLazyLoading(root, res.url);
+      pages.push({ url: res.url, label: p.label, html: res.text, root });
     } catch {
       /* a page that cannot be read is left out */
     }
@@ -734,10 +784,10 @@ export function writeKitFromSite(site, dir) {
   const styles = globalStylesFromCss(css);
   if (styles) fs.writeFileSync(path.join(dir, 'site-settings.json'), JSON.stringify({ settings: styles }));
   // Add-on widgets kept as HTML: their scripts (moving rows, sliders) do not run on the new site, so what
-  // they place beyond the edge of the page is cut instead of widening the whole page
+  // they place beyond the edge of the page scrolls sideways inside the widget instead of widening the whole page
   // Their blocks hidden until a script reveals them (on load / on scroll) are shown as they are
   const addonSafety = notes.size
-    ? '\n.elementor-widget-html{max-width:100%;overflow-x:clip}' +
+    ? '\n.elementor-widget-html{max-width:100%;overflow-x:auto;scrollbar-width:thin}' +
       '\n.elementor-widget-html :is([class*="--load"],[class*="scroll-reveal"],[class*="-reveal "],.wow,[data-aos],.elementor-invisible,.reveal,.is-hidden-until-load){opacity:1!important;visibility:visible!important}'
     : '';
   fs.writeFileSync(path.join(dir, 'site.css'), `${fontImports(css, site.fontLinks).join('\n')}\n${themeVariables(css, site.vars)}${css}${addonSafety}`);

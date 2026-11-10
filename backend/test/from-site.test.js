@@ -190,3 +190,21 @@ test('CSS filter: commas inside :where() / :is() / attributes and braces inside 
   // Every parenthesis of the result is closed
   assert.equal((out.match(/\(/g) || []).length, (out.match(/\)/g) || []).length);
 });
+
+test('lazy loading undone: the real addresses of images and background photos, absolute', async () => {
+  const { undoLazyLoading } = await import('../src/kits/from-site.js');
+  const { parse } = await import('node-html-parser');
+  const root = parse(
+    '<img data-lazyloaded="1" src="data:image/svg+xml;base64,AAAA" data-src="/wp-content/uploads/a.jpg" data-srcset="/wp-content/uploads/a-300.jpg 300w, /wp-content/uploads/a.jpg 1200w" data-sizes="(max-width: 1200px) 100vw, 1200px" class="lazyload x">' +
+      '<img src="b.png"><div class="tile" data-bg="/wp-content/uploads/bg.jpg" style="color:red"></div>'
+  );
+  undoLazyLoading(root, new URL('https://ref.example/pagina/'));
+  const [a, b] = root.querySelectorAll('img');
+  assert.equal(a.getAttribute('src'), 'https://ref.example/wp-content/uploads/a.jpg');
+  assert.equal(a.getAttribute('srcset'), 'https://ref.example/wp-content/uploads/a-300.jpg 300w, https://ref.example/wp-content/uploads/a.jpg 1200w');
+  assert.equal(a.getAttribute('sizes'), '(max-width: 1200px) 100vw, 1200px');
+  assert.equal(a.getAttribute('data-src'), undefined);
+  assert.equal(a.getAttribute('data-lazyloaded'), undefined);
+  assert.equal(b.getAttribute('src'), 'https://ref.example/pagina/b.png');
+  assert.match(root.querySelector('.tile').getAttribute('style'), /color:red;background-image:url\('https:\/\/ref\.example\/wp-content\/uploads\/bg\.jpg'\)/);
+});
