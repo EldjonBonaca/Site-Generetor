@@ -6,7 +6,7 @@ import { useToast } from '../components/Toast.jsx';
 import { Badge, Button, Card, EmptyState, IconButton, PageHeader, Spinner } from '../components/ui.jsx';
 
 /** Plugins the WordPress plugin of every site installs and activates (wp-plugin/plugin.php). */
-const FREE_PLUGINS = ['Elementor', 'Contact Form 7', 'Yoast SEO', 'Ultimate Addons for Elementor', 'LocalWeb All In One', 'Loginizer', 'WP Fastest Cache', 'Really Simple SSL', 'Joinchat (WhatsApp, if on)'];
+const FREE_PLUGINS = ['Elementor', 'Contact Form 7', 'Yoast SEO', 'Ultimate Addons for Elementor', 'LocalWeb All In One', 'Loginizer', 'WP Fastest Cache', 'Really Simple SSL', 'Akismet Anti-spam', 'Joinchat (WhatsApp, if on)'];
 
 /** Premium plugins uploaded once (e.g. WP Fastest Cache Premium): installed on every site exported afterwards. */
 export default function PluginsPage() {
@@ -87,7 +87,7 @@ export default function PluginsPage() {
             </ul>
           )}
         </Card>
-        <Card title={t('Installed on every site')} description={t('Free plugins from wordpress.org, installed and activated automatically. Only the Hello Elementor theme is kept; when the site is ready the builder plugin removes itself.')}>
+        <Card title={t('Installed on every site')} description={t('Free plugins from wordpress.org, installed and activated automatically (one already installed is only activated). The Hello Dolly sample plugin is deleted and only the Hello Elementor theme is kept; when the site is ready the builder plugin removes itself.')}>
           <div className="flex flex-wrap gap-2">
             {FREE_PLUGINS.map((name) => (
               <Badge key={name} color="green">

@@ -43,8 +43,10 @@ const CF7 = array('slug' => 'contact-form-7', 'file' => 'contact-form-7/wp-conta
 const UAE = array('slug' => 'header-footer-elementor', 'file' => 'header-footer-elementor/header-footer-elementor.php', 'name' => 'Ultimate Addons for Elementor');
 // SEO: the focus keyphrase, SEO title and meta description of every page and article are filled in
 const YOAST = array('slug' => 'wordpress-seo', 'file' => 'wordpress-seo/wp-seo.php', 'name' => 'Yoast SEO');
-// LocalWeb All In One, security (login protection), cache and SSL: installed and activated on every site
+// LocalWeb All In One, security (login protection), cache, SSL and anti-spam: installed and activated on every site
+// (a plugin already installed, like the Akismet that comes with WordPress, is only activated)
 const SITE_PLUGINS = array(
+	array('slug' => 'akismet', 'file' => 'akismet/akismet.php', 'name' => 'Akismet Anti-spam'),
 	array('slug' => 'lw-all-in-one', 'file' => 'lw-all-in-one/lw-all-in-one.php', 'name' => 'LocalWeb All In One'),
 	array('slug' => 'loginizer', 'file' => 'loginizer/loginizer.php', 'name' => 'Loginizer'),
 	array('slug' => 'wp-fastest-cache', 'file' => 'wp-fastest-cache/wpFastestCache.php', 'name' => 'WP Fastest Cache'),
@@ -546,12 +548,45 @@ function setup_dependencies() {
 }
 
 /**
+ * Hello Dolly, the sample plugin that comes with WordPress (hello.php, or hello-dolly/hello.php), is
+ * deactivated and deleted: a site for a client keeps no sample plugin.
+ */
+function remove_hello_dolly(array &$messages) {
+	if (is_multisite() || !current_user_can('delete_plugins')) {
+		return;
+	}
+	load_upgrader();
+	require_once ABSPATH . 'wp-admin/includes/file.php';
+	$found = array();
+	foreach (array_keys(get_plugins()) as $file) {
+		if ($file === 'hello.php' || $file === 'hello-dolly/hello.php') {
+			$found[] = $file;
+		}
+	}
+	if (!$found) {
+		return;
+	}
+	if (get_filesystem_method() !== 'direct') {
+		$messages[] = array('level' => 'warning', 'text' => t('pluginRemoveFailed', array('name' => 'Hello Dolly', 'error' => 'FTP credentials required')));
+		return;
+	}
+	deactivate_plugins($found, true);
+	$result = delete_plugins($found);
+	if ($result === true) {
+		$messages[] = array('level' => 'info', 'text' => t('pluginRemoved', array('name' => 'Hello Dolly')));
+	} else {
+		$messages[] = array('level' => 'warning', 'text' => t('pluginRemoveFailed', array('name' => 'Hello Dolly', 'error' => is_wp_error($result) ? $result->get_error_message() : 'unknown error')));
+	}
+}
+
+/**
  * Second step (its own request, so that a slow host does not time out): login protection, cache and
  * SSL, the premium plugins bundled with this plugin, and only Hello Elementor among the themes.
  */
 function setup_extras() {
 	$messages = array();
 	$data = data();
+	remove_hello_dolly($messages);
 	foreach (SITE_PLUGINS as $plugin) {
 		ensure_plugin($plugin, $messages);
 	}

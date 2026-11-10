@@ -720,4 +720,6 @@ export default {
   "{n} from their HTML": "{n} dal loro HTML",
   "header not made with Elementor: the site gets the header of the generator, with the colors and fonts of the website": "header non realizzato con Elementor: il sito usa l'header del generatore, con i colori e i font del sito",
   "footer not copied": "footer non copiato",
+  "Free plugins from wordpress.org, installed and activated automatically (one already installed is only activated). The Hello Dolly sample plugin is deleted and only the Hello Elementor theme is kept; when the site is ready the builder plugin removes itself.":
+    "Plugin gratuiti da wordpress.org, installati e attivati in automatico (uno già installato viene solo attivato). Il plugin di esempio Hello Dolly viene eliminato e resta solo il tema Hello Elementor; quando il sito è pronto il plugin di creazione si rimuove da solo.",
 };

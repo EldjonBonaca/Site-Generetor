@@ -333,3 +333,13 @@ test('key figures: 1200 years of experience or 300% are corrected, believable fi
   assert.equal(fixKeyFigures(page), 2);
   assert.deepEqual(page.fields.map((f) => f.value), ['25+', 'Anni di esperienza', '850', 'Lavori completati', '25', 'Anni nel settore']);
 });
+
+test('WordPress plugin: Akismet installed or only activated, Hello Dolly deleted', () => {
+  const php = fs.readFileSync(new URL('../src/generation/wp-plugin/plugin.php', import.meta.url), 'utf8');
+  assert.match(php, /array\('slug' => 'akismet', 'file' => 'akismet\/akismet\.php'/);
+  assert.match(php, /remove_hello_dolly\(\$messages\);\s+foreach \(SITE_PLUGINS as \$plugin\)/, 'before the plugins of the site are installed');
+  assert.match(php, /\$file === 'hello\.php' \|\| \$file === 'hello-dolly\/hello\.php'/);
+  assert.match(php, /deactivate_plugins\(\$found, true\);\s+\$result = delete_plugins\(\$found\);/);
+  // ensure_plugin: a plugin whose folder exists is not downloaded again, only activated
+  assert.match(php, /if \(!file_exists\(WP_PLUGIN_DIR \. '\/' \. \$plugin\['file'\]\) && !\(\$folder && is_dir\(WP_PLUGIN_DIR \. '\/' \. \$folder\)\)\) \{/);
+});
