@@ -713,4 +713,7 @@ export default {
   "Template Kit created": "Template Kit creato",
   "Check the role of each page in Template Kit, then open a project and choose this kit in its Template step: the texts are written by the AI, the photos are the ones of the project and the WordPress plugin is generated as usual.": "Controlla il ruolo di ogni pagina in Template Kit, poi apri un progetto e scegli questo kit nel passaggio Template: i testi li scrive l'AI, le foto sono quelle del progetto e il plugin WordPress viene generato come sempre.",
   "Open Template Kit": "Apri Template Kit",
+  "Preview": "Anteprima",
+  "Preview of the structure": "Anteprima della struttura",
+  "The copied page as it is imported into Elementor, with the CSS of the website. The texts and photos of the website appear here only as placeholders: the AI writes the texts of the client and the photos are the ones of the project. Scripts of the website (sliders, animations) do not run in the preview.": "La pagina copiata come viene importata in Elementor, con il CSS del sito. I testi e le foto del sito qui sono solo segnaposto: l'AI scrive i testi del cliente e le foto sono quelle del progetto. Gli script del sito (slider, animazioni) non funzionano nell'anteprima.",
 };

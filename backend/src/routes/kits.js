@@ -26,6 +26,7 @@ import { touch } from './projects.js';
 import { loadContext, pageTitle } from '../generation/plan.js';
 import { kitLayouts, sectionTemplates, validLayout } from '../kits/site.js';
 import { crawlSite, writeKitFromSite } from '../kits/from-site.js';
+import { previewPage, PREVIEW_CSP } from '../kits/preview.js';
 
 const router = Router();
 
@@ -286,6 +287,24 @@ router.get('/template-kits/:id/screenshot', (req, res) => {
   if (!fs.existsSync(file)) throw notFound('Screenshot');
   res.set({ 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox", 'Cache-Control': 'private, max-age=86400' });
   res.sendFile(file);
+});
+
+/**
+ * Preview of a page of the kit (?template=<id>), with the header and footer of the kit around it, as
+ * the structure will be imported into Elementor (kits/preview.js). Sandboxed: no scripts.
+ */
+router.get('/template-kits/:id/preview', (req, res) => {
+  const row = requireKit(req.params.id);
+  const info = parseJson(row.info_json, { templates: [] });
+  const roles = effectiveRoles(info, parseJson(row.analysis_json, null), parseJson(row.roles_json, {}));
+  const tpl = info.templates.find((t) => t.id === String(req.query.template || '') && t.valid);
+  if (!tpl) throw notFound('Template');
+  const load = (id) => (id ? loadKitTemplate(kitDir(row), id) : null);
+  const role = roles[tpl.id];
+  const themePart = (r) => (role === r ? null : load(info.templates.find((t) => roles[t.id] === r)?.id));
+  const html = previewPage({ dir: kitDir(row), info }, { header: themePart('header'), page: load(tpl.id), footer: themePart('footer') }, `${row.name} – ${tpl.title}`);
+  res.set({ 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': PREVIEW_CSP, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store' });
+  res.send(html);
 });
 
 /** The kit used by a project instead of a category template (kit_id null = none). */

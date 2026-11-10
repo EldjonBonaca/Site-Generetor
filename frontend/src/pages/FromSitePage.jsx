@@ -6,14 +6,14 @@
  */
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Copy, Globe, Package, RefreshCw, Save, ScanSearch, Wand2 } from 'lucide-react';
+import { Bot, Copy, Eye, Globe, Package, RefreshCw, Save, ScanSearch, Wand2 } from 'lucide-react';
 import { api } from '../api.js';
 import { useT } from '../i18n/index.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { Alert, Button, Card, EmptyState, Field, Input, PageHeader, Select, Spinner, Textarea, Toggle } from '../components/ui.jsx';
 import { TemplatePreview, TemplateSwatches } from '../components/TemplatePreview.jsx';
 import { HOME_SECTION_LABELS, LANGUAGE_OPTIONS } from '../components/TemplateDialogs.jsx';
-import { KIT_ROLE_LABELS } from '../components/KitParts.jsx';
+import { KIT_ROLE_LABELS, kitPreviewUrl } from '../components/KitParts.jsx';
 
 const NEW_CATEGORY = 'new';
 
@@ -125,6 +125,8 @@ export default function FromSitePage() {
   };
 
   const ready = providerId && url.trim() && (categoryId !== NEW_CATEGORY || newCategory.trim());
+  const homeTemplate = kit?.templates.find((tpl) => tpl.valid && tpl.role === 'home') || kit?.templates.find((tpl) => tpl.valid && tpl.role !== 'header' && tpl.role !== 'footer');
+  const homePreview = homeTemplate ? kitPreviewUrl(kit, homeTemplate.id) : null;
   const ref = draft?.reference;
 
   return (
@@ -173,7 +175,7 @@ export default function FromSitePage() {
           }
         />
       ) : mode === 'exact' ? (
-        <div className="max-w-2xl space-y-4">
+        <div className={kit ? 'space-y-4 [&>*:not(:last-child)]:max-w-2xl' : 'max-w-2xl space-y-4'}>
           <Card>
             <div className="space-y-4">
               <Field label={t('Address of the website')} hint={t('E.g. www.example.com: the home page and the pages of its menu are copied (at most 8).')} required>
@@ -215,6 +217,16 @@ export default function FromSitePage() {
                       </li>
                     ))}
                 </ul>
+                <div className="flex flex-wrap gap-2">
+                  {kit.templates
+                    .filter((tpl) => tpl.valid && tpl.role !== 'header' && tpl.role !== 'footer')
+                    .map((tpl) => (
+                      <a key={tpl.id} href={kitPreviewUrl(kit, tpl.id)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:border-brand-300 hover:bg-brand-50">
+                        <Eye className="size-3.5" />
+                        {tpl.title}
+                      </a>
+                    ))}
+                </div>
                 {kit.from_site.notes.length > 0 && (
                   <Alert kind="warning">
                     {t('Some elements are kept exactly as on the website (HTML), because their settings cannot be read from the page: {list}. They look the same; check their texts and links in Elementor.', { list: kit.from_site.notes.join(', ') })}
@@ -229,6 +241,11 @@ export default function FromSitePage() {
                   </Link>
                 </Alert>
               </div>
+            </Card>
+          )}
+          {homePreview && (
+            <Card title={t('Preview of the structure')} description={t('The copied page as it is imported into Elementor, with the CSS of the website. The texts and photos of the website appear here only as placeholders: the AI writes the texts of the client and the photos are the ones of the project. Scripts of the website (sliders, animations) do not run in the preview.')} className="max-w-none" padded={false}>
+              <iframe title={t('Preview of the structure')} src={homePreview} sandbox="allow-popups" className="h-[80vh] w-full rounded-b-xl border-0 bg-white" />
             </Card>
           )}
         </div>

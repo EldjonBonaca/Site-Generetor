@@ -3,7 +3,7 @@
  * role of each template, sections, plugins), shared by the Template Kit page and the Template step.
  */
 import { useEffect, useState } from 'react';
-import { AlertTriangle, ArrowDown, ArrowUp, Check, Package, Pencil, Plus, RotateCcw, ScanSearch, X } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, Check, Eye, Package, Pencil, Plus, RotateCcw, ScanSearch, X } from 'lucide-react';
 import { api } from '../api.js';
 import { useT } from '../i18n/index.jsx';
 import { useToast } from './Toast.jsx';
@@ -22,7 +22,9 @@ export const KIT_ROLE_LABELS = {
   ignore: 'Not used',
 };
 
-export const kitScreenshotUrl = (kit, path) => `/api/template-kits/${kit.id}/screenshot?path=${encodeURIComponent(path)}`;
+/** Preview of a page of the kit as its structure is imported (header + page + footer, sandboxed, no scripts). */
+export const kitPreviewUrl = (kit, templateId) => `/api/template-kits/${kit.id}/preview?template=${encodeURIComponent(templateId)}`;
+export const kitScreenshotUrl =(kit, path) => `/api/template-kits/${kit.id}/screenshot?path=${encodeURIComponent(path)}`;
 
 /** Screenshot of the kit home page, or its colors when the kit has no screenshot. */
 export function KitCover({ kit, className }) {
@@ -245,6 +247,12 @@ export function KitDetailsDialog({ kitId, onClose, onChanged }) {
                           </li>
                         ))}
                       </ol>
+                    )}
+                    {tpl.valid && (
+                      <a href={kitPreviewUrl(kit, tpl.id)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline">
+                        <Eye className="size-3.5" />
+                        {t('Preview')}
+                      </a>
                     )}
                     <p className="text-[11px] text-slate-400">
                       {t('{fields} texts · {images} images', { fields: tpl.fields, images: tpl.images })}

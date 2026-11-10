@@ -131,9 +131,9 @@ test('an Elementor website becomes a Template Kit with the same structure, its C
   assert.doesNotMatch(siteCss, /hero\.jpg|team\.jpg/);
   assert.match(siteCss, /url\("https:\/\/ref\.example\/wp-content\/uploads\/wave\.svg"\)/);
   assert.match(siteCss, /body\{--e-global-color-primary:#0A6E8A/);
-  assert.match(siteCss, /@import url\("https:\/\/fonts\.googleapis\.com\/css\?family=Montserrat:300/);
+  assert.match(siteCss, /@import url\("https:\/\/fonts\.googleapis\.com\/css\?family=Montserrat:100,200,300/);
   assert.match(siteCss, /padding:120px 0/);
-  assert.doesNotMatch(siteCss, /astra/, 'theme CSS is not taken');
+  assert.ok(siteCss.indexOf('{--flex-direction:row;}') > siteCss.indexOf('body{}'), 'the CSS keeps the order of the page: the inline style after the theme stylesheet');
 
   // Built as a kit site: the CSS goes to the Additional CSS of WordPress
   const outlines = Object.fromEntries(info.templates.map((t) => [t.id, outlineDocument(loadKitTemplate(dir, t.id))]));
@@ -141,6 +141,27 @@ test('an Elementor website becomes a Template Kit with the same structure, its C
   const kit = { id: 1, name: 'x', dir, info, analysis, roles: effectiveRoles(info, analysis, {}), demoImages: {} };
   const built = buildKitSite(kit, { lang: 'it', siteName: 'Rossi', pages: { home: { title: 'Home', url: '/' }, about: { title: 'Chi siamo', url: '/chi-siamo/' }, services: { title: 'Servizi', url: '/servizi/' }, gallery: { title: 'Galleria', url: '/galleria/' }, contact: { title: 'Contatti', url: '/contatti/' } }, services: [], copyright: '' });
   assert.match(built.siteCss, /elementor-element-a000001/);
+});
+
+test('preview of a kit page: the Elementor markup of the structure, its CSS, no scripts', async () => {
+  const { previewPage, renderDocument, PREVIEW_CSP } = await import('../src/kits/preview.js');
+  const site = await crawlSite('ref.example', { fetchImpl: fakeFetch, lookup });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esg-kit-'));
+  writeKitFromSite(site, dir);
+  const info = readKit(dir);
+  const by = (role) => loadKitTemplate(dir, info.templates.find((t) => t.suggestedRole === role).id);
+  const html = previewPage({ dir, info }, { header: by('header'), page: by('home'), footer: by('footer') }, 'Home');
+  // Same classes and ids as on Elementor: the copied CSS styles them
+  assert.match(html, /class="elementor-element elementor-element-c0ffee1 e-flex e-con-boxed e-con e-parent[^"]*" data-id="c0ffee1"/);
+  assert.match(html, /<h1 class="elementor-heading-title elementor-size-default">Impianti idraulici a Torino<\/h1>/);
+  assert.match(html, /background-image:url\('https:\/\/ref\.example\/wp-content\/uploads\/2024\/hero\.jpg'\)/, 'background photo from the settings');
+  assert.match(html, /elementor-widget-ekit-heading/, 'the widget class of an add-on kept as HTML stays');
+  assert.match(html, /body \.elementor \.elementor-element\.elementor-element-a000001/, 'the CSS of the site');
+  assert.match(html, /--e-global-color-primary:#0A6E8A/);
+  assert.match(PREVIEW_CSP, /sandbox/);
+  assert.doesNotMatch(PREVIEW_CSP, /script-src|allow-scripts/);
+  // Texts are escaped where Elementor escapes them
+  assert.match(renderDocument([{ id: 'x1', elType: 'widget', widgetType: 'button', settings: { text: '<b>Go</b>', link: { url: '/' } } }]), /&lt;b&gt;Go&lt;\/b&gt;/);
 });
 
 test('a website not built with Elementor is refused with an explanation', async () => {

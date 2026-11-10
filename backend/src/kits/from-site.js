@@ -61,17 +61,27 @@ function cssSources(root, pageUrl) {
   // Every stylesheet of the site (Elementor CSS of the pages, add-on widgets, theme; also the files merged by
   // cache plugins: LiteSpeed, WP Rocket, Autoptimize…), except what the new site already has: the frontend of
   // Elementor / Elementor Pro (custom-*.css: its breakpoints), Font Awesome, WordPress admin, Google Fonts
-  const links = root
+  // In the order of the page: a theme's customizations (inline) come after its stylesheet (its reset)
+  const items = [];
+  for (const n of root.querySelectorAll('link, style')) {
+    if (n.rawTagName.toLowerCase() === 'style') {
+      if (!/admin-bar|wp-emoji|dashicons/i.test(n.getAttribute('id') || '')) items.push({ inline: n.innerHTML });
+      continue;
+    }
+    const rel = n.getAttribute('rel') || '';
+    if (!/stylesheet/i.test(rel) && !(/preload/i.test(rel) && /style/i.test(n.getAttribute('as') || ''))) continue;
+    const h = n.getAttribute('href');
+    if (h && /\.css(\?|$)|\/css\?|litespeed\/css|cache\/(min|autoptimize|minify)/i.test(h) && !SKIP_CSS.test(h)) items.push({ href: new URL(h, pageUrl).href });
+  }
+  const links = items.filter((x) => x.href).map((x) => x.href);
+  const inline = items.filter((x) => x.inline !== undefined).map((x) => x.inline);
+  // The frontend CSS of Elementor itself: only for the preview of the kit (the new site has its own)
+  const core = root
     .querySelectorAll('link')
-    .filter((l) => /stylesheet/i.test(l.getAttribute('rel') || '') || (/preload/i.test(l.getAttribute('rel') || '') && /style/i.test(l.getAttribute('as') || '')))
     .map((l) => l.getAttribute('href'))
-    .filter((h) => h && /\.css(\?|$)|\/css\?|litespeed\/css|cache\/(min|autoptimize|minify)/i.test(h) && !SKIP_CSS.test(h))
+    .filter((h) => h && /\/plugins\/elementor(-pro)?\/assets\/(lib\/[^/]+\/)?css\/[^?]*\.css/i.test(h))
     .map((h) => new URL(h, pageUrl).href);
-  const inline = root
-    .querySelectorAll('style')
-    .filter((s) => !/admin-bar|wp-emoji|dashicons/i.test(s.getAttribute('id') || ''))
-    .map((s) => s.innerHTML);
-  return { links, inline };
+  return { items, links, inline, core };
 }
 
 /**
@@ -97,10 +107,27 @@ export async function crawlSite(address, opts = {}) {
   let size = 0;
   const fontLinks = new Set();
   const vars = new Map();
+  const coreCss = [];
   for (const page of pages) {
-    const { links, inline } = cssSources(page.root, page.url);
-    for (const block of inline) css.push({ base: page.url.href, text: block });
-    for (const href of links) {
+    const { items, core } = cssSources(page.root, page.url);
+    for (const href of core) {
+      if (seen.has(href) || size > MAX_TOTAL_CSS) continue;
+      seen.add(href);
+      try {
+        const res = await safeGet(new URL(href), { ...opts, maxBytes: MAX_CSS, accept: 'text/css' });
+        size += res.text.length;
+        coreCss.push({ base: href, text: res.text });
+      } catch {
+        /* the preview uses its basic layout */
+      }
+    }
+    // Stylesheets and inline styles in the order of the page (the later rules win, as on the site)
+    for (const item of items) {
+      if (item.inline !== undefined) {
+        css.push({ base: page.url.href, text: item.inline });
+        continue;
+      }
+      const href = item.href;
       if (seen.has(href) || size > MAX_TOTAL_CSS) continue;
       seen.add(href);
       try {
@@ -123,7 +150,7 @@ export async function crawlSite(address, opts = {}) {
       if (/fonts\.googleapis\.com\/css/i.test(href)) fontLinks.add(href);
     }
   }
-  return { url: first.url.href, pages, css, fontLinks: [...fontLinks], vars };
+  return { url: first.url.href, pages, css, coreCss, fontLinks: [...fontLinks], vars };
 }
 
 // -------------------------------------------------------------------------------- conversion --
@@ -287,6 +314,10 @@ function tabs(n, titleSel, contentSel) {
   return { tabs: titles.map((t, i) => ({ _id: `tb${i}`, tab_title: t.text.replace(/\s+/g, ' ').trim(), tab_content: contents[i]?.innerHTML.trim() || '' })) };
 }
 
+/** Classes Elementor writes itself on an element (from its type and settings): not copied as custom classes. */
+const GENERATED_CLASS =
+  /^(elementor-(element|element-[0-9a-z]+|widget|widget-[\w-]+|section|top-section|inner-section|column|col-\d+|top-column|inner-column|section-[\w-]+|hidden-[\w-]+|invisible|motion-effects-[\w-]+|sticky[\w-]*|column-gap-\w+|align-[\w-]+|widget__width-[\w-]+|widget-[\w-]+__width-[\w-]+|tablet-align-[\w-]+|mobile-align-[\w-]+|position-[\w-]+|vertical-align-[\w-]+|view-[\w-]+|shape-[\w-]+|grid-[\w-]*|repeater-item-[\w-]+|headline--[\w-]+|button-[\w-]+|icon-list--[\w-]+|absolute|fixed|reverse-[\w-]+|element-populated|has-[\w-]+|mobile-position-[\w-]+|kit-\d+)|e-(con|flex|grid|con-boxed|con-full|parent|child|lazyloaded|transform)|animated|animated-[\w-]+|ha-has-[\w-]+|e-con-inner)$/;
+
 /**
  * One rendered Elementor element -> its Elementor JSON (same id, type and content).
  * notes: collects what could not be converted exactly.
@@ -296,6 +327,10 @@ function convertElement(node, base, notes) {
   const id = node.getAttribute('data-id') || Math.random().toString(16).slice(2, 9);
   const cls = node.getAttribute('class') || '';
   const settings = jsonAttr(node, 'data-settings');
+  // Classes of the element that Elementor does not add by itself (Advanced > CSS Classes of the designer):
+  // kept, the CSS of the site uses them
+  const own = cls.split(/\s+/).filter((c) => c && !GENERATED_CLASS.test(c));
+  if (own.length) settings[elType === 'widget' ? '_css_classes' : 'css_classes'] = own.join(' ');
   if (elType === 'widget') {
     const widgetType = (node.getAttribute('data-widget_type') || 'html.default').split('.')[0];
     const read = WIDGET_CONTENT[widgetType];
@@ -308,10 +343,12 @@ function convertElement(node, base, notes) {
       }
       return { id, elType: 'widget', widgetType, settings: { ...settings, ...content }, elements: [] };
     }
-    // Pro / addon widget (settings not readable from the page): its rendered HTML is kept, the same look
+    // Pro / addon widget (settings not readable from the page): its rendered HTML is kept, the same look.
+    // Its widget class stays on the HTML widget: the CSS of the add-on and of the page target it
     notes.add(widgetType);
     const html = node.querySelector('.elementor-widget-container')?.innerHTML ?? node.innerHTML;
-    return { id, elType: 'widget', widgetType: 'html', settings: { html }, elements: [] };
+    const classes = [`elementor-widget-${widgetType}`, ...own].join(' ');
+    return { id, elType: 'widget', widgetType: 'html', settings: { html, _css_classes: classes }, elements: [] };
   }
   const children = childElements(node).map((c) => convertElement(c, base, notes));
   if (elType === 'container') {
@@ -344,8 +381,8 @@ function convertElement(node, base, notes) {
   // Elements of newer Elementor versions (atomic e-div-block, e-flexbox...): a container; when their
   // content is not made of Elementor elements, it is kept as it is in an HTML widget (the same look)
   notes.add(elType);
-  const own = children.length ? children : node.innerHTML.trim() ? [{ id: `${id.slice(0, 5)}h${(children.length + 1).toString(16)}`, elType: 'widget', widgetType: 'html', settings: { html: node.innerHTML.trim() }, elements: [] }] : [];
-  return { id, elType: 'container', isInner: true, settings: { content_width: 'full', ...settings }, elements: own };
+  const inside = children.length ? children : node.innerHTML.trim() ? [{ id: `${id.slice(0, 5)}h${(children.length + 1).toString(16)}`, elType: 'widget', widgetType: 'html', settings: { html: node.innerHTML.trim() }, elements: [] }] : [];
+  return { id, elType: 'container', isInner: true, settings: { content_width: 'full', ...settings }, elements: inside };
 }
 
 /** The Elementor documents of a page: its content, and the header / footer made with Elementor (theme builder or Header Footer plugins). */
@@ -457,6 +494,9 @@ export function keepRulesFor(css, ids, used = null, seen = new Set(), scope = ''
       .map((s) => s.trim())
       .filter((s) => {
         const named = [...s.matchAll(/\.elementor-element-([0-9a-z]{6,8})\b/g)].map((m) => m[1]);
+        // Not the lazy loading of the background photos of the other site (hidden until its script runs): the
+        // new site has its own setting for it
+        if (/:not\(\.e-lazyloaded\)/.test(s)) return false;
         return (!named.length || named.every((id) => ids.has(id))) && selectorUsed(s, used);
       });
     if (selectors.length) out += once(`${selectors.join(',')}{${body}}`);
@@ -484,6 +524,9 @@ export function adaptCss(sources, ids, used = null) {
       if (!/background(-image)?\s*:[^;]*url\(/i.test(body)) return rule;
       const id = /\.elementor-element-([0-9a-z]{6,8})\b/.exec(selector)?.[1];
       if (!id || !ids.has(id) || /::?(before|after)|background-overlay|elementor-background-slideshow/.test(selector)) return rule;
+      // Only the background of the element itself (a section, column or container): a photo inside a
+      // widget (add-on tiles...) stays in the CSS, the widget has no background setting for it
+      if (ids.get(id)?.elType === 'widget' || !new RegExp(`elementor-element-${id}(:not\\([^)]*\\))?\\s*(,|$)`).test(selector.trim())) return rule;
       const url = /url\(\s*(['"]?)([^'")]+)\1\s*\)/i.exec(body)?.[2];
       if (!url || /^data:/i.test(url) || /\.svg(\?|$)/i.test(url)) return rule;
       let abs = url;
@@ -575,7 +618,7 @@ export function fontImports(css, fontLinks = []) {
   return [...families]
     .filter((f) => !system.test(f))
     .slice(0, 8)
-    .map((f) => `@import url("https://fonts.googleapis.com/css?family=${encodeURIComponent(f).replace(/%20/g, '+')}:300,400,500,600,700,800,400italic&display=swap");`);
+    .map((f) => `@import url("https://fonts.googleapis.com/css?family=${encodeURIComponent(f).replace(/%20/g, '+')}:100,200,300,400,500,600,700,800,900,400italic,700italic&display=swap");`);
 }
 
 // ------------------------------------------------------------------------------------ the kit --
@@ -621,7 +664,8 @@ export function writeKitFromSite(site, dir) {
   // Links to the pages of the other site (menu, buttons, HTML of the add-on widgets) become links of the new
   // site (/about-us/); its files (photos, documents in wp-content) keep their full address
   const host = new URL(site.url).hostname.replace(/^www\./, '').replace(/\./g, '\\.');
-  const ownLinks = new RegExp(`https?:\\/\\/(?:www\\.)?${host}(?=\\/(?!wp-content\\/|wp-includes\\/)|["'#?\\s])`, 'gi');
+  // (also for a WordPress in a subfolder: /plumber/wp-content/... is a file; .jpg, .pdf... too)
+  const ownLinks = new RegExp(`https?:\\/\\/(?:www\\.)?${host}(?=\\/(?![^"'\\s<>]*\\/wp-(?:content|includes)\\/)(?![^"'\\s<>?#]*\\.(?:jpe?g|png|gif|webp|svg|avif|pdf|mp4|webm|zip|docx?)\\b)|["'#?\\s])`, 'gi');
   const write = (name, title, type, doc) => {
     const file = `templates/${name}.json`;
     const json = JSON.stringify({ version: '0.4', title, type, content: doc.content, page_settings: { hide_title: 'yes' } }).replace(ownLinks, '');
@@ -635,6 +679,8 @@ export function writeKitFromSite(site, dir) {
   const styles = globalStylesFromCss(css);
   if (styles) fs.writeFileSync(path.join(dir, 'site-settings.json'), JSON.stringify({ settings: styles }));
   fs.writeFileSync(path.join(dir, 'site.css'), `${fontImports(css, site.fontLinks).join('\n')}\n${themeVariables(css, site.vars)}${css}`);
+  // Elementor frontend of the other site, for the preview only (kits/preview.js)
+  if (site.coreCss?.length) fs.writeFileSync(path.join(dir, 'preview.css'), adaptCss(site.coreCss, ids, used).css);
   const title = (site.pages[0].root.querySelector('title')?.text || new URL(site.url).hostname).replace(/\s+/g, ' ').trim().slice(0, 150);
   fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ title, source: site.url, templates }, null, 1));
   return { title, pages: docs.length, header: Boolean(header), footer: Boolean(footer), notes: [...notes], dir };
