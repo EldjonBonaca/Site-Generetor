@@ -11,8 +11,10 @@ import { SOCIAL_KEYS } from '../lib/socials.js';
 
 const router = Router();
 
-const PROJECT_FIELDS = ['site_name', 'phone', 'phone2', 'email', 'address', 'google_business_url', 'city', 'industry', 'language', 'notes', 'image_base_url', 'copyright', 'vat_number', 'whatsapp_enabled', 'whatsapp_number', ...SOCIAL_KEYS];
-const MAX_LEN = { site_name: 200, phone: 40, phone2: 40, email: 200, address: 1000, google_business_url: 2000, city: 200, industry: 200, notes: 5000, image_base_url: 500, copyright: 600, vat_number: 40, whatsapp_enabled: 1, whatsapp_number: 40, ...Object.fromEntries(SOCIAL_KEYS.map((k) => [k, 500])) };
+/** What a project is exported as: a WordPress site (plugin) or a static website (HTML, CSS, JavaScript). */
+const PLATFORMS = ['wordpress', 'code'];
+const PROJECT_FIELDS = ['platform', 'site_name', 'phone', 'phone2', 'email', 'address', 'google_business_url', 'city', 'industry', 'language', 'notes', 'image_base_url', 'copyright', 'vat_number', 'whatsapp_enabled', 'whatsapp_number', ...SOCIAL_KEYS];
+const MAX_LEN = { platform: 20, site_name: 200, phone: 40, phone2: 40, email: 200, address: 1000, google_business_url: 2000, city: 200, industry: 200, notes: 5000, image_base_url: 500, copyright: 600, vat_number: 40, whatsapp_enabled: 1, whatsapp_number: 40, ...Object.fromEntries(SOCIAL_KEYS.map((k) => [k, 500])) };
 
 export function serializeProject(row) {
   const { settings_json, ...rest } = row;
@@ -51,7 +53,8 @@ router.post('/projects', (req, res) => {
   const name = String(req.body?.site_name || '').trim().slice(0, 200);
   // New sites default to Italian (DEFAULT_LANGUAGE in .env to change it)
   const language = LANGUAGES[process.env.DEFAULT_LANGUAGE] ? process.env.DEFAULT_LANGUAGE : 'it';
-  const { lastInsertRowid } = run('INSERT INTO projects (site_name, language) VALUES (?, ?)', name, language);
+  const platform = PLATFORMS.includes(req.body?.platform) ? req.body.platform : 'wordpress';
+  const { lastInsertRowid } = run('INSERT INTO projects (site_name, language, platform) VALUES (?, ?, ?)', name, language, platform);
   res.status(201).json(serializeProject(requireProject(lastInsertRowid)));
 });
 
@@ -73,6 +76,7 @@ router.patch('/projects/:id', async (req, res) => {
     if (v.length > MAX_LEN[k]) throw badRequest(`"${k}" is too long (max ${MAX_LEN[k]})`);
   }
   if (data.language && !LANGUAGES[data.language]) throw badRequest('Unsupported language');
+  if (data.platform !== undefined && !PLATFORMS.includes(data.platform)) throw badRequest('"platform" must be "wordpress" or "code"');
   if (data.whatsapp_enabled !== undefined && !['', '1'].includes(data.whatsapp_enabled)) throw badRequest('"whatsapp_enabled" must be "1" or ""');
   if (data.image_base_url && !/^https?:\/\//i.test(data.image_base_url.trim())) throw badRequest('Image base URL must start with http:// or https://');
 

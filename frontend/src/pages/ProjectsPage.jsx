@@ -4,6 +4,7 @@ import { Copy, FolderKanban, Image, ImageDown, Layers, Plus, Trash2 } from 'luci
 import { api } from '../api.js';
 import { useT } from '../i18n/index.jsx';
 import { useToast } from '../components/Toast.jsx';
+import { useSection } from '../section.js';
 import { Badge, Button, EmptyState, IconButton, Modal, PageHeader, Spinner } from '../components/ui.jsx';
 
 export const formatDateTime = (s) => (s ? new Date(s.replace(' ', 'T') + 'Z').toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
@@ -13,7 +14,11 @@ export default function ProjectsPage() {
   const { t } = useT();
   const toast = useToast();
   const navigate = useNavigate();
-  const [projects, setProjects] = useState(null);
+  const [all, setProjects] = useState(null);
+  const [section] = useSection();
+  const code = section === 'code';
+  // The projects of the section of the header (WordPress, or websites made with code)
+  const projects = all ? all.filter((p) => (p.platform === 'code') === code) : null;
   const [toDelete, setToDelete] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -25,7 +30,7 @@ export default function ProjectsPage() {
   const create = async () => {
     setBusy(true);
     try {
-      const p = await api.post('/projects', {});
+      const p = await api.post('/projects', { platform: section });
       navigate(`/projects/${p.id}/site`);
     } catch (e) {
       toast(e.message, 'error');
@@ -57,8 +62,12 @@ export default function ProjectsPage() {
   return (
     <>
       <PageHeader
-        title={t('Projects')}
-        description={t('Each project is one website: site data, services, images, template and generated content.')}
+        title={code ? t('Projects · Code (HTML, CSS, JS)') : t('Projects · WordPress')}
+        description={
+          code
+            ? t('Websites made with code: each project is exported as a static site (HTML, CSS, JavaScript) in a zip, ready for any hosting. Same site data, images, templates and AI texts as the WordPress projects.')
+            : t('Each project is one website: site data, services, images, template and generated content.')
+        }
         actions={
           <Button variant="primary" icon={Plus} onClick={create} loading={busy}>
             {t('New project')}

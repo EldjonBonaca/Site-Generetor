@@ -20,6 +20,7 @@ function addColumn(table, column, definition) {
   if (!exists) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 addColumn('projects', 'copyright', "TEXT NOT NULL DEFAULT ''");
+addColumn('projects', 'platform', "TEXT NOT NULL DEFAULT 'wordpress'"); // 'wordpress' (plugin) | 'code' (static HTML / CSS / JS site)
 addColumn('projects', 'template_id', 'INTEGER REFERENCES site_templates(id) ON DELETE SET NULL'); // replaces kit_id
 addColumn('images', 'library_image_id', 'INTEGER'); // Gallery image it was copied from
 addColumn('template_categories', 'profile_json', 'TEXT'); // industry analysis of the category

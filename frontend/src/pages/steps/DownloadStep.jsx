@@ -58,13 +58,15 @@ export default function DownloadStep({ project, setProject }) {
     try {
       const r = await api.post(`/generations/${genId}/export`);
       // Start the download (attachment: the page stays), then back to the main page
+      // A website made with code downloads the static site; a WordPress one the package with the plugin
+      if (code && !r.staticDownload) throw new Error(t('The static website could not be built: {error}', { error: (r.staticNotes || []).join(', ') || '?' }));
       const a = document.createElement('a');
-      a.href = r.download;
+      a.href = code ? r.staticDownload : r.download;
       a.download = '';
       document.body.appendChild(a);
       a.click();
       a.remove();
-      toast(t('Export ready: the download has started. The final checks are in the zip.'));
+      toast(code ? t('Website ready: the download of the zip has started.') : t('Export ready: the download has started. The final checks are in the zip.'));
       navigate('/projects');
     } catch (e) {
       toast(e.message, 'error');
@@ -74,7 +76,17 @@ export default function DownloadStep({ project, setProject }) {
 
   const selected = gens?.find((g) => g.id === genId);
   const it = project.language === 'it';
-  const contents = [
+  const code = project.platform === 'code';
+  const contents = code
+    ? [
+        [FileCode, 'index.html', t('Home page; every other page and every service in its own folder (e.g. chi-siamo/index.html)')],
+        [FileCode, 'assets/css/site.css', t('Styles of the whole site: layout, colors and fonts of the template')],
+        [FileCode, 'assets/js/site.js', t('Menu on phones, photo carousel and zoom, entrance animations, contact form')],
+        [Image, 'assets/img/', t('Renamed and optimized images')],
+        [FileText, 'send.php', t('Sends the contact form to the e-mail of the business (needs a hosting with PHP)')],
+        [PackageCheck, 'LEGGIMI.txt', t('How to publish the site: upload the folder to the hosting')],
+      ]
+    : [
     [Plug, t('<site>-site.zip'), t('WordPress plugin: upload and activate it, it creates the 5 pages, the service articles, images, menu, contact form, header and footer')],
     [FileJson, 'templates/*.json', t('Header, footer, single post and every page as importable Elementor templates')],
     [FileCode, 'wordpress-import.xml', t('Service articles (category, text, featured image), pages and navigation menu for Tools → Import')],
@@ -90,6 +102,7 @@ export default function DownloadStep({ project, setProject }) {
       <StepIssues project={project} step="download" t={t} />
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
         <div className="space-y-6">
+          {!code && (
           <Card title={t('Images base URL')} description={t('Only for the manual import: images are referenced by URL in the templates. Use the WordPress uploads folder where you will upload them. The WordPress plugin does not need it.')} actions={<SaveStatus status={status} t={t} />}>
             <Field label={t('Base URL')} error={!validUrl ? t('Must start with http:// or https://') : null} hint={t('Example: https://mysite.com/wp-content/uploads/{ym}/', { ym: ym() })}>
               {(id) => (
@@ -109,8 +122,16 @@ export default function DownloadStep({ project, setProject }) {
               {t('step.')}
             </p>
           </Card>
+          )}
 
-          <Card title={t('Export')} description={t('Builds the zip from the template and the generated content. You can export again after editing.')}>
+          <Card
+            title={t('Export')}
+            description={
+              code
+                ? t('Builds the website (HTML, CSS, JavaScript) from the template and the generated content, with its images, in one zip. You can export again after editing.')
+                : t('Builds the zip from the template and the generated content. You can export again after editing.')
+            }
+          >
             {!gens ? (
               <Spinner />
             ) : !gens.length ? (
@@ -142,9 +163,14 @@ export default function DownloadStep({ project, setProject }) {
                 )}
                 <div className="flex flex-wrap gap-2">
                   <Button variant="primary" size="lg" icon={Download} onClick={exportZip} loading={exporting} disabled={!genId || !validUrl}>
-                    {t('Export & download zip')}
+                    {code ? t('Export & download the website (zip)') : t('Export & download zip')}
                   </Button>
-                  {selected?.output_file && (
+                  {selected?.output_file && code && (
+                    <a href={`/api/generations/${selected.id}/static`}>
+                      <Button size="lg">{t('Download last website')}</Button>
+                    </a>
+                  )}
+                  {selected?.output_file && !code && (
                     <>
                       <a href={`/api/generations/${selected.id}/plugin`}>
                         <Button size="lg" icon={Plug}>{t('Download WordPress plugin')}</Button>

@@ -257,6 +257,43 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
     assert.ok(names.includes(root + f), `missing ${f}`);
   }
   assert.ok(!names.includes(root + 'elementor-kit.zip'), 'no kit anymore');
+
+  // Static website (HTML, CSS, JavaScript): the same pages without WordPress
+  assert.equal(exp.static, 'rossi-idraulica-html.zip');
+  assert.deepEqual(exp.staticNotes, [], 'every widget of the templates is rendered');
+  const staticBuffer = Buffer.from(await (await fetch(base.replace('/api', '') + exp.staticDownload)).arrayBuffer());
+  if (process.env.ESG_KEEP_STATIC) fs.writeFileSync(process.env.ESG_KEEP_STATIC, staticBuffer);
+  const st = new AdmZip(staticBuffer);
+  const stNames = st.getEntries().map((e) => e.entryName);
+  const sr = 'rossi-idraulica-html/';
+  for (const f of ['index.html', 'about-us/index.html', 'services/index.html', 'gallery/index.html', 'contact/index.html', 'riparazione-caldaie/index.html', 'bagni-su-misura/index.html', 'cookie-policy/index.html', 'assets/css/site.css', 'assets/js/site.js', 'send.php', 'LEGGIMI.txt']) {
+    assert.ok(stNames.includes(sr + f), `static site: missing ${f} in ${stNames.filter((n) => n.endsWith('index.html')).join(', ')}`);
+  }
+  assert.ok(stNames.filter((n) => n.startsWith(sr + 'assets/img/')).length >= 14, 'the images of the project');
+  const homeHtml = st.readAsText(sr + 'index.html');
+  const aboutHtml = st.readAsText(sr + 'about-us/index.html');
+  assert.match(homeHtml, /<html lang="en">/);
+  assert.match(homeHtml, /<link rel="stylesheet" href="assets\/css\/site\.css">/);
+  assert.match(aboutHtml, /<link rel="stylesheet" href="\.\.\/assets\/css\/site\.css">/);
+  // The menu of the site, the current page marked; links and images relative to each page
+  assert.match(homeHtml, /<li class="menu-item current-menu-item"><a class="hfe-menu-item" href="index\.html" aria-current="page">Home<\/a><\/li><li class="menu-item"><a class="hfe-menu-item" href="about-us\/index\.html">/);
+  assert.match(aboutHtml, /<a class="hfe-menu-item" href="\.\.\/index\.html">Home<\/a>/);
+  assert.match(aboutHtml, /src="\.\.\/assets\/img\/[a-z0-9-]+\.webp"/);
+  for (const html of [homeHtml, aboutHtml]) {
+    assert.doesNotMatch(html, /esg-image:\/\/|href="\/[a-z]|\{\{esg:|\[contact-form-7/, 'no WordPress placeholder or root address left');
+    assert.match(html, /<h1 class="elementor-heading-title/);
+  }
+  // The contact form posts to send.php (the address of the business), no WordPress shortcode
+  const contactHtml = st.readAsText(sr + 'contact/index.html');
+  assert.match(contactHtml, /<form class="wpcf7-form esg-contact-form" action="\.\.\/send\.php" method="post"/);
+  assert.match(st.readAsText(sr + 'send.php'), /\$to = "info@rossi-idraulica\.example";|\$to = "[^"]+@[^"]+";/);
+  // The CSS: base layout, global colors, the rules of the elements, the site CSS of the template
+  const stCss = st.readAsText(sr + 'assets/css/site.css');
+  assert.match(stCss, /\.e-con\{--display:flex/);
+  assert.match(stCss, /:root\{--e-global-color-primary:#[0-9A-F]{6}/i);
+  assert.match(stCss, /\.esg-header\{position:relative;z-index:100\}/);
+  assert.doesNotMatch(stCss, /esg-image:\/\//);
+  assert.match(homeHtml, /<style>\n\.elementor-element-[0-9a-f]{7}\{--flex-direction:/);
   const instructions = zip.readAsText(root + 'INSTRUCTIONS.md');
   assert.match(instructions, /Upload Plugin\*\* → choose `rossi-idraulica-site\.zip`/);
   assert.match(instructions, /template \*\*Plumber blue\*\* \(category \*Idraulici\*\)/);
@@ -496,4 +533,19 @@ test('Gallery library: categories, upload, pick images in a project', async () =
   const projImages = await api('GET', `/projects/${p.id}/images`);
   assert.equal(projImages.length, 3);
   for (const img of projImages) assert.equal((await fetch(`${base}/images/${img.id}/file`)).status, 200);
+});
+
+test('projects of the two sections: WordPress (default) and code (static website)', async () => {
+  const wp = await api('POST', '/projects', {});
+  const code = await api('POST', '/projects', { platform: 'code' });
+  assert.equal(wp.platform, 'wordpress');
+  assert.equal(code.platform, 'code');
+  const list = await api('GET', '/projects');
+  assert.equal(list.find((p) => p.id === code.id).platform, 'code');
+  // A project can be moved to the other section; anything else is refused
+  assert.equal((await api('PATCH', `/projects/${wp.id}`, { platform: 'code' })).platform, 'code');
+  await assert.rejects(api('PATCH', `/projects/${wp.id}`, { platform: 'joomla' }), /400.*platform/);
+  // A copy stays in the section of the original
+  await api('POST', `/projects/${code.id}/duplicate`);
+  assert.equal((await api('GET', '/projects')).filter((p) => p.platform === 'code').length, 3);
 });

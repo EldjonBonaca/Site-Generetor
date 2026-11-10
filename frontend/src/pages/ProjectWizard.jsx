@@ -8,6 +8,7 @@ import { AlertTriangle, ArrowLeft, ArrowRight, Check, CircleAlert } from 'lucide
 import { api } from '../api.js';
 import { useT } from '../i18n/index.jsx';
 import { useToast } from '../components/Toast.jsx';
+import { getSection, setSection } from '../section.js';
 import { Badge, Button, Spinner, cx } from '../components/ui.jsx';
 import SiteDataStep from './steps/SiteDataStep.jsx';
 import ServicesStep from './steps/ServicesStep.jsx';
@@ -37,6 +38,11 @@ export default function ProjectWizard() {
   const [project, setProject] = useState(null);
 
   const reload = useCallback(() => api.get(`/projects/${id}`).then(setProject), [id]);
+  // The header shows the section of the project that is open
+  const platform = project?.platform;
+  useEffect(() => {
+    if (platform && platform !== getSection()) setSection(platform);
+  }, [platform]);
 
   useEffect(() => {
     reload().catch((e) => {

@@ -21,6 +21,8 @@ import { buildWxr } from './wxr.js';
 import { buildPlugin, PLUGIN_IMAGE_SCHEME } from './wp-plugin.js';
 import { siteIconFromLogo } from '../lib/site-icon.js';
 import { compileDocument } from '../elementor/html-parts.js';
+import { buildStaticSite } from '../static/site.js';
+import { LEGAL_PAGES } from '../templates/builder.js';
 import { docsText } from './export-docs.js';
 import { docToHtml, seoScore } from './seo-score.js';
 import { fieldValue } from './runner.js';
@@ -625,6 +627,25 @@ export async function exportGeneration(generationId) {
   fs.mkdirSync(pluginDir, { recursive: true });
   fs.writeFileSync(path.join(pluginDir, plugin.fileName), plugin.buffer);
 
+  // Static website (HTML, CSS, JavaScript): the same site without WordPress, with its images
+  let staticFile = null;
+  let staticNotes = [];
+  try {
+    const site = buildStaticSite(input, { siteIcon, frontendCss: kitFrontendCss(ctx), legalPages: LEGAL_PAGES });
+    const staticName = `${slugify(ctx.project.site_name) || 'site'}-html`;
+    const staticZip = new AdmZip();
+    for (const f of site.files) staticZip.addFile(`${staticName}/${f.path}`, Buffer.from(f.data, 'utf8'));
+    const imagesDir = path.join(outRoot, 'images');
+    for (const name of fs.readdirSync(imagesDir)) staticZip.addFile(`${staticName}/assets/img/${name}`, fs.readFileSync(path.join(imagesDir, name)));
+    const staticDir = path.join(config.outputDir, String(gen.id), 'static');
+    fs.mkdirSync(staticDir, { recursive: true });
+    staticFile = `${staticName}.zip`;
+    staticZip.writeZip(path.join(staticDir, staticFile));
+    staticNotes = site.notes;
+  } catch (err) {
+    staticNotes = [`error: ${err.message}`];
+  }
+
   const menuItems = sitePages.map((p) => ({ title: p.title, url: p.seo.slug ? `/${p.seo.slug}/` : '/' }));
   const checks = runChecks(ctx, built, posts, links, baseUrl, T, input.seoReport);
   const docInfo = { ctx, pages, built, posts, exported, baseUrl, placeholder: baseUrl === PLACEHOLDER_BASE_URL, category, menuItems, pluginFile: plugin.fileName, imageCount: exported.size, oneLineAddress: oneLine(ctx.project.address), siteCss: builtSite(ctx).siteCss || '' };
@@ -643,7 +664,22 @@ export async function exportGeneration(generationId) {
   fs.rmSync(workDir, { recursive: true, force: true });
 
   run(`UPDATE generations SET output_file = ?, updated_at = datetime('now') WHERE id = ?`, zipRel.replace(/\\/g, '/'), gen.id);
-  return { file: zipRel, pages: built.length, posts: posts.length, images: exported.size, plugin: plugin.fileName, checks };
+  return { file: zipRel, pages: built.length, posts: posts.length, images: exported.size, plugin: plugin.fileName, static: staticFile, staticNotes, checks };
+}
+
+/** Elementor frontend CSS kept with a kit copied from a website (kits/from-site.js: preview.css), for its static site. */
+function kitFrontendCss(ctx) {
+  if (!ctx.kit?.dir || !fs.existsSync(ctx.kit.dir)) return '';
+  const dirs = [ctx.kit.dir, ...fs.readdirSync(ctx.kit.dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => path.join(ctx.kit.dir, d.name))];
+  const file = dirs.map((d) => path.join(d, 'preview.css')).find((f) => fs.existsSync(f));
+  return file ? fs.readFileSync(file, 'utf8') : '';
+}
+
+/** Path of the static website zip of an export (null when not exported yet). */
+export function staticFile(generationId) {
+  const dir = path.join(config.outputDir, String(generationId), 'static');
+  const name = fs.existsSync(dir) && fs.readdirSync(dir).find((f) => f.endsWith('.zip'));
+  return name ? path.join(dir, name) : null;
 }
 
 /** Path of the WordPress plugin zip of an export (null when not exported yet). */

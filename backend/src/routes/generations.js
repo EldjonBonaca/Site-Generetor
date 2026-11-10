@@ -9,7 +9,7 @@ import { loadContext, checkReadiness, siteLinks, hasDesign, designInfo } from '.
 import { initPages, runGeneration, regenerateField, cancelGeneration, isRunning } from '../generation/runner.js';
 import { sitePromptFor } from '../generation/site-prompt.js';
 import { BUILDER_VERSION } from '../templates/builder.js';
-import { exportGeneration, pluginFile } from '../generation/exporter.js';
+import { exportGeneration, pluginFile, staticFile } from '../generation/exporter.js';
 import { buildPagePrompt, estimateTokens } from '../generation/prompt-builder.js';
 import { canUseProvider } from '../lib/owner.js';
 import { kitLayoutSignatures } from '../kits/site.js';
@@ -186,7 +186,7 @@ router.post('/generations/:gid/export', async (req, res) => {
   const g = requireGen(req.params.gid);
   if (isRunning(g.id)) throw badRequest('Wait for the generation to finish.');
   const result = await exportGeneration(g.id);
-  res.json({ ...result, download: `/api/generations/${g.id}/download`, pluginDownload: `/api/generations/${g.id}/plugin` });
+  res.json({ ...result, download: `/api/generations/${g.id}/download`, pluginDownload: `/api/generations/${g.id}/plugin`, staticDownload: result.static ? `/api/generations/${g.id}/static` : null });
 });
 
 router.get('/generations/:gid/download', (req, res) => {
@@ -202,6 +202,14 @@ router.get('/generations/:gid/plugin', (req, res) => {
   const g = requireGen(req.params.gid);
   const file = pluginFile(g.id);
   if (!file) throw notFound('WordPress plugin (run the export first)');
+  res.download(file, path.basename(file));
+});
+
+/** The static website (HTML, CSS, JavaScript) of the last export. */
+router.get('/generations/:gid/static', (req, res) => {
+  const g = requireGen(req.params.gid);
+  const file = staticFile(g.id);
+  if (!file) throw notFound('Static website (run the export first)');
   res.download(file, path.basename(file));
 });
 
