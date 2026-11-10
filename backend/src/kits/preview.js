@@ -61,6 +61,16 @@ const WIDGETS = {
   divider: () => '<div class="elementor-divider"><span class="elementor-divider-separator"></span></div>',
   spacer: () => '<div class="elementor-spacer"><div class="elementor-spacer-inner"></div></div>',
   html: (s) => compileParts(s),
+  // The menu of the new site (its own pages), in the colors and font read from the menu of the website
+  'navigation-menu': (s) => {
+    const global = (key, kind) => /id=([a-z0-9]+)/i.exec(s.__globals__?.[key] || '')?.[1] && `var(--e-global-${kind}-${/id=([a-z0-9]+)/i.exec(s.__globals__[key])[1]}${kind === 'typography' ? '-font-family' : ''})`;
+    const color = s.color_menu_item || global('color_menu_item', 'color') || 'inherit';
+    const active = s.color_menu_item_hover || global('color_menu_item_hover', 'color') || color;
+    const font = s.menu_typography_font_family ? `'${attr(s.menu_typography_font_family)}'` : global('menu_typography_typography', 'typography') || 'inherit';
+    const size = s.menu_typography_font_size?.size ? `${Number(s.menu_typography_font_size.size)}px` : '16px';
+    const items = ['Home', 'Chi siamo', 'Servizi', 'Galleria', 'Contatti'].map((label, i) => `<a style="color:${i ? color : active};text-decoration:none;font-family:${font};font-size:${size};font-weight:${attr(s.menu_typography_font_weight || 500)}">${label}</a>`);
+    return `<nav style="display:flex;gap:${Number(s.menu_space_between?.size) || 26}px;justify-content:${s.navmenu_align === 'right' ? 'flex-end' : s.navmenu_align === 'left' ? 'flex-start' : 'center'};flex-wrap:wrap">${items.join('')}</nav>`;
+  },
   google_maps: (s) => `<div class="elementor-custom-embed" style="background:#e5e7eb;height:300px;display:flex;align-items:center;justify-content:center;color:#475569">Google Maps · ${esc(s.address)}</div>`,
   video: () => '<div class="elementor-wrapper" style="background:#0f172a;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;color:#fff">▶ Video</div>',
 };
@@ -122,7 +132,7 @@ function globalVars(styles) {
   return colors.length || fonts.length ? `body{${[...colors, ...fonts].join(';')}}` : '';
 }
 
-/** Minimal Elementor frontend (layout of sections, columns and flex containers) when the kit has no preview.css. */
+/** Minimal Elementor frontend (layout of sections, columns and flex containers), used only when the kit has no preview.css (the Elementor frontend CSS of the copied site). */
 const BASE_CSS = `*,*::before,*::after{box-sizing:border-box}body{margin:0;font-family:sans-serif;line-height:1.5}img{max-width:100%;height:auto}
 .elementor-section{position:relative}.elementor-section .elementor-container{display:flex;margin:0 auto;position:relative}.elementor-section.elementor-section-boxed>.elementor-container{max-width:1140px}
 .elementor-column{position:relative;min-height:1px;display:flex}.elementor-widget-wrap{position:relative;width:100%;flex-wrap:wrap;align-content:flex-start;display:flex;padding:10px}
@@ -131,7 +141,7 @@ const BASE_CSS = `*,*::before,*::after{box-sizing:border-box}body{margin:0;font-
 .elementor-widget-wrap>.elementor-element{width:100%}.elementor-background-overlay{position:absolute;inset:0}
 .e-con{--container-max-width:1140px;--content-width:min(100%,var(--container-max-width));--flex-direction:column;--gap:20px;--padding-block:10px;--padding-inline:10px;display:var(--display,flex);flex-direction:var(--flex-direction);gap:var(--gap);padding:var(--padding-top,var(--padding-block)) var(--padding-right,var(--padding-inline)) var(--padding-bottom,var(--padding-block)) var(--padding-left,var(--padding-inline));position:relative;width:var(--width,100%);margin-inline:auto}
 .e-con-boxed>.e-con-inner{display:flex;flex-direction:var(--flex-direction);gap:var(--gap);width:100%;max-width:var(--content-width);margin:0 auto;flex-wrap:var(--flex-wrap,nowrap);justify-content:var(--justify-content,flex-start);align-items:var(--align-items,stretch)}
-.e-con-full{flex-wrap:var(--flex-wrap,nowrap);justify-content:var(--justify-content,flex-start);align-items:var(--align-items,stretch)}.e-con.e-child{--width:auto}
+.e-con-full{flex-wrap:var(--flex-wrap,nowrap);justify-content:var(--justify-content,flex-start);align-items:var(--align-items,stretch)}.e-con{--width:100%}.elementor-fixed{position:fixed}.elementor-absolute{position:absolute}
 .elementor-button{display:inline-block;padding:12px 24px;background:var(--e-global-color-accent,#69727d);color:#fff;text-decoration:none;border-radius:3px}
 .elementor-icon{display:inline-block;font-size:50px;line-height:1}.elementor-icon svg,.e-font-icon-svg{width:1em;height:1em}.elementor-icon-list-items{list-style:none;margin:0;padding:0}
 .elementor-heading-title{margin:0;line-height:1.2}.elementor-counter-number-wrapper{font-size:69px;font-weight:600}`;
@@ -148,7 +158,7 @@ export function previewPage(kit, docs, title = '') {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 <style>${imports}</style>
-<style>${BASE_CSS}</style>
+<style>${css.frontend ? '*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%;height:auto}' : BASE_CSS}</style>
 <style>${css.frontend}</style>
 <style>${globalVars(kit.info?.globalStyles)}</style>
 <style>${css.site.replace(/^@import[^;]+;/gm, '')}</style>

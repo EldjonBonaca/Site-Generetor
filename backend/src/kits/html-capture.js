@@ -25,9 +25,10 @@ const MEDIA = 'img, picture, video, iframe, svg, canvas, form';
 export const stableId = (...keys) => crypto.createHash('md5').update(keys.join('|')).digest('hex').slice(0, 7);
 
 /** An HTML widget with a piece of copied markup; its texts, images and links become parts. */
-export function htmlWidget(id, html, classes = '') {
+export function htmlWidget(id, html, classes = '', { settings: extra = {}, suffix = '' } = {}) {
   const { html: template, parts } = extractParts(html, { prefix: id });
-  const settings = { html: parts.length ? template : html };
+  // suffix: markup added after the copied one and never read for parts (the script of a carousel)
+  const settings = { ...extra, html: (parts.length ? template : html) + suffix };
   if (parts.length) settings[PARTS_KEY] = parts;
   if (classes) settings._css_classes = classes;
   return { id, elType: 'widget', widgetType: 'html', settings, elements: [] };

@@ -92,7 +92,7 @@ export function extractParts(html, { prefix = '' } = {}) {
         el.removeAttribute('src');
         el.removeAttribute('alt');
         // The whole attribute is the placeholder: "src=… alt=…", or a hidden image when the photo is removed
-        el.setAttribute(`data-esg-${id}`, '');
+        el.setAttribute(`data-esgpart-${id}`, '');
       }
       return;
     }
@@ -135,8 +135,8 @@ export function extractParts(html, { prefix = '' } = {}) {
     else if (isText(child) && HAS_LETTER.test(child.rawText) && child.rawText.trim().length >= 2) child.rawText = mark(textPart(child.rawText));
   }
   if (!parts.length) return { html: String(html), parts: [] };
-  // The image placeholders were set as attributes (data-esg-<id>=""): back to the placeholder syntax
-  const out = root.toString().replace(/\sdata-esg-([a-z0-9_]+)(="")?/g, (m, id) => ` ${mark(id)}`);
+  // The image placeholders were set as attributes (data-esgpart-<id>=""): back to the placeholder syntax
+  const out = root.toString().replace(/\sdata-esgpart-([a-z0-9_]+)(="")?/g, (m, id) => ` ${mark(id)}`);
   return { html: out, parts };
 }
 

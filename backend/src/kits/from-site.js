@@ -300,7 +300,7 @@ const WIDGET_CONTENT = {
   button: (n, base) => ({ text: text(n, '.elementor-button-text') || text(n, '.elementor-button'), link: linkOf(n.querySelector('a'), base) || { url: '#' }, ...(iconOf(n.querySelector('.elementor-button-icon')) ? { selected_icon: iconOf(n.querySelector('.elementor-button-icon')) } : {}) }),
   icon: (n, base) => ({ selected_icon: iconOf(n) || { value: 'fas fa-star', library: 'fa-solid' }, ...(n.querySelector('a') ? { link: linkOf(n.querySelector('a'), base) } : {}) }),
   'icon-box': (n, base) => ({
-    selected_icon: iconOf(n.querySelector('.elementor-icon')) || { value: 'fas fa-star', library: 'fa-solid' },
+    selected_icon: iconOf(n.querySelector('.elementor-icon')) || { value: '', library: '' },
     title_text: text(n, '.elementor-icon-box-title'),
     description_text: inner(n, '.elementor-icon-box-description'),
     title_size: n.querySelector('.elementor-icon-box-title')?.rawTagName?.toLowerCase() || 'h3',
@@ -361,8 +361,9 @@ const WIDGET_CONTENT = {
   spacer: () => ({}),
   progress: (n) => ({ title: text(n, '.elementor-title'), percent: { unit: '%', size: Number(n.querySelector('.elementor-progress-bar')?.getAttribute('data-max')) || 80 } }),
   alert: (n) => ({ alert_title: text(n, '.elementor-alert-title'), alert_description: text(n, '.elementor-alert-description') }),
-  html: (n) => ({ html: inner(n, '.elementor-widget-container') }),
-  shortcode: (n) => ({ shortcode: '', _rendered: inner(n, '.elementor-widget-container') }),
+  html: (n) => ({ html: inner(n, '.elementor-widget-container') || n.innerHTML.trim() }),
+  // (newer Elementor versions write the widget without its .elementor-widget-container wrapper)
+  shortcode: (n) => ({ shortcode: '', _rendered: inner(n, '.elementor-shortcode') || inner(n, '.elementor-widget-container') || n.innerHTML.trim() }),
 };
 
 function tabs(n, titleSel, contentSel) {
@@ -371,9 +372,90 @@ function tabs(n, titleSel, contentSel) {
   return { tabs: titles.map((t, i) => ({ _id: `tb${i}`, tab_title: t.text.replace(/\s+/g, ' ').trim(), tab_content: contents[i]?.innerHTML.trim() || '' })) };
 }
 
-/** Classes Elementor writes itself on an element (from its type and settings): not copied as custom classes. */
+/**
+ * Classes that say what the element is (Elementor writes them again from its type) or that a script
+ * manages: not copied. Every other class is kept as a custom class: the ones of the designer and the
+ * ones Elementor wrote from settings of the element that cannot be read back from the page (position,
+ * width, alignment, view, visibility...), so its CSS still applies.
+ */
 const GENERATED_CLASS =
-  /^(elementor-(element|element-[0-9a-z]+|widget|widget-[\w-]+|section|top-section|inner-section|column|col-\d+|top-column|inner-column|section-[\w-]+|hidden-[\w-]+|invisible|motion-effects-[\w-]+|sticky[\w-]*|column-gap-\w+|align-[\w-]+|widget__width-[\w-]+|widget-[\w-]+__width-[\w-]+|tablet-align-[\w-]+|mobile-align-[\w-]+|position-[\w-]+|vertical-align-[\w-]+|view-[\w-]+|shape-[\w-]+|grid-[\w-]*|repeater-item-[\w-]+|headline--[\w-]+|button-[\w-]+|icon-list--[\w-]+|absolute|fixed|reverse-[\w-]+|element-populated|has-[\w-]+|mobile-position-[\w-]+|kit-\d+)|e-(con|flex|grid|con-boxed|con-full|parent|child|lazyloaded|transform)|animated|animated-[\w-]+|ha-has-[\w-]+|e-con-inner)$/;
+  /^(elementor-(element|element-[0-9a-z]+|widget|section|top-section|inner-section|column|col-\d+|top-column|inner-column|invisible|motion-effects-[\w-]+|sticky[\w-]*|element-populated|kit-\d+)|e-(con|flex|grid|con-boxed|con-full|parent|child|lazyloaded|transform)|animated|animated-[\w-]+|e-con-inner)$/;
+
+/** Settings of an element that Elementor shows as classes on it: read back, so the editor shows them too. */
+function classSettings(cls, widgetType) {
+  const out = {};
+  const has = (re) => re.exec(cls)?.[1];
+  if (/\belementor-fixed\b/.test(cls)) out._position = 'fixed';
+  else if (/\belementor-absolute\b/.test(cls)) out._position = 'absolute';
+  const width = has(/\belementor-widget__width-(auto|initial|inherit)\b/);
+  if (width) out._element_width = width;
+  for (const device of ['desktop', 'tablet', 'mobile']) if (new RegExp(`\\belementor-hidden-${device}\\b`).test(cls)) out[`hide_${device}`] = `hidden-${device}`;
+  const align = has(/\belementor-align-(left|center|right|justify|start|end)\b/);
+  if (align && ['button', 'icon-list', 'icon'].includes(widgetType)) out[widgetType === 'icon-list' ? 'icon_align' : 'align'] = align;
+  const view = has(/\belementor-view-(default|stacked|framed)\b/);
+  if (view && ['icon', 'icon-box'].includes(widgetType)) out.view = view;
+  const shape = has(/\belementor-shape-(circle|square|rounded)\b/);
+  if (shape && ['icon', 'icon-box', 'social-icons'].includes(widgetType)) out.shape = shape;
+  const position = has(/\belementor-position-(top|left|right)\b/);
+  if (position && ['icon-box', 'image-box'].includes(widgetType)) out.position = position;
+  if (widgetType === 'icon-list') {
+    if (/\belementor-icon-list--layout-inline\b/.test(cls)) out.view = 'inline';
+    const click = has(/\belementor-list-item-link-(full_width|inline)\b/);
+    if (click) out.link_click = click;
+  }
+  return out;
+}
+
+/** Add-on widgets that show the menu of the site: replaced by the menu widget of the new site. */
+const MENU_WIDGET = /(^|[-_])(nav|navigation|horizontal|mega|simple|main)[-_]?menu([-_]|$)|^wp-widget-nav_menu$/;
+
+/**
+ * Carousels of add-on widgets (Swiper markup) kept as HTML: the script of the add-on does not come,
+ * so the slides are laid out by CSS (CAROUSEL_CSS) and moved by a small script of ours. The slides
+ * per view and the space between them are read from the settings of the carousel on the page.
+ */
+function prepareCarousels(node) {
+  let found = false;
+  for (const wrapper of node.querySelectorAll('.swiper-wrapper')) {
+    found = true;
+    let config = null;
+    for (let n = wrapper; n && n !== node.parentNode && !config; n = n.parentNode) {
+      for (const name of ['data-config', 'data-settings', 'data-swiper', 'data-slider_options', 'data-options']) {
+        const raw = n.getAttribute?.(name);
+        if (!raw || !/slides/i.test(raw)) continue;
+        try {
+          config = JSON.parse(raw);
+        } catch {
+          /* not JSON */
+        }
+      }
+    }
+    const pick = (o) => Number(o?.slidesPerView ?? o?.slides_to_show ?? o?.slidesToShow) || null;
+    const gapOf = (o) => Number(o?.spaceBetween ?? o?.space_between?.size) || 0;
+    // The widest breakpoint is the desktop layout
+    const widest = config?.breakpoints ? Object.keys(config.breakpoints).map(Number).sort((a, b) => b - a)[0] : null;
+    const desktop = widest ? config.breakpoints[widest] : null;
+    const per = Math.max(1, Math.min(6, Math.round(pick(desktop) || pick(config) || 1)));
+    const gap = gapOf(desktop) || gapOf(config);
+    const delay = Number(config?.autoplay?.delay ?? config?.autoplaySpeed ?? config?.autoplay_speed) || 4500;
+    const autoplay = config ? config.autoplay !== false && config.autoplay !== 'no' : true;
+    wrapper.setAttribute('style', `--esg-per-d:${per};--esg-gap:${gap}px`);
+    wrapper.setAttribute('data-esg-carousel', autoplay ? String(delay) : '0');
+  }
+  return found;
+}
+
+/** Moves the carousels of the widget it is in: autoplay (paused under the mouse), arrows, back to the first slide at the end. */
+const CAROUSEL_SCRIPT =
+  '<script>(function(s){var root=s.parentNode;if(!root)return;root.querySelectorAll("[data-esg-carousel]").forEach(function(w){var step=function(d){var max=w.scrollWidth-w.clientWidth;var slide=w.children[0]?w.children[0].getBoundingClientRect().width+(parseFloat(getComputedStyle(w).columnGap)||0):w.clientWidth;var to=w.scrollLeft+d*slide;if(d>0&&w.scrollLeft>=max-4)to=0;if(d<0&&w.scrollLeft<=4)to=max;w.scrollTo({left:to,behavior:"smooth"})};var box=w.closest(".swiper,.swiper-container")||w.parentNode;var scope=box.parentNode||box;scope.querySelectorAll(".swiper-button-next,.slick-next,.owl-next").forEach(function(b){b.addEventListener("click",function(e){e.preventDefault();step(1)})});scope.querySelectorAll(".swiper-button-prev,.slick-prev,.owl-prev").forEach(function(b){b.addEventListener("click",function(e){e.preventDefault();step(-1)})});var delay=+w.getAttribute("data-esg-carousel");if(delay&&!matchMedia("(prefers-reduced-motion: reduce)").matches)setInterval(function(){if(!w.matches(":hover")&&w.scrollWidth>w.clientWidth+4)step(1)},delay)})})(document.currentScript)</script>';
+
+/** Layout of the carousels of prepareCarousels: one row of slides that snaps, no scrollbar; one slide per view on phones. */
+export const CAROUSEL_CSS = `
+.elementor-widget-html :is(.swiper,.swiper-container){overflow:hidden;position:relative}
+.elementor-widget-html [data-esg-carousel]{display:flex;flex-wrap:nowrap;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-ms-overflow-style:none;gap:var(--esg-gap,0px);--esg-per:var(--esg-per-d,1);transform:none!important}
+.elementor-widget-html [data-esg-carousel]::-webkit-scrollbar{display:none}
+.elementor-widget-html [data-esg-carousel]>*{flex:0 0 calc((100% - (var(--esg-per) - 1)*var(--esg-gap,0px))/var(--esg-per));width:auto;max-width:none;scroll-snap-align:start;height:auto;box-sizing:border-box;margin:0}
+@media(max-width:767px){.elementor-widget-html [data-esg-carousel]{--esg-per:1}}`;
 
 /**
  * One rendered Elementor element -> its Elementor JSON (same id, type and content).
@@ -386,11 +468,20 @@ function convertElement(node, base, notes) {
   const settings = jsonAttr(node, 'data-settings');
   // Classes of the element that Elementor does not add by itself (Advanced > CSS Classes of the designer):
   // kept, the CSS of the site uses them
-  const own = cls.split(/\s+/).filter((c) => c && !GENERATED_CLASS.test(c));
+  const own = cls.split(/\s+/).filter((c) => c && !GENERATED_CLASS.test(c) && !/^elementor-widget-[\w-]+$/.test(c));
   if (own.length) settings[elType === 'widget' ? '_css_classes' : 'css_classes'] = own.join(' ');
   if (elType === 'widget') {
     const widgetType = (node.getAttribute('data-widget_type') || 'html.default').split('.')[0];
-    const read = WIDGET_CONTENT[widgetType];
+    Object.assign(settings, classSettings(cls, widgetType));
+    // The menu of the other site (its pages, its script on phones): the menu widget of the new site in its place,
+    // styled like it afterwards (styleMenus)
+    if (MENU_WIDGET.test(widgetType)) {
+      notes.add(widgetType);
+      const advanced = Object.fromEntries(Object.entries(settings).filter(([k]) => k.startsWith('_') || k.startsWith('hide_')));
+      return { id, elType: 'widget', widgetType: 'navigation-menu', settings: { ...advanced, _esg_menu: widgetType }, elements: [] };
+    }
+    const unreadableIcon = (widgetType === 'icon' && !iconOf(node)) || (widgetType === 'social-icons' && node.querySelectorAll('a').some((a) => !iconOf(a)));
+    const read = unreadableIcon ? null : WIDGET_CONTENT[widgetType];
     if (read) {
       const content = read(node, base);
       if (widgetType === 'shortcode') {
@@ -402,10 +493,13 @@ function convertElement(node, base, notes) {
     }
     // Pro / addon widget (settings not readable from the page): its rendered HTML is kept, the same look.
     // Its widget class stays on the HTML widget: the CSS of the add-on and of the page target it
-    notes.add(widgetType);
+    // (an icon that is not a Font Awesome one is kept the same way: its drawing is in its markup)
+    if (!unreadableIcon) notes.add(widgetType);
+    const carousel = prepareCarousels(node);
     const html = node.querySelector('.elementor-widget-container')?.innerHTML ?? node.innerHTML;
     const classes = [`elementor-widget-${widgetType}`, ...own].join(' ');
-    return htmlWidget(id, html, classes);
+    const advanced = Object.fromEntries(Object.entries(settings).filter(([k]) => (k.startsWith('_') && k !== '_css_classes') || k.startsWith('hide_')));
+    return htmlWidget(id, html, classes, { settings: advanced, suffix: carousel ? CAROUSEL_SCRIPT : '' });
   }
   const children = childElements(node).map((c) => convertElement(c, base, notes));
   if (elType === 'container') {
@@ -677,6 +771,8 @@ export function adaptCss(sources, ids, used = null) {
         }
       })
       .replace(/\.elementor-kit-\d+/g, 'body')
+      // (a selector that already names the body, e.g. body:not(.rtl) .elementor-12 …, keeps its own: "body body" matches nothing)
+      .replace(/(\bbody[^\s,{}]*\s+)\.elementor-\d+(?=[\s.:>[{,])/g, '$1.elementor')
       .replace(/\.elementor-\d+(?=[\s.:>[{,])/g, 'body .elementor');
     parts.push(css.trim());
   }
@@ -801,8 +897,10 @@ export function writeKitFromSite(site, dir) {
   // Only the CSS of the classes the pages use (the stylesheets of a whole theme / add-on are large)
   const used = usedClasses(site.pages.map((p) => p.html).join('\n'));
   const { css, backgrounds } = adaptCss(site.css, ids, used);
+  const rawCss = site.css.map((c) => c.text).join('\n');
   for (const d of all) {
     applyBackgrounds(d.content, backgrounds);
+    styleMenus(d.content, rawCss);
     d.notes.forEach((n) => notes.add(n));
   }
 
@@ -829,8 +927,10 @@ export function writeKitFromSite(site, dir) {
   // Add-on widgets kept as HTML: their scripts (moving rows, sliders) do not run on the new site, so what
   // they place beyond the edge of the page scrolls sideways inside the widget instead of widening the whole page
   // Their blocks hidden until a script reveals them (on load / on scroll) are shown as they are
+  // (clipped at the edge of the page, without scrollbars: "clip" keeps sticky elements working)
   const addonSafety = notes.size
-    ? '\n.elementor-widget-html{max-width:100%;overflow-x:auto;scrollbar-width:thin}' +
+    ? '\nhtml,body{overflow-x:clip}\n.elementor-widget-html{max-width:100%}' +
+      CAROUSEL_CSS +
       '\n.elementor-widget-html :is([class*="--load"],[class*="scroll-reveal"],[class*="-reveal "],.wow,[data-aos],.elementor-invisible,.reveal,.is-hidden-until-load){opacity:1!important;visibility:visible!important}'
     : '';
   fs.writeFileSync(path.join(dir, 'site.css'), `${fontImports(css, site.fontLinks).join('\n')}\n${themeVariables(css, site.vars)}${css}${addonSafety}${CAPTURE_CSS}`);
@@ -839,6 +939,77 @@ export function writeKitFromSite(site, dir) {
   const title = (site.pages[0].root.querySelector('title')?.text || new URL(site.url).hostname).replace(/\s+/g, ' ').trim().slice(0, 150);
   fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ title, source: site.url, templates }, null, 1));
   return { title, pages: docs.length, htmlPages, header: Boolean(header), footer: Boolean(footer), notes: [...notes], dir };
+}
+
+/**
+ * The menu widgets put in place of the menus of the other site get its look: the color of the links,
+ * their color under the mouse and their font, read from the CSS the site wrote for its menu widget
+ * (a global color or font of the site stays linked to it).
+ */
+export function styleMenus(elements, css) {
+  const px = (size) => ({ unit: 'px', size, sizes: [] });
+  for (const el of elements) {
+    styleMenus(el.elements || [], css);
+    if (el.elType !== 'widget' || !el.settings?._esg_menu) continue;
+    const rules = [...css.matchAll(new RegExp(`([^{}]*elementor-element-${el.id}\\b[^{}]*)\\{([^}]*)\\}`, 'g'))].map((m) => ({ selector: m[1], body: m[2] }));
+    const declared = (filter, prop) => {
+      for (const r of rules) {
+        if (!filter(r.selector)) continue;
+        const v = new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([^;]+)`, 'i').exec(r.body)?.[1]?.trim();
+        if (v) return v;
+      }
+      return null;
+    };
+    const top = (sel) => /(>\s*a|\sa)\s*$/.test(sel.trim()) && !/sub-?menu|dropdown|panel|:hover|:focus|:active|current/i.test(sel);
+    const hover = (sel) => /a:hover\s*$/.test(sel.trim()) && !/sub-?menu|dropdown|panel/i.test(sel);
+    const globals = {};
+    const settings = {};
+    const color = (key, value) => {
+      const id = /var\(\s*--e-global-color-([a-z0-9]+)/i.exec(value || '')?.[1];
+      if (id) globals[key] = `globals/colors?id=${id}`;
+      else if (/^(#[0-9a-f]{3,8}|rgba?\([^)]*\))$/i.test(value || '')) settings[key] = value;
+    };
+    const link = declared(top, 'color');
+    const over = declared(hover, 'color') || link;
+    color('color_menu_item', link);
+    for (const key of ['color_menu_item_hover', 'color_menu_item_active', 'pointer_color_menu_item_hover', 'pointer_color_menu_item_active', 'toggle_hover_color']) color(key, over);
+    color('toggle_color', declared((sel) => /hamburger|toggle/i.test(sel) && !/:hover/.test(sel), 'color') || declared((sel) => /hamburger|toggle/i.test(sel) && !/:hover/.test(sel), 'background-color') || link);
+    const family = declared(top, 'font-family');
+    const typography = /var\(\s*--e-global-typography-([a-z0-9]+)-font-family/i.exec(family || '')?.[1];
+    if (typography) globals.menu_typography_typography = `globals/typography?id=${typography}`;
+    else if (family) {
+      Object.assign(settings, { menu_typography_typography: 'custom', menu_typography_font_family: family.split(',')[0].replace(/["']/g, '').trim() });
+      const size = parseFloat(declared(top, 'font-size'));
+      const weight = declared(top, 'font-weight');
+      if (size) settings.menu_typography_font_size = px(size);
+      if (/^\d+$/.test(weight || '')) settings.menu_typography_font_weight = weight;
+    }
+    const kept = Object.fromEntries(Object.entries(el.settings).filter(([k]) => k !== '_esg_menu'));
+    el.settings = {
+      menu: '',
+      layout: 'horizontal',
+      navmenu_align: 'center',
+      dropdown: 'tablet',
+      resp_align: 'right',
+      full_width_dropdown: 'yes',
+      submenu_icon: 'arrow',
+      pointer: 'none',
+      padding_horizontal_menu_item: px(0),
+      padding_horizontal_menu_item_tablet: px(20),
+      padding_vertical_menu_item: px(8),
+      padding_vertical_menu_item_tablet: px(14),
+      menu_space_between: px(26),
+      color_dropdown_item: '#222222',
+      background_color_dropdown_item: '#FFFFFF',
+      color_dropdown_item_hover: '#222222',
+      background_color_dropdown_item_hover: '#F2F2F2',
+      distance_from_menu: px(14),
+      toggle_size: px(24),
+      ...settings,
+      ...kept,
+      ...(Object.keys(globals).length ? { __globals__: { ...(kept.__globals__ || {}), ...globals } } : {}),
+    };
+  }
 }
 
 /** Elementor kit settings from the colors and fonts the site uses the most (a site without Elementor global styles). */

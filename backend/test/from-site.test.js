@@ -306,3 +306,54 @@ test('header / footer made with a plugin (ElementsKit, HFE): the page is the doc
   const b = pageDocuments(bare, 'https://x.example/');
   assert.deepEqual([b.header.postId, b.page.postId, b.footer.postId], ['155', '12', '166'], 'the popup is not the footer');
 });
+
+test('add-on menu -> the menu widget of the site, styled like it; add-on carousel; classes of settings; icons that are not Font Awesome', async () => {
+  const { pageDocuments, styleMenus, adaptCss, CAROUSEL_CSS } = await import('../src/kits/from-site.js');
+  const { parse } = await import('node-html-parser');
+  const w = (id, type, cls, inner, settings = '') => `<div class="elementor-element elementor-element-${id} ${cls} elementor-widget elementor-widget-${type}" data-id="${id}" data-element_type="widget" data-widget_type="${type}.default"${settings}><div class="elementor-widget-container">${inner}</div></div>`;
+  const root = parse(`<html><body class="page-id-12 elementor-page-12"><div data-elementor-type="wp-page" data-elementor-id="12" class="elementor elementor-12">
+<div class="elementor-element elementor-element-c000001 e-con e-parent my-row" data-id="c000001" data-element_type="container">
+${w('m000001', 'ekit-nav-menu', 'elementor-hidden-mobile', '<ul class="elementskit-navbar-nav"><li><a href="/old/">Old page</a></li></ul>')}
+${w('t000001', 'elementskit-testimonial', '', '<div class="slider" data-config="{&quot;autoplay&quot;:true,&quot;slidesPerView&quot;:1,&quot;spaceBetween&quot;:15,&quot;breakpoints&quot;:{&quot;320&quot;:{&quot;slidesPerView&quot;:1},&quot;1024&quot;:{&quot;slidesPerView&quot;:2,&quot;spaceBetween&quot;:20}}}"><div class="swiper"><div class="swiper-wrapper"><div class="swiper-slide"><p>Ottimo servizio</p></div><div class="swiper-slide"><p>Puntuali</p></div></div></div></div>')}
+${w('i000001', 'icon', 'elementor-fixed elementor-view-stacked elementor-shape-square', '<div class="elementor-icon-wrapper"><a class="elementor-icon" href="#top"><svg class="ekit-svg-icon icon-up-arrow" viewBox="0 0 32 32"><path d="M1 1"/></svg></a></div>', ' data-settings="{&quot;_position&quot;:&quot;fixed&quot;}"')}
+${w('i000002', 'icon', 'elementor-view-framed elementor-widget__width-auto', '<div class="elementor-icon-wrapper"><div class="elementor-icon"><i class="fas fa-phone"></i></div></div>')}
+${w('l000001', 'icon-list', 'elementor-icon-list--layout-inline elementor-list-item-link-inline elementor-align-center', '<ul class="elementor-icon-list-items"><li class="elementor-icon-list-item"><span class="elementor-icon-list-text">Uno</span></li></ul>')}
+</div></div></body></html>`);
+  const { page } = pageDocuments(root, 'https://x.example/');
+  const [menu, slider, arrow, phone, list] = page.content[0].elements;
+  assert.equal(page.content[0].settings.css_classes, 'my-row');
+
+  // Menu: the menu widget of the new site (its pages, its hamburger), with the colors and the font of the other one
+  assert.deepEqual([menu.widgetType, menu.settings._esg_menu, menu.settings.hide_mobile], ['navigation-menu', 'ekit-nav-menu', 'hidden-mobile']);
+  assert.doesNotMatch(JSON.stringify(menu), /Old page/);
+  styleMenus(page.content, `.elementor-12 .elementor-element.elementor-element-m000001 .elementskit-navbar-nav > li > a{color:var( --e-global-color-e052ba3 );font-family:var( --e-global-typography-61258b2-font-family ), Sans-serif;}
+.elementor-12 .elementor-element.elementor-element-m000001 .elementskit-navbar-nav > li > a:hover{color:#E34234;}
+.elementor-12 .elementor-element.elementor-element-m000001 .elementskit-navbar-nav .elementskit-submenu-panel > li > a{color:#000000;}`);
+  assert.equal(menu.settings._esg_menu, undefined);
+  assert.deepEqual([menu.settings.layout, menu.settings.color_menu_item_hover, menu.settings.color_menu_item_active], ['horizontal', '#E34234', '#E34234']);
+  assert.deepEqual([menu.settings.__globals__.color_menu_item, menu.settings.__globals__.menu_typography_typography], ['globals/colors?id=e052ba3', 'globals/typography?id=61258b2']);
+  assert.equal(menu.settings.hide_mobile, 'hidden-mobile', 'its advanced settings stay');
+
+  // Carousel of an add-on: slides per view and gap of the desktop breakpoint, autoplay, our script after the markup; its texts are parts
+  assert.equal(slider.widgetType, 'html');
+  assert.match(slider.settings.html, /class="swiper-wrapper" style="--esg-per-d:2;--esg-gap:20px" data-esg-carousel="4500"/);
+  assert.match(slider.settings.html, /<script>\(function\(s\)\{[\s\S]*\}\)\(document\.currentScript\)<\/script>$/);
+  assert.deepEqual(slider.settings.esg_parts.map((p) => p.text), ['Ottimo servizio', 'Puntuali']);
+  assert.match(slider.settings._css_classes, /elementor-widget-elementskit-testimonial/);
+  assert.match(CAROUSEL_CSS, /\[data-esg-carousel\]\{display:flex/);
+
+  // An icon that is not a Font Awesome one: kept as it is (no star in its place), still fixed in its corner
+  assert.equal(arrow.widgetType, 'html');
+  assert.match(arrow.settings.html, /ekit-svg-icon icon-up-arrow/);
+  assert.equal(arrow.settings._position, 'fixed');
+  assert.match(arrow.settings._css_classes, /elementor-widget-icon elementor-fixed elementor-view-stacked elementor-shape-square/);
+  assert.doesNotMatch(JSON.stringify(page.content), /fa-star/);
+  // Settings shown as classes are read back, and the classes stay for the CSS of the site
+  assert.deepEqual([phone.widgetType, phone.settings.selected_icon.value, phone.settings.view, phone.settings._element_width], ['icon', 'fas fa-phone', 'framed', 'auto']);
+  assert.deepEqual([list.settings.view, list.settings.link_click, list.settings.icon_align], ['inline', 'inline', 'center']);
+  assert.match(list.settings._css_classes, /elementor-icon-list--layout-inline/);
+
+  // A selector that already starts at the body stays valid
+  const { css } = adaptCss([{ base: 'https://x.example/a.css', text: 'body:not(.rtl) .elementor-12 .elementor-element.elementor-element-i000001{right:24px}.elementor-12 .elementor-element.elementor-element-i000001{bottom:24px}' }], new Map([['i000001', {}]]));
+  assert.equal(css, ':is(body,.esg-body):not(.rtl) .elementor .elementor-element.elementor-element-i000001{right:24px}body .elementor .elementor-element.elementor-element-i000001{bottom:24px}');
+});
