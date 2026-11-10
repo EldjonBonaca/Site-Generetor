@@ -55,7 +55,7 @@ const UI = {
     hfTheme: 'Senza Elementor Pro header e footer vengono mostrati solo con il tema Hello Elementor: attivalo e clicca "Aggiorna il sito".',
     pluginReady: 'Plugin "{name}" installato e attivato.',
     pluginRemoved: 'Plugin "{name}" eliminato.',
-    seoPass: 'Punteggi Yoast SEO: apertura di ogni pagina e articolo nell'editor, analisi e salvataggio ({done}/{total}) – {title}',
+    seoPass: "Punteggi Yoast SEO: apertura di ogni pagina e articolo nell'editor, analisi e salvataggio ({done}/{total}) – {title}",
     seoPassDone: 'Punteggi Yoast SEO calcolati e salvati: {n} su {total} tra pagine e articoli.',
     seoPassFailed: 'Punteggio Yoast SEO non salvato per "{title}": aprila in modifica, attendi qualche secondo e clicca Aggiorna.',
     pluginRemoveFailed: 'Impossibile eliminare il plugin "{name}" ({error}). Eliminalo a mano da Plugin.',
