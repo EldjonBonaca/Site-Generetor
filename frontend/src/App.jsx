@@ -38,7 +38,7 @@ function UserMenu() {
       </span>
       <button type="button" onClick={logout} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100" title={t('Log out')}>
         <LogOut className="size-4" />
-        <span className="hidden md:inline">{t('Log out')}</span>
+        <span className="hidden 2xl:inline">{t('Log out')}</span>
       </button>
     </div>
   );
@@ -62,7 +62,7 @@ export default function App() {
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-7xl items-center gap-6 px-4 sm:px-6">
+        <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:px-6 lg:gap-4">
           <div className="flex shrink-0 rounded-lg bg-slate-100 p-0.5" role="group" aria-label={t('Section')}>
             {SECTIONS.map((s) => (
               <button
@@ -77,17 +77,22 @@ export default function App() {
               </button>
             ))}
           </div>
-          <nav className="flex flex-1 items-center gap-1 overflow-x-auto">
+          <nav className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {nav.map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
                 to={to}
+                title={label}
                 className={({ isActive }) =>
-                  cx('inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium whitespace-nowrap', isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-100')
+                  cx('inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium whitespace-nowrap', isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-100')
                 }
               >
-                <Icon className="size-4" />
-                <span className="hidden md:inline">{label}</span>
+                {({ isActive }) => (
+                  <>
+                    <Icon className="size-4 shrink-0" />
+                    <span className={isActive ? 'inline' : 'hidden xl:inline'}>{label}</span>
+                  </>
+                )}
               </NavLink>
             ))}
           </nav>
