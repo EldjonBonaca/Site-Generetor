@@ -427,6 +427,7 @@ function SiteStructureCard({ project, reload }) {
   const { t } = useT();
   const toast = useToast();
   const s = project.settings;
+  const code = project.platform === 'code';
   const [menuName, setMenuName] = useState(s.menuName);
   const save = async (patch) => {
     try {
@@ -441,15 +442,20 @@ function SiteStructureCard({ project, reload }) {
   return (
     <Card title={t('Site structure')} description={t('Contact form, navigation menu and map.')} actions={<SaveStatus status={status} t={t} />}>
       <p className="text-sm text-slate-600">
-        {t('The site has 5 pages (Home, About, Services, Gallery, Contact), a header, a 4-column footer and the single post template. Services are published as WordPress articles, one per service, in the services category.')}
+        {code
+          ? t('The site has 5 pages (Home, About, Services, Gallery, Contact), a header and a 4-column footer. Every service has its own page, linked from the services page.')
+          : t('The site has 5 pages (Home, About, Services, Gallery, Contact), a header, a 4-column footer and the single post template. Services are published as WordPress articles, one per service, in the services category.')}
       </p>
       <div className="mt-5 grid gap-5 md:grid-cols-2">
         <div>
           <p className="text-sm font-medium text-slate-700">{t('Contact form')}</p>
           <p className="mt-1 text-sm text-slate-500">
-            {t('Contact Form 7: the WordPress plugin installs it, creates the form (name, email, phone, message, privacy consent) and puts it on the contact page.')}
+            {code
+              ? t('The contact page has a form (name, email, phone, message, privacy consent) sent to the e-mail of the business by send.php: the hosting must run PHP.')
+              : t('Contact Form 7: the WordPress plugin installs it, creates the form (name, email, phone, message, privacy consent) and puts it on the contact page.')}
           </p>
         </div>
+        {!code && (
         <Field label={t('Menu name')} hint={t('Created by the WordPress plugin (or wordpress-import.xml). The header and footer already link to the pages.')}>
           {(id) => (
             <Input
@@ -463,6 +469,7 @@ function SiteStructureCard({ project, reload }) {
             />
           )}
         </Field>
+        )}
       </div>
       {/* A Template Kit keeps its own contact page: its map (if any) shows the site address */}
       {!project.template_kit_id && (

@@ -39,7 +39,7 @@ export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
  * Version of the generated structure. Field ids depend on it: a generation made with another
  * version cannot be exported (exporter.js), it has to be generated again.
  */
-export const BUILDER_VERSION = 16;
+export const BUILDER_VERSION = 17;
 
 export const DOC_ROLES = ['home', 'about', 'services', 'gallery', 'contact', 'single_post', 'header', 'footer'];
 
@@ -647,7 +647,11 @@ function intro(b, parts, o = {}) {
   if (b.st.titles === 'line') els.push(b.line(align));
   if (parts.text) els.push(b.text(parts.text.value, { ...parts.text, align, color: light ? 'rgba(255,255,255,0.86)' : undefined }));
   if (column) return b.box(els, { gap: 12, align: align === 'center' ? 'center' : 'stretch' });
-  return align === 'center' ? b.box(els, { maxWidth: 760, gap: 12, align: 'center' }) : b.box(els, { maxWidth: 820, gap: 12, align: 'stretch' });
+  if (align === 'center') return b.box(els, { maxWidth: 760, gap: 12, align: 'center' });
+  // A left-aligned title starts where the content below it starts (not in the middle of the section)
+  const block = b.box(els, { maxWidth: 820, gap: 12, align: 'stretch' });
+  if (!o.centered) block.settings._flex_align_self = 'flex-start';
+  return block;
 }
 
 /** "numbers" signature: the number of the section (CSS counter of the page) in large outlined figures above its title. */
@@ -1014,10 +1018,10 @@ function reviews(b) {
 function mediaRow(b, content, o = {}) {
   const variant = o.imageFirst === undefined ? b.spec.layout.about : o.imageFirst ? 'image-left' : 'image-right';
   if (variant === 'wide') {
-    return b.section(
-      [b.box(content, { maxWidth: 860, gap: 16, align: 'stretch' }), b.box([b.picture('photo', { height: o.wideHeight || 460, frame: true, wide: true })], { anim: 0 })],
-      { bg: o.bg || b.ink.bg, align: 'center', gap: 48 }
-    );
+    // The text starts where the photo starts, or is centered above it in a centered template (o.center)
+    const txt = b.box(content, { maxWidth: 860, gap: 16, align: o.center ? 'center' : 'stretch' });
+    if (!o.center) txt.settings._flex_align_self = 'flex-start';
+    return b.section([txt, b.box([b.picture('photo', { height: o.wideHeight || 460, frame: true, wide: true })], { anim: 0 })], { bg: o.bg || b.ink.bg, align: 'center', gap: 48 });
   }
   // "collage": a large photo and a smaller one overlapping its bottom-right corner, cut out by a border of the section color
   if (variant === 'collage') {
@@ -1267,8 +1271,8 @@ function hero(b, site) {
 function aboutTeaser(b, site) {
   const { copy, layout } = b.spec;
   const bar = b.st.titles === 'bar';
-  // "triptych": the text centered between the photos
-  const align = layout.about === 'triptych' && !bar ? 'center' : 'left';
+  // "triptych": the text centered between the photos; "wide": centered above the photo in a centered template
+  const align = (layout.about === 'triptych' || (layout.about === 'wide' && b.st.align === 'center')) && !bar ? 'center' : 'left';
   const head = [
     ...(b.st.signature === 'numbers' ? [sectionNumber(b)] : []),
     b.kicker(copy.aboutKicker, { align, hint: 'small label of the "about us" section', max: 30 }),
@@ -1306,7 +1310,7 @@ function aboutTeaser(b, site) {
       { bg, gap: 56 }
     );
   }
-  return mediaRow(b, [...head, ...body], { bg });
+  return mediaRow(b, [...head, ...body], { bg, center: align === 'center' });
 }
 
 /** Featured services (max 3) + "all services". */
@@ -1342,7 +1346,7 @@ function homeGallery(b, site) {
   const head = () => intro(b, {
     kicker: { value: copy.galleryKicker, hint: 'small label of the photo gallery section of the Home page', max: 30 },
     title: { value: copy.galleryTitle, hint: 'title of the photo gallery of the Home page (e.g. our works)', max: 60 },
-  });
+  }, { centered: layout.homeGallery === 'strip' });
   const more = () => b.button(copy.galleryButton, url, { variant: 'outline', outlineColor: b.ink.heading, align: left ? 'left' : 'center', hint: 'button leading to the Gallery page', max: 30 });
   const bg = surfaceBg(b, 'gallery', 'bg');
   /** One photo of the archive, cropped to `height`, zooming on hover and leading to the Gallery page. */

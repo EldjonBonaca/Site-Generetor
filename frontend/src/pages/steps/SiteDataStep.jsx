@@ -119,7 +119,11 @@ export default function SiteDataStep({ project, setProject }) {
                 schedule(patch);
               }}
               label={t('WhatsApp button')}
-              description={t('Optional: the WordPress plugin installs and activates Joinchat with this number (green WhatsApp button on every page).')}
+              description={
+                project.platform === 'code'
+                  ? t('Optional: a green WhatsApp button on every page opens the chat with this number.')
+                  : t('Optional: the WordPress plugin installs and activates Joinchat with this number (green WhatsApp button on every page).')
+              }
             />
             {form.whatsapp_enabled === '1' && (
               <Field label={t('WhatsApp number')} hint={t('With the country code, e.g. +39 333 123 4567 (without it, the code of the site language is added).')} error={err('whatsapp_number')}>

@@ -140,7 +140,10 @@ export const LOGIN_PAGE = `<!doctype html>
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f1f5f9;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#0f172a}
 form{width:min(360px,calc(100vw - 32px));background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:32px;box-shadow:0 10px 30px rgba(15,23,42,.06)}
-h1{margin:0 0 24px;font-size:22px;font-weight:600}
+h1{margin:0 0 16px;font-size:22px;font-weight:600}
+.warn{display:flex;gap:10px;align-items:flex-start;margin:0 0 22px;padding:12px 14px;border:1px solid #fcd34d;border-radius:10px;background:#fffbeb;font-size:13.5px;line-height:1.45;color:#92400e}
+.warn b{display:block;color:#b45309;letter-spacing:.04em}
+.warn span{font-size:20px;line-height:1.1}
 label{display:block;margin-bottom:16px;font-size:14px;font-weight:500;color:#334155}
 input{display:block;width:100%;margin-top:6px;padding:11px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px}
 input:focus{outline:none;border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.15)}
@@ -152,6 +155,7 @@ button:disabled{opacity:.6;cursor:wait}
 <body>
 <form id="f" autocomplete="on">
 <h1>Login</h1>
+<div class="warn"><span aria-hidden="true">&#9888;&#65039;</span><p style="margin:0"><b>KUJDES!</b>Po hap di&ccedil;ka t&euml; paligjshme. Vazhdo me p&euml;rgjegj&euml;sin&euml; t&euml;nde &#128517;</p></div>
 <label>Username<input name="username" autocomplete="username" required autofocus></label>
 <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
 <button type="submit">Sign in</button>

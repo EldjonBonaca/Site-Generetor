@@ -65,7 +65,7 @@ export default function ProjectsPage() {
         title={code ? t('Projects · Code (HTML, CSS, JS)') : t('Projects · WordPress')}
         description={
           code
-            ? t('Websites made with code: each project is exported as a static site (HTML, CSS, JavaScript) in a zip, ready for any hosting. Same site data, images, templates and AI texts as the WordPress projects.')
+            ? t('Each project is one website made with code: exported as HTML, CSS and JavaScript in a zip, ready for any hosting.')
             : t('Each project is one website: site data, services, images, template and generated content.')
         }
         actions={

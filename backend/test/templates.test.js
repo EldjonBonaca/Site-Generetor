@@ -938,7 +938,7 @@ test('industry analysis of a category drives directions and sections of its temp
   const saved = [];
   for (let i = 0; i < 5; i++) {
     const { spec } = await generateTemplateSpec(new MockProvider({}), { category, existing: saved, profile });
-    assert.ok(profile.directions.includes(spec.direction), 'a direction suitable for the industry');
+    assert.ok([...profile.directions, 'clean', 'simple'].includes(spec.direction), 'a direction suitable for the industry, or one of the simple ones offered to every category');
     for (const s of REQUIRED_SECTIONS) assert.ok(spec.sections.includes(s));
     assert.ok(spec.sections.filter((s) => OPTIONAL_SECTIONS.includes(s)).every((s) => profile.sections.includes(s)), 'only recommended optional sections');
     saved.push(spec);

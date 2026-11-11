@@ -231,9 +231,14 @@ Follow every instruction above that concerns the design and the texts of the tem
  *   - rng            random source (tests)
  * @returns {Promise<{ spec, tokens, direction }>}
  */
+/** Directions offered for every category (simple and professional looks), whatever its industry analysis lists. */
+const ALWAYS_SUITABLE = ['clean', 'simple'];
+
 export async function generateTemplateSpec(provider, { category, instructions = '', language = 'it', existing = [], direction: requested = '', exclude = [], avoidColors = [], profile = null, library = [], clientNotes = '', brandColors = null, rng = Math.random }) {
   const brand = sanitizeBrandColors(brandColors);
-  const direction = pickDirection(existing, { requested, exclude, suitable: profile?.directions, library, rng });
+  // The simple, tidy directions suit every industry: they come first, also for the categories analyzed before they existed
+  const suitable = profile?.directions?.length ? [...ALWAYS_SUITABLE.filter((id) => !profile.directions.includes(id)), ...profile.directions] : profile?.directions;
+  const direction = pickDirection(existing, { requested, exclude, suitable, library, rng });
   const plan = designPlan(direction, existing, rng, profile, library);
   const { prompt, system } = buildTemplatePrompt({ category, instructions, language, direction, plan, existing, avoidColors, profile, library, clientNotes, brandColors: brand });
   // With the brand colors of the user, the colors of the other templates do not count

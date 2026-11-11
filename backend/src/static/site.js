@@ -14,6 +14,7 @@
  */
 import { BASE_CSS, globalsCss } from './css.js';
 import { renderDocument, SITE_JS, textsFor } from './render.js';
+import { whatsappNumber } from '../generation/plan.js';
 
 export const IMAGE_SCHEME = 'esg-image://';
 const FONT_AWESOME = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css';
@@ -123,6 +124,13 @@ export function buildStaticSite(input, { siteIcon = null, frontendCss = '', lega
   const footer = render(template('footer'), null, '');
   const sharedCss = [imports, BASE_CSS, LEGACY_CSS, frontendCss, globalsCss(input.globalStyles), header.css, footer.css, siteCss.replace(/^@import[^;]+;/gm, '')].filter(Boolean).join('\n');
 
+  // WhatsApp button of the project (the WordPress site gets it from the Joinchat plugin): a link to the chat
+  const wa = whatsappNumber(project);
+  const waButton = wa
+    ? `<a class="esg-wa" href="https://wa.me/${wa}" target="_blank" rel="noopener" aria-label="WhatsApp"><i class="fab fa-whatsapp" aria-hidden="true"></i></a>
+`
+    : '';
+  const WA_CSS = wa ? '.esg-wa{position:fixed;right:20px;bottom:20px;z-index:900;display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;background:#25d366;color:#fff;font-size:30px;text-decoration:none;box-shadow:0 6px 18px rgba(0,0,0,.22);transition:transform .2s}.esg-wa:hover{transform:scale(1.06);color:#fff}@media(max-width:767px){.esg-wa{right:14px;bottom:14px;width:52px;height:52px}}' : '';
   const files = [];
   const page = ({ path, doc, title, seo, current, body = null }) => {
     const depth = path ? path.split('/').filter(Boolean).length : 0;
@@ -153,7 +161,7 @@ ${localize(main.html, depth)}
 <footer class="esg-footer-wrap"><div class="elementor elementor-location-footer">
 ${localize(foot.html, depth)}
 </div></footer>
-<script src="${prefix}assets/js/site.js" defer></script>
+${waButton}<script src="${prefix}assets/js/site.js" defer></script>
 </body>
 </html>
 `;
@@ -176,7 +184,7 @@ ${localize(foot.html, depth)}
   }
 
   // The shared stylesheet lives in assets/css: its images are two folders up
-  files.push({ path: 'assets/css/site.css', data: sharedCss.split(IMAGE_SCHEME).join('../img/') });
+  files.push({ path: 'assets/css/site.css', data: [sharedCss, WA_CSS].filter(Boolean).join('\n').split(IMAGE_SCHEME).join('../img/') });
   files.push({ path: 'assets/js/site.js', data: SITE_JS });
   files.push({ path: 'send.php', data: sendPhp({ email: project.email, siteName: project.site_name }) });
   files.push({

@@ -1,6 +1,6 @@
 /**
  * Design directions: distinct visual identities a template of any category can take
- * (industrial, corporate, minimal, editorial, friendly, bold, premium, natural, technical,
+ * (clean, simple, industrial, corporate, minimal, editorial, friendly, bold, premium, natural, technical,
  * luxury, boutique, architectural).
  *
  * When a template is generated, the system (not the AI) picks the direction and the concrete
@@ -32,6 +32,26 @@ import { change, colorAmount, effective, firstScreen, homeShape, repeatedBlocks,
  * layout: allowed values of LAYOUTS keys (keys left out allow every value).
  */
 export const DIRECTIONS = [
+  {
+    id: 'clean',
+    name: 'Clean professional',
+    summary: 'Simple and tidy: white pages, clear titles, soft cards, one brand color and nothing decorative. Professional at first sight.',
+    brief: 'Clean professional look, simple and beautiful: white pages with generous but regular spacing, clear sans-serif titles, cards with a soft shadow or a thin outline, moderately rounded corners, ONE brand color used sparingly with a warm accent for the buttons, natural photos, no decorations and no shaped edges. Nothing showy: order, legibility and trust.',
+    palette: 'restrained and professional: one confident primary (deep blue, teal, forest green, slate, burgundy) used sparingly, a warm "secondary" for the buttons that stands out on it, near-white "background" (a hint of the primary hue), a deep "dark" of the same hue for the footer',
+    fonts: [['Plus Jakarta Sans', 'Inter'], ['Manrope', 'Inter'], ['Outfit', 'Inter'], ['Poppins', 'Inter'], ['DM Sans', 'DM Sans']],
+    style: { theme: ['light'], buttons: ['rounded', 'pill'], cards: ['shadow', 'outline'], titles: ['plain'], align: ['center', 'left'], scale: ['normal', 'large'], images: ['rounded'], titleCase: ['normal'], kicker: ['plain', 'pill'], radius: [10, 16], spacing: ['normal', 'airy'], headingWeight: ['700', '600'], uppercase: [false], fill: ['flat', 'gradient'], motion: ['fade', 'rise'], hover: ['lift', 'still'], edges: ['hero'], rhythm: ['alternate', 'fixed'], highlight: ['none', 'color'], decor: ['none'], photoTone: ['natural'], photoRatio: ['standard', 'wide'], signature: ['none'] },
+    layout: { header: ['classic', 'topbar'], hero: ['left', 'split', 'center', 'color'], heroButtons: ['two', 'link'], heroHeight: ['auto'], heroPhrases: ['none'], about: ['image-right', 'image-left', 'badge'], features: ['icons', 'cards', 'split'], cta: ['banner', 'card', 'split'], services: ['cards', 'boxed'], testimonials: ['cards', 'quote'], homeGallery: ['mosaic', 'masonry'], footer: ['dark'], footerCta: ['none', 'large'], divider: ['none'], subheader: ['plain', 'photo'], stats: ['cards', 'inline'], process: ['cards'], highlights: ['strip'], contact: ['split', 'panel'], faq: ['accordion'] },
+  },
+  {
+    id: 'simple',
+    name: 'Simple elegant',
+    summary: 'Calm and refined: a lot of air, elegant titles, thin outlines and soft neutral tones. Simple, but with taste.',
+    brief: 'Simple elegant look: a lot of white space, calm centered compositions, elegant titles (a refined serif or a light sans-serif) of medium weight, thin outlines instead of shadows, soft neutral surfaces with one muted brand color, natural photos, no decorations. Understated and tasteful, never loud.',
+    palette: 'soft and tasteful: a muted primary (sage, dusty blue, clay, olive, plum, graphite), a gentle "secondary" a little warmer or deeper for the buttons, a warm off-white "background", a deep soft "dark" of the same family',
+    fonts: [['Fraunces', 'Inter'], ['DM Serif Display', 'DM Sans'], ['Lora', 'Inter'], ['Marcellus', 'Jost'], ['Outfit', 'Inter'], ['Jost', 'Jost']],
+    style: { theme: ['light'], buttons: ['pill', 'rounded'], cards: ['outline', 'tinted'], titles: ['plain'], align: ['center'], scale: ['large', 'normal'], images: ['rounded'], titleCase: ['normal'], kicker: ['plain', 'dash'], radius: [8, 14], spacing: ['airy'], headingWeight: ['600', '500'], uppercase: [false], fill: ['flat'], motion: ['fade'], hover: ['still', 'lift'], edges: ['hero'], rhythm: ['alternate', 'fixed'], highlight: ['italic', 'none'], decor: ['none'], photoTone: ['natural', 'faded'], photoRatio: ['standard', 'tall'], signature: ['none'] },
+    layout: { header: ['classic', 'centered'], hero: ['center', 'split', 'card'], heroButtons: ['one', 'link'], heroHeight: ['auto'], heroPhrases: ['none'], about: ['image-left', 'image-right', 'wide'], features: ['icons', 'center', 'split'], cta: ['minimal', 'banner', 'photo-split'], services: ['cards', 'boxed'], testimonials: ['quote', 'minimal', 'cards'], homeGallery: ['masonry', 'mosaic'], footer: ['light', 'dark'], footerCta: ['none'], divider: ['none'], subheader: ['plain', 'photo'], stats: ['inline'], process: ['cards', 'vertical'], highlights: ['strip'], contact: ['split', 'stacked'], faq: ['accordion'] },
+  },
   {
     id: 'industrial',
     name: 'Robust industrial',
