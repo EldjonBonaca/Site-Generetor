@@ -233,6 +233,21 @@ export function mapLink(project) {
   return query ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}` : '';
 }
 
+/**
+ * Items of the contacts menu of the site (footer, article sidebar): phone(s), e-mail and address, each
+ * with the kind of its icon. The address leads to the place on Google Maps.
+ */
+export function contactMenuItems(project) {
+  const phone2 = project.phone2 && telHref(project.phone2) !== telHref(project.phone) ? project.phone2 : '';
+  const address = oneLine(project.address || '');
+  return [
+    project.phone ? { type: 'phone', title: project.phone, url: `tel:${telHref(project.phone)}` } : null,
+    phone2 ? { type: 'phone', title: phone2, url: `tel:${telHref(phone2)}` } : null,
+    project.email ? { type: 'email', title: project.email, url: `mailto:${project.email}` } : null,
+    address ? { type: 'address', title: address, url: mapLink(project) || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` } : null,
+  ].filter(Boolean);
+}
+
 /** The Elementor documents of the project (built once per context), from its template or its Template Kit. */
 export function builtSite(ctx) {
   // Kit: the sections chosen in the project for each page (settings.kitLayout)

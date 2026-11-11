@@ -14,7 +14,7 @@
  */
 import { BASE_CSS, globalsCss } from './css.js';
 import { renderDocument, SITE_JS, textsFor } from './render.js';
-import { whatsappNumber } from '../generation/plan.js';
+import { contactMenuItems, whatsappNumber } from '../generation/plan.js';
 
 export const IMAGE_SCHEME = 'esg-image://';
 const FONT_AWESOME = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css';
@@ -107,7 +107,10 @@ export function buildStaticSite(input, { siteIcon = null, frontendCss = '', lega
   const template = (role) => input.templates.find((t) => t.role === role)?.doc || null;
   const logoFile = input.images?.find((i) => i.logo)?.file || null;
   const unknown = new Set();
-  const shared = { texts, menu, siteName: project.site_name, home: '/', logo: logoFile ? `${IMAGE_SCHEME}${logoFile}` : null };
+  // The services (one page each): the cards of the posts widget and the services menu of the WordPress site
+  const posts = (input.posts || []).filter((p) => p.doc).map((p) => ({ title: p.title, url: `/${p.slug}/`, excerpt: p.excerpt || '', image: p.image ? `${IMAGE_SCHEME}${p.image}` : null }));
+  const menus = { services: posts.map((p) => ({ title: p.title, url: p.url })), contacts: contactMenuItems(project).map((i) => ({ title: i.title, url: i.url, cls: `esg-mi esg-mi-${i.type}` })) };
+  const shared = { texts, menu, menus, posts, siteName: project.site_name, home: '/', logo: logoFile ? `${IMAGE_SCHEME}${logoFile}` : null };
 
   const render = (doc, current, title, depth = 0) => {
     if (!doc) return { html: '', css: '' };

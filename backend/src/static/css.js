@@ -271,8 +271,34 @@ const WIDGET_CSS = {
     sheet.add(`${sel} .esg-carousel img`, { 'border-radius': box(s.image_border_radius) });
     sheet.add(`${sel} .esg-carousel-arrow`, { color: color(s, 'arrows_color'), 'font-size': unit(s.arrows_size) });
   },
+  'hfe-basic-posts'(sheet, sel, s) {
+    for (const [suffix, device] of DEVICES) {
+      const cols = Number(s[`columns${suffix}`]);
+      sheet.add(`${sel} .hfe-posts-grid`, { 'grid-template-columns': cols ? `repeat(${cols},1fr)` : null, 'column-gap': unit(s[`column_gap${suffix}`]), 'row-gap': unit(s[`row_gap${suffix}`]) }, device);
+      sheet.add(`${sel} .hfe-post-content`, { padding: box(s[`card_padding${suffix}`]) }, device);
+    }
+    const card = `${sel} .hfe-post-card`;
+    background(sheet, card, s, 'card_background_');
+    frame(sheet, card, s, 'card_');
+    sheet.add(`${sel} .hfe-post-title`, { 'margin-bottom': unit(s.title_spacing) });
+    sheet.add(`${sel} .hfe-post-title a`, { color: color(s, 'title_color') });
+    sheet.add(`${sel} .hfe-post-title a:hover`, { color: color(s, 'title_hover_color') });
+    typography(sheet, `${sel} .hfe-post-title`, s, 'title_');
+    sheet.add(`${sel} .hfe-post-excerpt`, { color: color(s, 'excerpt_color'), 'margin-bottom': unit(s.excerpt_spacing) });
+    typography(sheet, `${sel} .hfe-post-excerpt`, s, 'excerpt_');
+    sheet.add(`${sel} .hfe-read-more`, { color: color(s, 'read_more_color') });
+    sheet.add(`${sel} .hfe-read-more:hover`, { color: color(s, 'read_more_hover_color') });
+    typography(sheet, `${sel} .hfe-read-more`, s, 'read_more_');
+  },
   'navigation-menu'(sheet, sel, s) {
     const link = `${sel} .hfe-nav-menu a.hfe-menu-item`;
+    // A menu shown as a list: one link per line, no panel on phones
+    if (s.layout === 'vertical') {
+      sheet.add(link, { color: color(s, 'color_menu_item'), padding: `${unit(s.padding_vertical_menu_item) || '6px'} ${unit(s.padding_horizontal_menu_item) || '0px'}` });
+      sheet.add(`${link}:hover,${sel} .hfe-nav-menu .current-menu-item>a.hfe-menu-item`, { color: color(s, 'color_menu_item_hover') });
+      typography(sheet, link, s, 'menu_');
+      return;
+    }
     sheet.add(`${sel} .hfe-nav-menu`, { 'justify-content': flexAlign(s.navmenu_align), gap: `4px ${unit(s.menu_space_between) || '24px'}` });
     sheet.add(link, { color: color(s, 'color_menu_item'), padding: `${unit(s.padding_vertical_menu_item) || '8px'} ${unit(s.padding_horizontal_menu_item) || '0px'}` });
     sheet.add(`${link}:hover,${sel} .hfe-nav-menu .current-menu-item>a.hfe-menu-item`, { color: color(s, 'color_menu_item_hover') });
@@ -375,6 +401,11 @@ button{font:inherit;cursor:pointer}
 .elementor-shape svg{display:block;width:100%}
 .hfe-nav-menu{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;align-items:center}
 .hfe-nav-menu a.hfe-menu-item{display:block;transition:color .3s,background-color .3s}
+.hfe-nav-menu__layout-vertical .hfe-nav-menu{display:block}
+.hfe-posts-grid{display:grid}
+.hfe-post-image img{width:100%;height:auto;display:block}
+.hfe-post-title{margin-top:0;font-size:20px}
+.hfe-post-title a,.hfe-read-more{text-decoration:none}
 .hfe-nav-menu__layout-horizontal .hfe-nav-menu__toggle{display:none;background:none;border:0;padding:6px;line-height:1;margin-left:auto;color:inherit;box-shadow:none;min-width:0}
 .esg-lightbox{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.9);padding:20px;cursor:zoom-out}
 .esg-lightbox img{max-width:100%;max-height:100%;box-shadow:0 10px 60px rgba(0,0,0,.5)}

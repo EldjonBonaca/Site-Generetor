@@ -150,15 +150,16 @@ test('Italian full site: template, articles, gallery, reviews, contact form, men
   assert.equal(servicesDoc.title, 'Servizi');
   assert.equal(servicesDoc.content.length, 3, 'subheader + one section with all services + the SEO text');
   assert.match(JSON.stringify(servicesDoc.content[2]), /"header_size":"h2"/, 'SEO text with its subheading');
-  assert.equal([...servicesJson.matchAll(/"link_to":"custom"/g)].length, 5, 'one card (linked image) per service');
-  for (const s of services) {
-    assert.match(servicesJson, new RegExp(`"title":"${s.name}"`));
-    assert.match(servicesJson, new RegExp(`"url":"/${s.slug}/"`));
-  }
+  // The services are the articles themselves, read by the posts widget (every article, in the order of the project)
+  assert.match(servicesJson, /"widgetType":"hfe-basic-posts"/);
+  assert.match(servicesJson, /"posts_per_page":99,/);
+  assert.match(servicesJson, /"orderby":"date","order":"asc"/);
+  assert.doesNotMatch(servicesJson, /"link_to":"custom"/, 'no hand-made service card');
   // Home: hero, chi siamo, perché sceglierci, call to action, 3 featured services, photo carousel, reviews
   const homeJson = read('templates/home.json');
   assert.equal(JSON.parse(homeJson).content.length, 7);
-  assert.equal([...homeJson.matchAll(/"link_to":"custom"/g)].length, 3);
+  assert.match(homeJson, /"widgetType":"hfe-basic-posts"/);
+  assert.match(homeJson, /"posts_per_page":3,/, '3 featured services, read from the articles');
   assert.equal([...homeJson.matchAll(/"widgetType":"testimonial"/g)].length, 3);
   assert.equal([...homeJson.matchAll(/"testimonial_image":\{"url":"","id":""\}/g)].length, 3, 'reviews without photos');
   // "Perché sceglierci": 4 boxes written by the AI, no Elementor default text
@@ -185,7 +186,7 @@ test('Italian full site: template, articles, gallery, reviews, contact form, men
   assert.match(header, /"text":"\+39 02 1234 567"/);
   assert.match(header, /"widgetType":"navigation-menu","settings":{"menu":"menu-principale"/, 'the WordPress menu of the site');
   const footer = read('templates/footer.json');
-  for (const t of ['"title":"Link"', '"title":"Servizi"', '"title":"Contatti"', '"text":"Pavimenti"', '"url":"/pavimenti/"', 'Via Milano 10, 20100 Milano', '© 2026 Edil Bianchi S.r.l. – P.IVA 01234567890']) {
+  for (const t of ['"title":"Link"', '"title":"Servizi"', '"title":"Contatti"', '"menu":"menu-principale","esg_menu":"main"', '"menu":"servizi","esg_menu":"services"', '"menu":"contatti","esg_menu":"contacts"', '© 2026 Edil Bianchi S.r.l. – P.IVA 01234567890']) {
     assert.ok(footer.includes(t), `footer: ${t}`);
   }
   assert.equal(JSON.parse(footer).content[0].elements.length, 4, '4 columns');
@@ -217,6 +218,11 @@ test('Italian full site: template, articles, gallery, reviews, contact form, men
   assert.ok(site.posts.every((x) => x.image && x.content.replace(/<[^>]+>/g, '').length >= 300));
   assert.deepEqual(site.category, { name: 'Servizi', slug: 'servizi' });
   assert.deepEqual(site.menu, { name: 'Menu principale', slug: 'menu-principale' });
+  assert.deepEqual(site.menus.services, { name: 'Servizi' });
+  assert.equal(site.menus.contacts.name, 'Contatti');
+  assert.deepEqual(site.menus.contacts.items.map((i) => i.classes), ['esg-mi esg-mi-phone', 'esg-mi esg-mi-email', 'esg-mi esg-mi-address']);
+  assert.equal(site.menus.contacts.items[2].title, 'Via Milano 10, 20100 Milano');
+  assert.equal(site.uaeWidgets, true, 'menu and posts widgets of UAE');
   assert.deepEqual(site.templates.map((x) => x.type), ['header', 'footer', 'single-post']);
   assert.equal(site.contactForm.plugin, 'cf7');
   assert.equal(site.contactForm.title, 'Modulo di contatto');
@@ -231,5 +237,8 @@ test('Italian full site: template, articles, gallery, reviews, contact form, men
   assert.deepEqual(pluginGallery.settings.wp_gallery.map((i) => i.url), photos, 'the gallery shows every uploaded photo');
   // Photos are also used on the other pages (shared archive: not only in the gallery and on the services)
   const used = new Set(site.pages.filter((x) => x.role !== 'gallery').flatMap((x) => [...plugin.readAsText(`edil-bianchi-site/data/${x.elementor}`).matchAll(/esg-image:\/\/([^"]+)/g)].map((m) => m[1].replace(/-(hero|subheader)(\.\w+)$/, '$2')))); // hero/subheader crops count as their photo
-  assert.ok(site.images.filter((i) => i.photo).filter((i) => used.has(i.file)).length >= 8, `photos used outside the gallery: ${used.size}`);
+  // The photo of a service is the featured image of its article (shown by the posts widget on Home and Services)
+  for (const post of site.posts) if (post.image) used.add(post.image);
+  const usedPhotos = site.images.filter((i) => i.photo).filter((i) => used.has(i.file)).length;
+  assert.ok(usedPhotos >= 8, `photos used outside the gallery: ${usedPhotos} of ${photos.length}`);
 });

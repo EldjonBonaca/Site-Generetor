@@ -12,6 +12,7 @@ import { loadContext, buildPages, analyzePage, classifyField, siteLinks, fallbac
 import { sitePromptFor } from './site-prompt.js';
 import { sleep, stripHtml } from '../lib/util.js';
 import { believableFigure } from '../templates/spec.js';
+import { EMAIL_IN_TEXT, PHONE_IN_TEXT, looksLikePhone } from '../elementor/analyze.js';
 
 const CHUNK_SIZE = 45; // max fields per AI call, keeps answers reliable on long pages
 const CONTENT_RETRIES = 2; // retries when the JSON is invalid/incomplete
@@ -221,8 +222,73 @@ export async function generatePage({ provider, ctx, page, promptRow, log, onlyFi
       }
     }
   }
+  const cleaned = stripContacts(page);
+  if (cleaned) log('warn', `${page.title}: phone numbers or e-mail addresses removed from ${cleaned} text(s) written by the AI (the site shows the contacts in its own elements).`);
   const fixed = fixKeyFigures(page);
   if (fixed) log('warn', `${page.title}: ${fixed} key figure(s) not believable (e.g. too many years of experience) corrected: check them with the client.`);
+}
+
+const CONTACT = '\u0000';
+// A whole phone number as written in a sentence (PHONE_IN_TEXT may stop inside a long group of digits)
+const PHONE_RUN = /(?:\+|00)?\(?\d[\d\s().\/-]{5,}\d/g;
+// Thousands, not a phone: "10.000", "10.000 - 20.000"
+const AMOUNT = /^\d{1,3}(?:[.,\s]\d{3})+(?:\s*[-–]\s*\d{1,3}(?:[.,\s]\d{3})+)?$/;
+// Opening hours, not a phone: "9.00-13.00 / 15.00-19.00"
+const HOURS = /^\d{1,2}[.:]\d{2}(?:[\s\/–-]+\d{1,2}[.:]\d{2})*$/;
+// A label left alone once its number or address is gone: "Tel.", "E-mail:"
+const LABEL_LEFT = /(?:^|\s)(?:tel|cell|telefono|phone|mobile|e-?mail|mail)\.?:?\s*$/i;
+const markContacts = (text) => text.replace(EMAIL_IN_TEXT, CONTACT).replace(PHONE_RUN, (m) => (looksLikePhone(m) && !AMOUNT.test(m.trim()) && !HOURS.test(m.trim()) ? CONTACT : m));
+const tidy = (text) =>
+  text
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\s+([.,;:!?])/g, '$1')
+    .replace(/(?:[\s:,;–-]+|\s+(?:a|al|allo|alla|ai|su|o|e|at|to|on|or|and))+\s*([.!?]?)\s*$/i, '$1')
+    .trim();
+
+/** Plain text without the sentences holding a phone number or an e-mail address ('' when every sentence holds one). */
+function sentencesWithoutContacts(text) {
+  const marked = markContacts(text);
+  if (!marked.includes(CONTACT)) return text;
+  const kept = (marked.match(/[^.!?…]+[.!?…]*\s*/g) || [marked]).filter((sentence) => !sentence.includes(CONTACT)).join('');
+  const out = kept.replace(LABEL_LEFT, '');
+  return /\s$/.test(text) ? out : out.replace(/\s+$/, '');
+}
+
+const EMPTY_TAGS = /<(p|li|h[2-6]|strong|em|ul|ol)>\s*<\/\1>/gi;
+
+/**
+ * A text written by the AI without phone numbers and e-mail addresses (plain text or simple HTML): the
+ * contacts are shown by the elements of the site made for them, never inside the texts. The sentences
+ * holding one are dropped; when nothing else would be left, only the number / address is.
+ */
+export function withoutContacts(value) {
+  if (typeof value !== 'string' || !markContacts(value).includes(CONTACT)) return value;
+  const unlinked = value.replace(/<a\b[^>]*href=["'](?:mailto|tel):[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi, '$1');
+  const map = (fn) => unlinked.split(/(<[^>]+>)/).map((part) => (part.startsWith('<') ? part : fn(part))).join('');
+  const clean = map(sentencesWithoutContacts).replace(EMPTY_TAGS, '').replace(EMPTY_TAGS, '').trim();
+  if (clean.replace(/<[^>]+>/g, '').trim()) return clean;
+  return map((part) => (markContacts(part).includes(CONTACT) ? tidy(markContacts(part).split(CONTACT).join('')) : part)).trim();
+}
+
+/** Phone numbers and e-mail addresses removed from the texts the AI wrote for a page (and from its SEO title / description). Returns how many texts changed. */
+export function stripContacts(page) {
+  let changed = 0;
+  for (const f of page.fields) {
+    if (f.source !== 'ai' || typeof f.value !== 'string' || f.format === 'link') continue;
+    const clean = withoutContacts(f.value);
+    if (clean !== f.value && clean) {
+      f.value = clean;
+      changed++;
+    }
+  }
+  for (const key of ['title', 'description']) {
+    const clean = withoutContacts(page.seo?.[key] || '');
+    if (page.seo && clean && clean !== page.seo[key]) {
+      page.seo[key] = clean;
+      changed++;
+    }
+  }
+  return changed;
 }
 
 /**

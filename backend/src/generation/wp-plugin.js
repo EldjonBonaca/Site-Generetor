@@ -12,8 +12,8 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { AdmZip } from '../lib/zip.js';
 import { slugify } from '../lib/util.js';
-import { contactForm, whatsappNumber } from './plan.js';
-import { LEGAL_PAGES } from '../templates/builder.js';
+import { contactForm, contactMenuItems, whatsappNumber } from './plan.js';
+import { LEGAL_PAGES, siteMenus } from '../templates/builder.js';
 import { listBundledPlugins, bundledPluginPath } from '../lib/bundled-plugins.js';
 import { socialLinks } from '../lib/socials.js';
 
@@ -64,6 +64,7 @@ const UI = {
     conditions: 'Condizioni di visualizzazione di header/footer non aggiornate: aprile in Template → Theme Builder e ripubblicale.',
     noForm: '{plugin} non è attivo: il modulo di contatto non è stato creato. Installalo e clicca "Aggiorna il sito".',
     formCreated: 'Modulo di contatto "{title}" creato in {plugin} (le richieste arrivano a {email}).',
+    formsRemoved: 'Moduli già presenti in {plugin} eliminati ({count}): resta solo quello del sito.',
     permalinks: 'Permalink impostati su "Nome articolo".',
     globalStyles: 'Colori e font del template applicati al kit Elementor del sito.',
     themesRemoved: 'Temi non usati eliminati: {names}. Resta solo Hello Elementor.',
@@ -124,6 +125,7 @@ const UI = {
     conditions: 'Display conditions of header/footer could not be refreshed: open them in Templates → Theme Builder and publish them again.',
     noForm: '{plugin} is not active: the contact form was not created. Install it, then click "Update the website".',
     formCreated: 'Contact form "{title}" created in {plugin} (messages are sent to {email}).',
+    formsRemoved: 'Forms already in {plugin} deleted ({count}): only the form of the site is left.',
     permalinks: 'Permalinks set to "Post name".',
     globalStyles: 'Colors and fonts of the template applied to the Elementor site kit.',
     themesRemoved: 'Unused themes deleted: {names}. Only Hello Elementor is left.',
@@ -276,6 +278,8 @@ export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, c
     };
   });
 
+  const allDocs = [...templates, ...pages, ...posts].map((t) => JSON.stringify(t.doc || {})).join('\n');
+  const usesMenu = (role) => allDocs.includes(`"esg_menu":"${role}"`);
   const site = {
     // WordPress in the language of the site; tagline = main service + place
     site: { name: project.site_name, language: project.language, locale: WP_LOCALES[project.language] || '', tagline: siteTagline(ctx) },
@@ -285,6 +289,15 @@ export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, c
     siteIcon,
     category,
     menu: ctx.menu,
+    // Menus shown as lists by the templates (footer, article sidebar): the services (one item per article, added
+    // by the plugin) and the contacts (phone, e-mail, address: the class of each item gives it its icon)
+    // Only the menus the documents show (a Template Kit keeps its own lists)
+    menus: {
+      ...(usesMenu('services') ? { services: { name: siteMenus(project.language).services.name } } : {}),
+      ...(usesMenu('contacts')
+        ? { contacts: { name: siteMenus(project.language).contacts.name, items: contactMenuItems(project).map((i) => ({ title: i.title, url: i.url, classes: `esg-mi esg-mi-${i.type}` })) } }
+        : {}),
+    },
     // Links that stay site-relative (Cookie / Privacy Policy of the copyright line): every other internal link becomes absolute
     relativeLinks: LEGAL_PAGES.map((p) => p.url),
     contactForm: contactFormInfo(ctx),
@@ -304,7 +317,7 @@ export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, c
     // Social networks of the business: Yoast SEO organization profiles
     socials: socialLinks(project).map((s) => ({ key: s.key, url: s.url })),
     // The menu of the header is the Navigation Menu widget of UAE: installed also with Elementor Pro
-    uaeWidgets: templates.some((t) => JSON.stringify(t.doc || {}).includes('"widgetType":"navigation-menu"')),
+    uaeWidgets: /"widgetType":"(navigation-menu|hfe-basic-posts)"/.test(allDocs),
     // Without Elementor Pro the plugin itself displays the header and footer (no other addon needed)
     headerFooter: templates.some((t) => t.role === 'header' || t.role === 'footer'),
   };

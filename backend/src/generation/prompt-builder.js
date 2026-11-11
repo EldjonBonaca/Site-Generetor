@@ -226,7 +226,7 @@ ${pages.length ? `Site structure: ${pages.map((l) => `${l.label} (${l.url})`).jo
 - Values: strings written in ${languageLabel}.
 - Fields marked [html] may use simple HTML only (<p>, <h2>, <h3>, <strong>, <em>, <ul>, <li>, <br>, <a>). Fields marked [text] are plain text without HTML.
 - Stay within the indicated maximum length of each field so the design does not break; respect the minimum length when indicated.
-- Use the real business data (name, phone numbers, email, address) wherever contact details are needed. Never output placeholders like "Lorem ipsum" or "[your phone]".${client}${kitRules}${numbers}${
+- Never write a phone number or an e-mail address in any text, not even the real ones of the business: the site already shows them in its own elements (header, footer, contact page, buttons). To invite people to get in touch, name the action ("contact us", "ask for a quote", "call us") without the number or the address. Use the real business name and place where they are needed. Never output placeholders like "Lorem ipsum" or "[your phone]".${client}${kitRules}${numbers}${
     hasLinks
       ? `\n- Fields marked [link]: the value must be exactly one of these URLs (choose the one matching the button/link text): ${links.map((l) => l.url).join(' , ')}`
       : ''

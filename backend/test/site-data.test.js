@@ -12,6 +12,7 @@ process.env.ENCRYPTION_KEY ||= 'c'.repeat(64);
 
 const { parseMapsLink, siteMap, resolveMapsLink, isGoogleMapsLink, isShortMapsLink } = await import('../src/lib/maps.js');
 const { buildSite } = await import('../src/templates/builder.js');
+const { contactMenuItems } = await import('../src/generation/plan.js');
 const { sanitizeSpec } = await import('../src/templates/spec.js');
 const { replaceContacts } = await import('../src/elementor/apply.js');
 const { buildPagePrompt, clientInstructions } = await import('../src/generation/prompt-builder.js');
@@ -88,10 +89,19 @@ test('template sites: second phone number and the map of the business listing', 
   const map = siteMap({ businessUrl: PLACE, siteName: 'Edil Test', address: 'Via Roma 1, Milano' });
   const { docs } = buildSite(sanitizeSpec({ layout: { header: 'topbar' } }), site({ map }));
   const json = (role) => JSON.stringify(docs[role].doc);
-  for (const role of ['contact', 'footer', 'single_post']) {
-    assert.match(json(role), /"url":"tel:\+39021234567"/, `${role}: first phone`);
-    assert.match(json(role), /"url":"tel:\+393337654321"/, `${role}: second phone`);
+  assert.match(json('contact'), /"url":"tel:\+39021234567"/, 'contact: first phone');
+  assert.match(json('contact'), /"url":"tel:\+393337654321"/, 'contact: second phone');
+  // Footer and article sidebar show the contacts menu of the site (both phones are its items)
+  for (const role of ['footer', 'single_post']) {
+    assert.match(json(role), /"esg_menu":"contacts"/, `${role}: contacts menu`);
+    assert.doesNotMatch(json(role), /tel:\+39021234567/, `${role}: no hand-made contact list`);
   }
+  const items = contactMenuItems({ phone: '+39 02 1234567', phone2: '+39 333 7654321', email: 'info@ediltest.it', address: 'Via Roma 1\nMilano', google_business_url: '' });
+  assert.deepEqual(items.map((i) => [i.type, i.url]).slice(0, 3), [['phone', 'tel:+39021234567'], ['phone', 'tel:+393337654321'], ['email', 'mailto:info@ediltest.it']]);
+  assert.equal(items[3].type, 'address');
+  assert.equal(items[3].title, 'Via Roma 1, Milano');
+  assert.match(items[3].url, /^https:\/\/www\.google\.com\/maps\/search\//);
+  assert.equal(contactMenuItems({ phone: '+39 02 1234567', phone2: '+39 02 1234567', email: '', address: '' }).length, 1, 'the same number twice is one item');
   const topbar = JSON.stringify(docs.header.doc.content[0]);
   assert.match(topbar, /tel:\+39021234567/);
   assert.match(topbar, /mailto:info@ediltest\.it/, 'the top bar keeps the email');

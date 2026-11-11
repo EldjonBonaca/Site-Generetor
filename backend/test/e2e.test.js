@@ -225,7 +225,7 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   const home = gen.pages.find((pg) => pg.key === 'home');
   assert.ok(home.seo.title);
   assert.ok(home.seo.keyphrase, 'Yoast focus keyphrase written with the SEO fields');
-  assert.ok(home.fields.some((f) => f.id.startsWith('home.s5.heading') && f.value === 'Riparazione caldaie'), 'service card title = service name');
+  assert.ok(!home.fields.some((f) => /hfe_basic_posts/.test(f.id) && f.source === 'ai'), 'the services are shown by the posts widget (the articles themselves): no card text to write');
   const about = gen.pages.find((pg) => pg.key === 'about');
   assert.ok(about.fields.some((f) => /^about\.intro\.heading\d\.title$/.test(f.id) && f.value === 'About Us'), 'subheader title = page title');
   const shared = about.fields.filter((f) => f.source === 'shared');
@@ -338,7 +338,7 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.match(zip.readAsText(root + 'additional-css.css'), /\.esg-header\{position:relative;z-index:100\}/);
   assert.doesNotMatch(header, /<li><a href=/, 'no menu written in HTML');
   const footer = zip.readAsText(root + 'templates/footer.json');
-  for (const t of ['Riparazione caldaie', '/bagni-su-misura/', 'mailto:info@rossi-idraulica.it', `Copyright © ${new Date().getFullYear()} Rossi Idraulica - VAT 123456 | All rights reserved.`]) assert.ok(footer.includes(t), `footer: ${t}`);
+  for (const t of ['"esg_menu":"services"', '"esg_menu":"contacts"', `Copyright © ${new Date().getFullYear()} Rossi Idraulica - VAT 123456 | All rights reserved.`]) assert.ok(JSON.stringify(JSON.parse(footer)).includes(t), `footer: ${t}`);
   // Default copyright: credit of the agency, with its link
   assert.ok(footer.includes('Created by <a style=\\"color:var(--e-global-color-primary);font-weight:600\\" href=\\"https://localweb.it/\\" target=\\"_blank\\" title=\\"Local Web – Agenzia Web Marketing Milano\\">Local Web – Agenzia Web Marketing Milano</a> Copyright'), 'footer: agency credit');
   // Legal pages created later by the site owner
@@ -383,6 +383,14 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.ok(!php.includes("'metform") && !php.includes('metform-form') && !php.includes('[metform'), 'Contact Form 7 only');
   const site = JSON.parse(plugin.readAsText(pr + 'data/site.json'));
   assert.equal(site.site.locale, '', 'English site: default WordPress language');
+  // Menus of the lists of the templates: the services (filled with the articles by the plugin) and the contacts
+  assert.deepEqual(site.menus.services, { name: 'Services' });
+  assert.equal(site.menus.contacts.name, 'Contact');
+  assert.ok(site.menus.contacts.items.some((i) => i.url === 'mailto:info@rossi-idraulica.it' && i.classes === 'esg-mi esg-mi-email'), 'e-mail item with its icon class');
+  assert.ok(site.menus.contacts.items.some((i) => i.url.startsWith('tel:') && i.classes === 'esg-mi esg-mi-phone'), 'phone item with its icon class');
+  assert.match(php, /function add_menu_items/);
+  assert.match(php, /'post_type' => 'wpcf7_contact_form', 'post_status' => 'any'/, 'the forms already on the site are deleted before ours is created');
+  assert.match(php, /'post_date_gmt' => \$date_gmt/, 'services dated in the order of the project');
   assert.equal(site.site.tagline, 'Riparazione caldaie in Roma', 'tagline: main service + city');
   // Login protection, cache, SSL; the premium plugin from the bundled zip; only Hello Elementor; favicon; self-removal
   for (const slug of ['lw-all-in-one', 'loginizer', 'wp-fastest-cache', 'really-simple-ssl']) assert.ok(php.includes(`'slug' => '${slug}'`), slug);
@@ -432,15 +440,14 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.ok(site.images.some((i) => i.file === site.siteIcon && i.mime === 'image/png'));
   assert.equal(site.images.filter((i) => i.photo).length, 5, 'every image except the logo is a gallery photo');
   assert.equal(site.logo, site.images.find((i) => !i.photo && !/-(hero|subheader|carousel)\./.test(i.file)).file);
-  // Each article is designed: hero with its featured image, its content, the OTHER services in the sidebar, no comments
+  // Each article is designed: hero with its featured image, its content, the services and contacts menus in the sidebar, no comments
   for (const post of site.posts) {
     const doc = JSON.parse(plugin.readAsText(pr + 'data/' + post.elementor));
     const json = JSON.stringify(doc);
     assert.ok(json.includes(`"url":"esg-image://${post.image}"`), `${post.title}: featured image in the hero`);
     assert.ok(json.includes(`"title":"${post.title}"`), `${post.title}: title`);
     assert.doesNotMatch(json, /theme-post-|__dynamic__/, 'no Elementor Pro widget or dynamic tag');
-    const other = site.posts.find((x) => x !== post);
-    assert.ok(json.includes(`"text":"${other.title}"`) && !json.includes(`"text":"${post.title}"`), `${post.title}: other services only`);
+    assert.ok(json.includes('"esg_menu":"services"') && json.includes('"esg_menu":"contacts"'), `${post.title}: the services and contacts menus in the sidebar`);
     assert.doesNotMatch(json, /post-comments|comments/i);
   }
   const pluginPhp = plugin.readAsText(plugin.getEntries().find((e) => e.entryName.endsWith('.php')).entryName);

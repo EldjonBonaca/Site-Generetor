@@ -39,7 +39,7 @@ export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
  * Version of the generated structure. Field ids depend on it: a generation made with another
  * version cannot be exported (exporter.js), it has to be generated again.
  */
-export const BUILDER_VERSION = 17;
+export const BUILDER_VERSION = 18;
 
 export const DOC_ROLES = ['home', 'about', 'services', 'gallery', 'contact', 'single_post', 'header', 'footer'];
 
@@ -517,81 +517,6 @@ function createDoc(role, spec, site) {
     }
     return el;
   };
-  /** Card of a service: image (same height for every card) + linked title + short text + "read more", or text over the photo ("overlay"). */
-  const serviceCard = (service, index, desc, o = {}) => {
-    const hint = o.hint || `short description of the service "${service.name}" for its card (1–2 sentences)`;
-    if (spec.layout.services === 'list') {
-      // Numbered row: photo on one side, number + title + text on the other (alternating), thin line below
-      const img = box([picture('service_list', { service: index, height: 300, mobileHeight: 230, url: service.url, size: 'medium_large', wide: true })], { width: 42, tablet: 100, overflow: true, zoom: true, radius: imgRadius });
-      const txt = box(
-        [
-          heading(String(index + 1).padStart(2, '0'), { tag: 'p', size: 15, weight: '700', color: ink.kicker, fixed: true }),
-          heading(service.name, { tag: 'h3', size: 30, url: service.url, fixed: true }),
-          text(desc, { size: 16, hint, max: 170 }),
-          button(`${L.readMore} →`, service.url, { variant: 'link', fixed: true }),
-        ],
-        { width: 52, tablet: 100, gap: 12 }
-      );
-      return box(index % 2 ? [txt, img] : [img, txt], { row: true, justify: 'space-between', gap: 32, anim: o.anim, css: 'esg-svc-row' });
-    }
-    // "compact": a small square photo beside the number, the title and the text, in a light card
-    if (spec.layout.services === 'compact') {
-      return box(
-        [
-          box([picture('service_list', { service: index, height: 132, mobileHeight: 110, url: service.url, size: 'medium', round: false })], { width: 34, tablet: 34, mobile: 34, overflow: true, zoom: true, radius: imgRadius }),
-          box(
-            [
-              heading(String(index + 1).padStart(2, '0'), { tag: 'p', size: 13, weight: '700', color: ink.kicker, fixed: true }),
-              heading(service.name, { tag: 'h3', size: 19, url: service.url, fixed: true }),
-              text(desc, { size: 14, hint, max: 130 }),
-            ],
-            { width: 60, tablet: 60, mobile: 60, gap: 6 }
-          ),
-        ],
-        { width: o.width, row: true, gap: 16, align: 'center', justify: 'space-between', card: true, on: o.on, pad: 16, anim: o.anim, lift: true }
-      );
-    }
-    // "framed": a tall photo, the title and the text in a card overlapping its bottom edge
-    if (spec.layout.services === 'framed') {
-      const caption = box(
-        [
-          heading(service.name, { tag: 'h3', size: 21, url: service.url, fixed: true }),
-          text(desc, { size: 15, hint, max: 150 }),
-          button(`${L.readMore} →`, service.url, { variant: 'link', fixed: true }),
-        ],
-        { card: true, on: 'alt', pad: 24, gap: 8, margin: [-70, 18, 0, 18], zIndex: 2 }
-      );
-      return box([box([picture('service_list', { service: index, height: 320, mobileHeight: 260, url: service.url, size: 'medium_large' })], { overflow: true, zoom: true, radius: imgRadius }), caption], {
-        width: o.width,
-        gap: 0,
-        anim: o.anim,
-      });
-    }
-    if (spec.layout.services === 'overlay') {
-      return box(
-        [
-          heading(service.name, { tag: 'h3', size: 23, color: '#FFFFFF', url: service.url, fixed: true }),
-          text(desc, { size: 15, color: 'rgba(255,255,255,0.86)', hint, max: 170 }),
-          button(`${L.readMore} →`, service.url, { variant: 'link', color: c.secondary, fixed: true }),
-        ],
-        { width: o.width, slot: 'service_list', service: index, overlay: [rgba(c.dark, 0.05), rgba(c.dark, 0.9), 180], minHeightPx: 380, justify: 'flex-end', pad: 30, gap: 8, radius: imgRadius, anim: o.anim }
-      );
-    }
-    return box(
-      [
-        picture('service_list', { service: index, height: 230, mobileHeight: 220, round: false, url: service.url, size: 'medium_large' }),
-        box(
-          [
-            heading(service.name, { tag: 'h3', size: 21, url: service.url, fixed: true }),
-            text(desc, { size: 15, hint, max: 170 }),
-            button(`${L.readMore} →`, service.url, { variant: 'link', fixed: true }),
-          ],
-          { gap: 10, pad: 26 }
-        ),
-      ],
-      { width: o.width, card: true, on: o.on, pad: 0, overflow: true, gap: 0, anim: o.anim, lift: true, zoom: true }
-    );
-  };
   /** One review, without photo of the customer: quote mark, 5 stars, text, name and role. o: { align, light, big (large serif quote) } */
   const review = (r, i, o = {}) => {
     const align = o.align || 'center';
@@ -620,7 +545,7 @@ function createDoc(role, spec, site) {
   const shortcode = (code) => widget('shortcode', { shortcode: code });
   const html = (code) => widget('html', { html: code });
 
-  return { id, c, ink, L, st, fonts, pad, radius, imgRadius, marks, mark, fill, bands, section, box, columns, heading, kicker, line, text, button, picture, iconList, iconBox, serviceCard, review, shortcode, html, widget, typo };
+  return { id, c, ink, L, st, fonts, pad, radius, imgRadius, marks, mark, fill, bands, section, box, columns, heading, kicker, line, text, button, picture, iconList, iconBox, review, shortcode, html, widget, typo };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -652,6 +577,110 @@ function intro(b, parts, o = {}) {
   const block = b.box(els, { maxWidth: 820, gap: 12, align: 'stretch' });
   if (!o.centered) block.settings._flex_align_self = 'flex-start';
   return block;
+}
+
+/** Slug WordPress gives to a menu of this name ("Servizi" -> "servizi"). */
+const menuSlug = (name) => String(name).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+/**
+ * Menus of the site beside the main one (Appearance → Menus), created by the WordPress plugin: the
+ * services (one item per service article) and the contacts (phone, e-mail, address, each with its icon).
+ * Every list of services or contacts of the templates shows one of them, so they are edited in one place.
+ */
+export function siteMenus(lang) {
+  const L = LABELS[lang] || LABELS.en;
+  return { services: { name: L.services, slug: menuSlug(L.services) }, contacts: { name: L.contacts, slug: menuSlug(L.contacts) } };
+}
+
+/**
+ * A menu of the site as a vertical list (UAE Navigation Menu widget). role: 'main' (the pages),
+ * 'services' or 'contacts' ("esg_menu": the plugin selects the menu of that role; the static site lists its items).
+ * o: { color, hover, size, weight, gap, css }
+ */
+function menuList(b, site, role, o = {}) {
+  const menus = siteMenus(site.lang);
+  return b.widget('navigation-menu', {
+    menu: role === 'main' ? site.menuSlug || '' : menus[role].slug,
+    esg_menu: role,
+    layout: 'vertical',
+    navmenu_align: 'left',
+    dropdown: 'none',
+    pointer: 'none',
+    padding_horizontal_menu_item: px(0),
+    padding_vertical_menu_item: px(o.gap ?? (o.css === 'esg-menu-arrows' ? 10 : 6)),
+    ...b.typo('menu_', b.fonts.body, o.size || 16, o.weight || '400', { menu_typography_line_height: px(1.5, 'em') }),
+    color_menu_item: o.color || b.ink.text,
+    color_menu_item_hover: o.hover || b.ink.kicker,
+    color_menu_item_active: o.hover || b.ink.kicker,
+    _css_classes: ['esg-menu', `esg-menu-${role}`, o.css].filter(Boolean).join(' '),
+  });
+}
+
+/**
+ * The services of the site: the articles themselves, read by the posts widget (UAE Basic Posts), so a
+ * service added or renamed in WordPress shows up by itself. The card follows the services layout and the
+ * card style of the template (postsCss). o: { count (articles shown), columns, on ('alt' | 'base') }
+ */
+function postsGrid(b, o = {}) {
+  const { c, ink, fonts, st } = b;
+  const layout = b.spec.layout.services;
+  const overlay = layout === 'overlay';
+  const bare = layout === 'list' || layout === 'framed';
+  const one = layout === 'list';
+  const columns = one ? 1 : Math.min(3, Math.max(1, o.columns || 3));
+  const look = st.cards;
+  const cardBg = overlay ? c.dark : look === 'tinted' ? (o.on === 'alt' ? ink.card : ink.tint) : ink.card;
+  const radius = bare ? 0 : overlay ? b.imgRadius : Math.min(b.radius + 4, 24);
+  const el = b.widget('hfe-basic-posts', {
+    orderby: 'date',
+    order: 'asc',
+    exclude_current: '',
+    posts_per_page: o.count || 3,
+    columns: String(columns),
+    columns_tablet: String(Math.min(columns, 2)),
+    columns_mobile: '1',
+    show_image: 'yes',
+    image_size: 'medium_large',
+    show_title: 'yes',
+    title_tag: 'h3',
+    show_meta: '',
+    show_date: '',
+    show_author: '',
+    show_comments: '',
+    show_excerpt: 'yes',
+    excerpt_length: layout === 'compact' ? 14 : 24,
+    show_read_more: layout === 'compact' ? '' : 'yes',
+    read_more_text: `${b.L.readMore} →`,
+    column_gap: px(28),
+    row_gap: px(one ? 40 : 28),
+    card_background_background: 'classic',
+    card_background_color: cardBg,
+    card_border_radius: corners(radius),
+    card_padding: layout === 'framed' ? sides(24, 24, 24, 24) : bare || layout === 'compact' ? sides(0, 0, 0, 0) : overlay ? sides(30, 30, 30, 30) : sides(24, 26, 26, 26),
+    ...(bare || overlay
+      ? {}
+      : look === 'shadow'
+        ? { card_box_shadow_box_shadow_type: 'yes', card_box_shadow_box_shadow: boxShadow(10, 30, ink.dark ? 0.35 : 0.08) }
+        : look === 'outline'
+          ? { card_border_border: 'solid', card_border_width: corners(1), card_border_color: ink.border }
+          : look === 'accent'
+            ? { card_border_border: 'solid', card_border_width: sides(4, 0, 0, 0), card_border_color: c.secondary, card_box_shadow_box_shadow_type: 'yes', card_box_shadow_box_shadow: boxShadow(6, 20, ink.dark ? 0.3 : 0.06) }
+            : {}),
+    title_color: overlay ? '#FFFFFF' : ink.heading,
+    title_hover_color: overlay ? c.secondary : ink.kicker,
+    ...b.typo('title_', fonts.heading, one ? 28 : layout === 'compact' ? 19 : 21, b.spec.style.headingWeight, { title_typography_line_height: px(1.25, 'em') }),
+    title_spacing: px(10),
+    excerpt_color: overlay ? 'rgba(255,255,255,0.86)' : ink.text,
+    ...b.typo('excerpt_', fonts.body, layout === 'compact' ? 14 : 15, '400', { excerpt_typography_line_height: px(1.65, 'em') }),
+    excerpt_spacing: px(layout === 'compact' ? 0 : 14),
+    read_more_color: overlay ? c.secondary : ink.kicker,
+    read_more_hover_color: overlay ? '#FFFFFF' : ink.heading,
+    ...b.typo('read_more_', fonts.body, 15, '600'),
+    _css_classes: `esg-posts esg-posts-${layout}`,
+  });
+  // The label of the link is the same on every site (not a text for the AI)
+  b.mark(el, 'read_more_text', { fixed: true });
+  return b.box([el], { anim: 0 });
 }
 
 /** "numbers" signature: the number of the section (CSS counter of the page) in large outlined figures above its title. */
@@ -1327,10 +1356,7 @@ function featuredServices(b, site) {
         title: { value: copy.servicesTitle, hint: 'title of the featured services section', max: 60 },
         text: { value: copy.servicesText, hint: 'intro of the services section (1 sentence)', max: 200 },
       }),
-      b.box(
-        shown.map((s, i) => b.serviceCard(s, i, copy.serviceText, { width: b.columns(shown.length), on: surfaceOn(b, 'services', natural), anim: i * 120 })),
-        { row: true, gap: 28, align: 'stretch', justify: shown.length < 3 ? 'center' : 'space-between' }
-      ),
+      postsGrid(b, { count: shown.length, columns: shown.length, on: surfaceOn(b, 'services', natural) }),
       b.button(copy.servicesButton, site.pages.services.url, { align: left ? 'left' : 'center', hint: 'button "Tutti i servizi" leading to the Services page', max: 30 }),
     ],
     { bg: surfaceBg(b, 'services', natural), align: 'center', gap: 44 }
@@ -1683,12 +1709,8 @@ function services(b, site) {
   if (site.services.length) {
     out.push(
       b.section(
-        [
-          b.box(
-            site.services.map((s, i) => b.serviceCard(s, i, b.spec.copy.serviceText, { width: b.columns(3), on: boxed ? 'alt' : 'base', anim: (i % 3) * 120, hint: `short excerpt of the article about "${s.name}" for the services grid (1–2 sentences)` })),
-            { row: true, gap: 30, align: 'stretch', justify: 'flex-start' }
-          ),
-        ],
+        // Every article of the site (the ones added later in WordPress too)
+        [postsGrid(b, { count: 99, columns: 3, on: boxed ? 'alt' : 'base' })],
         { bg }
       )
     );
@@ -1864,16 +1886,13 @@ function singlePost(b, site) {
   );
   const sideTitle = (t) => [b.heading(t, { tag: 'h3', size: 20, fixed: true }), b.line()];
   const sidebar = [];
-  // Other services: every service; each article removes itself (articleDoc)
-  if (site.services.length) {
+  // The services menu of the site (the article being read is highlighted), when there is another service to go to
+  if (site.services.length > 1) {
     sidebar.push(
-      b.box(
-        [...sideTitle(b.L.otherServices), b.iconList(site.services.map((s) => ({ text: s.name, url: s.url, icon: 'fas fa-chevron-right' })), { color: b.ink.heading, weight: '600', size: 15, css: OTHER_SERVICES })],
-        { card: true, on: 'base', pad: 30, gap: 14, css: OTHER_SERVICES_BOX }
-      )
+      b.box([...sideTitle(b.L.services), menuList(b, site, 'services', { color: b.ink.heading, weight: '600', size: 15, css: 'esg-menu-arrows' })], { card: true, on: 'base', pad: 30, gap: 14, css: OTHER_SERVICES_BOX })
     );
   }
-  sidebar.push(b.box([...sideTitle(b.L.contacts), b.iconList(contactItems(site), { size: 15 })], { card: true, on: 'base', pad: 30, gap: 14 }));
+  sidebar.push(b.box([...sideTitle(b.L.contacts), menuList(b, site, 'contacts', { size: 15 })], { card: true, on: 'base', pad: 30, gap: 14 }));
   return [hero, b.section([main, b.box(sidebar, { width: 31, gap: 24 })], { row: true, bg: b.ink.bg, align: 'flex-start', gap: 40 })];
 }
 
@@ -1918,7 +1937,8 @@ export function articleDoc(doc, post) {
         return el;
       })
       // A list of other services left empty (a site with one service): no box
-      .filter((el) => !(el.settings?.css_classes === OTHER_SERVICES_BOX && !JSON.stringify(el).includes('"icon_list":[{')));
+      // (templates built before the services menu: an icon list)
+      .filter((el) => !(el.settings?.css_classes === OTHER_SERVICES_BOX && JSON.stringify(el).includes('"icon_list":[]')));
   out.content = walk(out.content || []);
   out.type = 'wp-post';
   out.title = post.title;
@@ -1927,7 +1947,6 @@ export function articleDoc(doc, post) {
 }
 
 const MENU_ROLES = ['home', 'about', 'services', 'gallery', 'contact'];
-const menuItems = (site) => MENU_ROLES.map((r) => ({ text: site.pages[r].title, url: site.pages[r].url }));
 
 /**
  * The site menu of WordPress (Appearance → Menus) in the "Navigation Menu" widget of Ultimate Addons
@@ -2031,6 +2050,91 @@ ${hover}
 .elementor-widget-image-carousel .swiper-slide img{transition:transform .9s ${ease}}
 .elementor-widget-image-carousel .swiper-slide:hover img{transform:scale(1.04)}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.esg-card,.esg-zoom img,.elementor-button{transition:none}.esg-card:hover,.esg-zoom:hover img,.elementor-button:hover{transform:none}}${signatureCss(b)}`;
+}
+
+/** Icons of the contacts menu (CSS masks: no icon font needed), URL-encoded so the CSS holds no markup. */
+const MENU_ICONS = {
+  phone: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
+  email: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 7 10-7"/></svg>',
+  address: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.6 7-12a7 7 0 0 0-14 0c0 5.4 7 12 7 12z"/><circle cx="12" cy="10" r="2.6"/></svg>',
+  arrow: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
+};
+
+/**
+ * Menus shown as lists (footer columns, article sidebar): plain links, the contacts with their icon, the
+ * services of the sidebar with an arrow. The icon is drawn before the list item (the menu widget uses the
+ * ::before of the links for its own hover effects).
+ */
+function menuCss(b) {
+  const icon = (svg) => `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  return `.esg-menu ul{list-style:none;margin:0;padding:0}
+.esg-menu li.menu-item{display:flex;align-items:flex-start;margin:0}
+.esg-menu li.menu-item>a{flex:1 1 auto;min-width:0;justify-content:flex-start;text-decoration:none;overflow-wrap:anywhere;transition:color .3s}
+.esg-menu .hfe-nav-menu__toggle,.esg-menu .hfe-menu-toggle{display:none!important}
+.esg-menu-contacts li.menu-item::before,.esg-menu-arrows li.menu-item::before{content:"";position:static;display:block;opacity:1;transform:none;flex:0 0 1.05em;width:1.05em;height:1.05em;margin:calc(6px + .22em) .7em 0 0;background:${b.c.secondary};-webkit-mask:var(--esg-i,none) center/contain no-repeat;mask:var(--esg-i,none) center/contain no-repeat}
+.esg-mi-phone{--esg-i:${icon(MENU_ICONS.phone)}}
+.esg-mi-email{--esg-i:${icon(MENU_ICONS.email)}}
+.esg-mi-address{--esg-i:${icon(MENU_ICONS.address)}}
+.esg-menu-arrows li.menu-item{--esg-i:${icon(MENU_ICONS.arrow)}}
+.esg-menu-arrows li.menu-item::before{flex-basis:.95em;width:.95em;height:.95em;margin:calc(10px + .28em) .4em 0 -.25em}
+.esg-menu-arrows li.menu-item+li.menu-item{border-top:1px solid ${b.ink.border}}
+`;
+}
+
+/**
+ * Cards of the posts widget showing the services (UAE Basic Posts: one fixed markup), per the services
+ * layout of the template: photo above the text, text over the photo, numbered rows, small photo beside
+ * the text, or the text in a card overlapping a tall photo. Colors, fonts and corners are widget settings.
+ */
+function postsCss(b) {
+  const { c, ink } = b;
+  const ease = 'cubic-bezier(.2,.7,.3,1)';
+  const number = `counter-increment:esgsvc;content:counter(esgsvc,decimal-leading-zero);display:block;margin-bottom:8px;font-size:14px;font-weight:700;letter-spacing:.08em;color:${ink.kicker}`;
+  const hover = {
+    glow: `.esg-posts .hfe-post-card:hover{box-shadow:0 0 0 2px ${c.secondary},0 18px 44px ${rgba(c.secondary, 0.2)}!important}`,
+    underline: `.esg-posts .hfe-post-card:hover{box-shadow:inset 0 -4px 0 ${c.secondary}!important}`,
+    still: '',
+  }[b.st.hover] ?? '.esg-posts .hfe-post-card:hover{transform:translateY(-6px)}';
+  const layouts = {
+    overlay: `.esg-posts-overlay .hfe-post-card{min-height:380px;justify-content:flex-end}
+.esg-posts-overlay .hfe-post-image{position:absolute;inset:0}
+.esg-posts-overlay .hfe-post-image a,.esg-posts-overlay .hfe-post-image img{height:100%}
+.esg-posts-overlay .hfe-post-image::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,${rgba(c.dark, 0.05)},${rgba(c.dark, 0.9)});pointer-events:none}
+.esg-posts-overlay .hfe-post-content{position:relative;z-index:1;flex:0 0 auto}`,
+    list: `.esg-posts-list .hfe-posts-grid{counter-reset:esgsvc}
+.esg-posts-list .hfe-post-card{flex-direction:row;align-items:center;gap:40px;overflow:visible;background:transparent!important;padding-bottom:40px;border-bottom:1px solid ${ink.border}}
+.esg-posts-list .hfe-post-card:nth-child(even){flex-direction:row-reverse}
+.esg-posts-list .hfe-post-card:last-child{padding-bottom:0;border-bottom:0}
+.esg-posts-list .hfe-post-card:hover{transform:none;box-shadow:none!important}
+.esg-posts-list .hfe-post-image{flex:0 0 44%;border-radius:${b.imgRadius}px}
+.esg-posts-list .hfe-post-image img{height:300px}
+.esg-posts-list .hfe-post-title::before{${number}}
+@media (max-width:767px){.esg-posts-list .hfe-post-card,.esg-posts-list .hfe-post-card:nth-child(even){flex-direction:column;align-items:stretch;gap:18px}.esg-posts-list .hfe-post-image{flex:none}.esg-posts-list .hfe-post-image img{height:230px}}`,
+    compact: `.esg-posts-compact .hfe-posts-grid{counter-reset:esgsvc}
+.esg-posts-compact .hfe-post-card{flex-direction:row;align-items:center;gap:18px;padding:16px}
+.esg-posts-compact .hfe-post-image{flex:0 0 36%;border-radius:${b.imgRadius}px}
+.esg-posts-compact .hfe-post-image img{height:140px}
+.esg-posts-compact .hfe-post-title::before{${number};margin-bottom:4px;font-size:13px}`,
+    framed: `.esg-posts-framed .hfe-post-card{overflow:visible;background:transparent!important}
+.esg-posts-framed .hfe-post-card:hover{transform:none;box-shadow:none!important}
+.esg-posts-framed .hfe-post-image{border-radius:${b.imgRadius}px}
+.esg-posts-framed .hfe-post-image img{height:320px}
+.esg-posts-framed .hfe-post-content{position:relative;z-index:2;margin:-70px 18px 0;background:${ink.card};border-radius:${Math.min(b.radius + 4, 24)}px;box-shadow:0 12px 34px rgba(15,27,45,${ink.dark ? 0.35 : 0.1})}`,
+  };
+  return `.esg-posts .hfe-posts-grid{align-items:stretch}
+.esg-posts .hfe-post-card{position:relative;display:flex;flex-direction:column;overflow:hidden;min-width:0;transition:transform .4s ${ease},box-shadow .4s ${ease}}
+.esg-posts .hfe-post-image{overflow:hidden}
+.esg-posts .hfe-post-image a{display:block}
+.esg-posts .hfe-post-image img{width:100%;height:230px;object-fit:cover;border-radius:0;transition:transform .9s ${ease}}
+.esg-posts .hfe-post-card:hover .hfe-post-image img{transform:scale(1.06)}
+.esg-posts .hfe-post-content{display:flex;flex-direction:column;flex:1 1 auto;min-width:0}
+.esg-posts .hfe-post-title{margin-top:0;overflow-wrap:break-word}
+.esg-posts .hfe-post-title a,.esg-posts .hfe-read-more{text-decoration:none;transition:color .3s}
+.esg-posts .hfe-read-more{margin-top:auto;align-self:flex-start}
+${hover}
+${layouts[b.spec.layout.services] || ''}
+@media (prefers-reduced-motion:reduce){.esg-posts .hfe-post-card,.esg-posts .hfe-post-image img{transition:none}.esg-posts .hfe-post-card:hover,.esg-posts .hfe-post-card:hover .hfe-post-image img{transform:none}}
+`;
 }
 
 /** Highlighted last word of the titles, per the highlight style (accent color on the page, secondary color on photos and bands). */
@@ -2321,16 +2425,16 @@ function footer(b, site) {
   const titleColor = light ? b.ink.heading : '#FFFFFF';
   const hover = light ? b.ink.kicker : b.c.secondary;
   const colTitle = (t) => [b.heading(t, { tag: 'h4', size: 18, color: titleColor, fixed: true }), b.line('left')];
-  const list = (items) => b.iconList(items, { color, hover, iconColor: b.c.secondary });
+  const list = (role) => menuList(b, site, role, { color, hover });
   // Social networks of the site (optional) below the logo
   const social = site.socials?.length ? [socialIcons(b, site.socials, { bg: light ? rgba(b.c.primary, 0.1) : 'rgba(255,255,255,0.1)', color: light ? b.c.primaryText : '#FFFFFF' })] : [];
   const cols = [
     // The logo larger than in the header (a square logo is kept within a maximum height: footer CSS)
     b.box([brand(b, site, { color: titleColor, width: 260, mobileWidth: 220, size: 'large' }), ...social], { width: 28, gap: 22, css: 'esg-ft-brand' }),
-    b.box([...colTitle(b.L.links), list(menuItems(site))], { width: 20, gap: 12 }),
+    b.box([...colTitle(b.L.links), list('main')], { width: 20, gap: 12 }),
   ];
-  if (site.services.length) cols.push(b.box([...colTitle(b.L.services), list(site.services.map((s) => ({ text: s.name, url: s.url })))], { width: 20, gap: 12 }));
-  cols.push(b.box([...colTitle(b.L.contacts), list(contactItems(site))], { width: 20, gap: 12 }));
+  if (site.services.length) cols.push(b.box([...colTitle(b.L.services), list('services')], { width: 20, gap: 12 }));
+  cols.push(b.box([...colTitle(b.L.contacts), list('contacts')], { width: 20, gap: 12 }));
   // "wordmark" decor: the business name huge and faint across the bottom of the footer, cropped at the edges
   const wordmark = [];
   if (b.st.decor === 'wordmark') {
@@ -2484,7 +2588,7 @@ export function buildSite(spec, site) {
 export function siteCss(spec, site) {
   const b = createDoc('site', spec, site);
   b.spec = spec;
-  return linkCssColors(`${headerCss(b)}\n${finishCss(b)}\n${formCss(b)}\n`, globalPalette(spec));
+  return linkCssColors(`${headerCss(b)}\n${finishCss(b)}\n${menuCss(b)}${postsCss(b)}${formCss(b)}\n`, globalPalette(spec));
 }
 
 /**

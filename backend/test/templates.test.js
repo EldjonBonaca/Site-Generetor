@@ -12,7 +12,7 @@ process.env.ENCRYPTION_KEY ||= 'd'.repeat(64);
 
 const { analyzeDocument } = await import('../src/elementor/analyze.js');
 const { sanitizeSpec, DEFAULT_SPEC, FONTS, tint, siteColors: siteColorsOf } = await import('../src/templates/spec.js');
-const { buildSite, DOC_ROLES, TEMPLATE_IMAGE, highlightTitles } = await import('../src/templates/builder.js');
+const { buildSite, DOC_ROLES, TEMPLATE_IMAGE, highlightTitles, siteMenus } = await import('../src/templates/builder.js');
 /** Documents of a built site, with the site CSS (Additional CSS of WordPress) as their non-enumerable `css`. */
 const withCss = ({ docs, siteCss }) => Object.defineProperty(docs, 'css', { value: siteCss });
 const { buildTemplatePrompt, generateTemplateSpec } = await import('../src/templates/generate.js');
@@ -717,7 +717,8 @@ test('section backgrounds follow the rhythm of the template', async () => {
   for (let i = 1; i < about.length; i++) assert.notEqual(about[i], about[i - 1], `about: sections ${i} and ${i + 1} on different backgrounds`);
   // The services cards (tinted look) now stand on a tinted section: they turn white instead of disappearing
   const services = JSON.stringify(alternate.home.doc.content[2]);
-  assert.match(services, /"css_classes":"esg-card esg-zoom"/);
+  assert.match(services, /"widgetType":"hfe-basic-posts"/);
+  assert.match(services, /"card_background_color":"#FFFFFF"/);
   assert.doesNotMatch(services, new RegExp(`"background_color":"${tint(primary, 0.93)}"`), 'no tinted card on the tinted section');
 
   const lines = build({ rhythm: 'lines' }).docs;
@@ -761,9 +762,16 @@ test('buildSite: structure required by the prompt', () => {
   const { docs } = buildSite(sanitizeSpec({ sections: ['about', 'features', 'services', 'gallery', 'reviews'] }), sampleSite(5));
   const json = (role) => JSON.stringify(docs[role].doc);
   const count = (role, re) => (json(role).match(re) || []).length;
-  const serviceSlots = (role) => [...docs[role].marks.values()].filter((m) => m.slot === 'service_list').map((m) => m.service);
-  assert.deepEqual(serviceSlots('home'), [0, 1, 2], 'home: 3 featured services');
-  assert.deepEqual(serviceSlots('services'), [0, 1, 2, 3, 4], 'services page: one card per service');
+  // The services are shown by the posts widget (the articles themselves): no photo to place, no text to write
+  assert.equal(count('home', /"widgetType":"hfe-basic-posts"/g), 1);
+  assert.match(json('home'), /"posts_per_page":3,"columns":"3"/, 'home: 3 featured services');
+  assert.match(json('services'), /"posts_per_page":99,"columns":"3"/, 'services page: every article');
+  for (const role of ['home', 'services']) assert.ok(![...docs[role].marks.values()].some((m) => m.slot === 'service_list'), `${role}: no photo slot per service`);
+  // Lists of pages, services and contacts: the menus of the site
+  assert.deepEqual([...json('footer').matchAll(/"esg_menu":"(\w+)"/g)].map((m) => m[1]), ['main', 'services', 'contacts']);
+  assert.match(json('footer'), /"menu":"servizi","esg_menu":"services","layout":"vertical"/);
+  assert.deepEqual(siteMenus('it'), { services: { name: 'Servizi', slug: 'servizi' }, contacts: { name: 'Contatti', slug: 'contatti' } });
+  assert.deepEqual(siteMenus('pt').services, { name: 'Serviços', slug: 'servicos' });
   assert.equal(count('home', /"widgetType":"testimonial"/g), 3, '3 reviews');
   assert.equal(count('about', /"widgetType":"testimonial"/g), 3, 'the same 3 reviews on About');
   assert.equal(docs.home.doc.content.length, 6, 'hero, about, why us, services, carousel, reviews (no call to action)');
@@ -776,7 +784,7 @@ test('buildSite: structure required by the prompt', () => {
   assert.equal(docs.gallery.doc.content[1].elements[0].settings.open_lightbox, 'yes');
   // Footer: logo, Link (5 pages), Servizi (all services), Contatti, copyright
   const footer = json('footer');
-  for (const t of ['"title":"Link"', '"title":"Servizi"', '"title":"Contatti"', 'Servizio 5', '/servizio-5/', '/galleria/', 'mailto:info@ediltest.it', '© 2026 Edil Test']) {
+  for (const t of ['"title":"Link"', '"title":"Servizi"', '"title":"Contatti"', '"esg_menu":"main"', '"esg_menu":"services"', '"esg_menu":"contacts"', '© 2026 Edil Test']) {
     assert.ok(footer.includes(t), `footer: ${t}`);
   }
   // Header: logo, menu and button on one line; the site menu in the Navigation Menu widget of UAE (its own hamburger below 1025px), no HTML
@@ -977,19 +985,19 @@ test('Home carousel, About in two alternating rows, designed articles', async ()
   // Single post template: hero with the featured image (dynamic), sidebar with every service
   const single = JSON.stringify(docs.single_post.doc);
   assert.match(single, /post-featured-image/);
-  assert.match(single, /"title":"Altri servizi"/);
+  assert.match(single, /"esg_menu":"services"/, 'sidebar: the services menu');
+  assert.match(single, /"esg_menu":"contacts"/, 'sidebar: the contacts menu');
   assert.doesNotMatch(single, /comments/i);
   // Article of "Servizio 2": static, its image, its title and content, the other services only
   const art = JSON.stringify(articleDoc(docs.single_post.doc, { title: 'Servizio 2', content: '<p>Testo</p>', imageUrl: 'https://x.it/s2.webp', url: '/servizio-2/' }));
   assert.doesNotMatch(art, /theme-post-|__dynamic__/);
   assert.match(art, /"url":"https:\/\/x\.it\/s2\.webp"/);
   assert.match(art, /"editor":"<p>Testo<\/p>"/);
-  assert.match(art, /"text":"Servizio 1"/);
-  assert.match(art, /"text":"Servizio 3"/);
-  assert.doesNotMatch(art, /"text":"Servizio 2"/);
-  // A site with one service: no empty "Other services" box
+  assert.match(art, /"esg_menu":"services"/, 'the services menu stays in the article (WordPress highlights the one being read)');
+  assert.doesNotMatch(art, /"icon_list"/, 'no hand-made list of services or contacts');
+  // A site with one service: no services box in the sidebar
   const one = buildSite(spec, sampleSite(1)).docs.single_post.doc;
-  assert.doesNotMatch(JSON.stringify(articleDoc(one, { title: 'Servizio 1', content: '', imageUrl: null, url: '/servizio-1/' })), /Altri servizi|background_image/);
+  assert.doesNotMatch(JSON.stringify(articleDoc(one, { title: 'Servizio 1', content: '', imageUrl: null, url: '/servizio-1/' })), /"esg_menu":"services"|background_image/);
 });
 
 test('compare the templates of a category and make one more different', async () => {
@@ -1167,9 +1175,8 @@ test('new section layouts: compact / framed services, minimal / card call to act
   const json = (x) => JSON.stringify(x);
   for (const services of ['compact', 'framed']) {
     const site = buildSite(sanitizeSpec({ layout: { services }, sections }), sampleSite());
-    const slots = [...site.docs.services.marks.values()].filter((m) => m.slot === 'service_list');
-    assert.equal(slots.length, 4, `${services}: one photo per service on the Services page`);
-    assert.ok([...site.docs.home.marks.values()].some((m) => m.slot === 'service_list'), `${services}: photos on Home`);
+    for (const role of ['home', 'services']) assert.ok(json(site.docs[role].doc).includes(`"_css_classes":"esg-posts esg-posts-${services}"`), `${services}: the posts widget of ${role} in this layout`);
+    assert.ok(site.siteCss.includes(`.esg-posts-${services} .hfe-post-image img{`), `${services}: its card in the site CSS`);
   }
   const minimal = buildSite(sanitizeSpec({ layout: { cta: 'minimal' }, sections }), sampleSite());
   assert.match(json(minimal.docs.gallery.doc), /"border_width":\{"unit":"px","top":"1"/, 'minimal: thin lines above and below');

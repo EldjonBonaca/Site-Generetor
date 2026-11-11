@@ -125,10 +125,34 @@ const WIDGETS = {
       .join('')}</div>${arrows && slides.length > 1 ? `<button type="button" class="esg-carousel-arrow prev" aria-label="${attr(R.texts.prev)}">&#10094;</button><button type="button" class="esg-carousel-arrow next" aria-label="${attr(R.texts.next)}">&#10095;</button>` : ''}</div>`;
   },
   // The menu of the site, in the markup of the UAE menu widget (the header CSS of the templates is written for it)
-  'navigation-menu': (s, el, R) =>
-    `<nav class="hfe-nav-menu__layout-horizontal" aria-label="${attr(R.texts.menu)}"><button type="button" class="hfe-nav-menu__toggle" aria-expanded="false" aria-label="${attr(R.texts.menu)}"><span class="hfe-nav-menu-icon"><i class="fas fa-bars" aria-hidden="true"></i></span></button><ul class="hfe-nav-menu">${R.menu
+  'navigation-menu': (s, el, R) => {
+    const item = (m) => `<li class="menu-item${m.cls ? ` ${attr(m.cls)}` : ''}${m.url === R.current ? ' current-menu-item' : ''}"><a class="hfe-menu-item" href="${attr(m.url)}"${m.url === R.current ? ' aria-current="page"' : ''}${/^https?:/.test(m.url) ? ' target="_blank" rel="noopener"' : ''}>${esc(m.title)}</a></li>`;
+    // A menu of the site shown as a list (footer columns, article sidebar): the pages, the services or the contacts
+    if (s.layout === 'vertical') {
+      const items = (s.esg_menu && s.esg_menu !== 'main' ? R.menus?.[s.esg_menu] : R.menu) || [];
+      return items.length ? `<nav class="hfe-nav-menu__layout-vertical"><ul class="hfe-nav-menu">${items.map(item).join('')}</ul></nav>` : '';
+    }
+    return `<nav class="hfe-nav-menu__layout-horizontal" aria-label="${attr(R.texts.menu)}"><button type="button" class="hfe-nav-menu__toggle" aria-expanded="false" aria-label="${attr(R.texts.menu)}"><span class="hfe-nav-menu-icon"><i class="fas fa-bars" aria-hidden="true"></i></span></button><ul class="hfe-nav-menu">${R.menu
       .map((m) => `<li class="menu-item${m.url === R.current ? ' current-menu-item' : ''}"><a class="hfe-menu-item" href="${attr(m.url)}"${m.url === R.current ? ' aria-current="page"' : ''}>${esc(m.title)}</a></li>`)
-      .join('')}</ul></nav>`,
+      .join('')}</ul></nav>`;
+  },
+  // The services of the site (the posts widget of the WordPress site): one card per service page
+  'hfe-basic-posts': (s, el, R) => {
+    const posts = (R.posts || []).slice(0, Math.max(1, Number(s.posts_per_page) || 6));
+    if (!posts.length) return '';
+    const tag = headingTag(s.title_tag, 'h3');
+    const words = Math.max(0, Number(s.excerpt_length) || 20);
+    const excerpt = (text) => {
+      const w = String(text || '').trim().split(/\s+/).filter(Boolean);
+      return w.length > words ? `${w.slice(0, words).join(' ')}...` : w.join(' ');
+    };
+    return `<div class="hfe-posts-grid">${posts
+      .map(
+        (p) =>
+          `<article class="hfe-post-card">${s.show_image === 'yes' && p.image ? `<div class="hfe-post-image"><a href="${attr(p.url)}"><img src="${attr(p.image)}" alt="${attr(p.title)}" loading="lazy"></a></div>` : ''}<div class="hfe-post-content"><${tag} class="hfe-post-title"><a href="${attr(p.url)}">${esc(p.title)}</a></${tag}>${s.show_excerpt === 'yes' && p.excerpt ? `<div class="hfe-post-excerpt">${esc(excerpt(p.excerpt))}</div>` : ''}${s.show_read_more === 'yes' ? `<a href="${attr(p.url)}" class="hfe-read-more">${esc(s.read_more_text || '→')}</a>` : ''}</div></article>`
+      )
+      .join('')}</div>`;
+  },
   'nav-menu': (s, el, R) => WIDGETS['navigation-menu'](s, el, R),
   'wp-widget-nav_menu': (s, el, R) => WIDGETS['navigation-menu'](s, el, R),
   // The contact form of the site (a WordPress shortcode in the documents)

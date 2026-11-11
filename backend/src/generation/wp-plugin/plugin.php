@@ -977,6 +977,10 @@ function prepare_elementor($node, array $r) {
 		$node['id'] = $img['id'];
 	}
 	if (isset($node['widgetType'], $node['settings']) && is_array($node['settings'])) {
+		// Menu shown by a menu widget: the services or contacts menu when the widget is the list of one of them
+		// ("esg_menu"), else the main menu of the site
+		$role = isset($node['settings']['esg_menu']) ? (string) $node['settings']['esg_menu'] : '';
+		$site_menu = ($role !== '' && isset($r['menus'][$role])) ? $r['menus'][$role] : array('slug' => $r['menu'], 'id' => $r['menu_id']);
 		// The Elementor Pro menu of a Template Kit header needs Pro: without it, the free UAE menu widget
 		if ($node['widgetType'] === 'nav-menu' && !empty($r['uae_menu'])) {
 			$node['widgetType'] = 'navigation-menu';
@@ -998,7 +1002,7 @@ function prepare_elementor($node, array $r) {
 			);
 		}
 		if (preg_match('/nav-menu|mega-menu|navigation-menu/', $node['widgetType'])) {
-			$node['settings']['menu'] = $r['menu'];
+			$node['settings']['menu'] = $site_menu['slug'];
 		}
 		// Menu of a generated header (UAE Navigation Menu) when UAE could not be installed: the site menu in the
 		// "WordPress Menu" widget of free Elementor instead, so the header still has its pages (without hamburger)
@@ -1014,7 +1018,7 @@ function prepare_elementor($node, array $r) {
 		// "WordPress Menu" widget: the site menu (Appearance -> Menus); the id also selects it in the Elementor editor
 		if ($node['widgetType'] === 'wp-widget-nav_menu') {
 			$wp = isset($node['settings']['wp']) && is_array($node['settings']['wp']) ? $node['settings']['wp'] : array();
-			$node['settings']['wp'] = array_merge($wp, array('nav_menu' => (string) $r['menu_id']));
+			$node['settings']['wp'] = array_merge($wp, array('nav_menu' => (string) $site_menu['id']));
 		}
 	}
 	$is_link = isset($node['url']) && (array_key_exists('is_external', $node) || array_key_exists('nofollow', $node));
@@ -1174,6 +1178,15 @@ function contact_form(array &$state, array &$messages) {
 	}
 	$form = $known ? \WPCF7_ContactForm::get_instance($known) : null;
 	if (!$form) {
+		$removed = 0;
+		foreach (get_posts(array('post_type' => 'wpcf7_contact_form', 'post_status' => 'any', 'numberposts' => -1, 'fields' => 'ids')) as $old) {
+			if (wp_delete_post($old, true)) {
+				$removed++;
+			}
+		}
+		if ($removed) {
+			$messages[] = array('level' => 'info', 'text' => t('formsRemoved', array('count' => $removed, 'plugin' => $cf['name'])));
+		}
 		$form = \WPCF7_ContactForm::get_template(array('title' => $cf['title']));
 		$props = $form->get_properties();
 		// Fields of the site (name, email, phone, message, privacy consent) and the email to the site owner
@@ -1236,6 +1249,20 @@ function fill_menu(array &$state, $menu, array $page_ids) {
 	}
 }
 
+/**
+ * Items of another menu of the site (services, contacts), after fill_menu() removed the ones of the last run.
+ * $items: arguments of wp_update_nav_menu_item() without status and position.
+ */
+function add_menu_items(array &$state, $menu, array $items) {
+	foreach ($items as $position => $item) {
+		$id = wp_update_nav_menu_item($menu->term_id, 0, array_merge($item, array('menu-item-status' => 'publish', 'menu-item-position' => $position + 1)));
+		if (!is_wp_error($id)) {
+			$state['menu_items'][] = (int) $id;
+		}
+	}
+	save_state($state);
+}
+
 function gallery_shortcode(array $images) {
 	$ids = array();
 	foreach (data()['images'] as $img) {
@@ -1256,11 +1283,22 @@ function import_content() {
 	$images = image_map($state);
 	$category = category_id($data['category']);
 	$menu = site_menu($data['menu']);
+	// Menus of the lists of the templates (footer columns, article sidebar): services and contacts
+	$menus = array();
+	$menu_data = isset($data['menus']) && is_array($data['menus']) ? $data['menus'] : array();
+	foreach (array('services', 'contacts') as $role) {
+		if (!empty($menu_data[$role]['name'])) {
+			$menus[$role] = site_menu(array('name' => $menu_data[$role]['name']));
+		}
+	}
 	$shortcode = contact_form($state, $messages);
 	$r = array(
 		'images' => $images,
 		'menu' => $menu->slug,
 		'menu_id' => (int) $menu->term_id,
+		'menus' => array_map(function ($m) {
+			return array('slug' => $m->slug, 'id' => (int) $m->term_id);
+		}, $menus),
 		'uae_menu' => use_uae(),
 		'uae_widgets' => uae_active(),
 		'relative' => isset($data['relativeLinks']) ? (array) $data['relativeLinks'] : array(),
@@ -1300,7 +1338,11 @@ function import_content() {
 	// content, sidebar with the other services), so it needs no Elementor Pro. Comments are closed.
 	update_option('default_comment_status', 'closed');
 	update_option('default_ping_status', 'closed');
-	foreach ($data['posts'] as $post) {
+	$service_ids = array();
+	$first_date = time() - 60 * count($data['posts']);
+	foreach ($data['posts'] as $order => $post) {
+		// One minute apart, in the order of the project: the services are listed from the oldest
+		$date_gmt = gmdate('Y-m-d H:i:s', $first_date + 60 * $order);
 		$image = ($post['image'] && isset($images[$post['image']])) ? $images[$post['image']]['id'] : 0;
 		$content = replace_string($post['content'], $r);
 		$post_doc = !empty($post['elementor']) ? element_doc($post['elementor']) : null;
@@ -1314,6 +1356,8 @@ function import_content() {
 			'post_name' => $post['slug'],
 			'post_content' => $content,
 			'post_excerpt' => $post['excerpt'],
+			'post_date_gmt' => $date_gmt,
+			'post_date' => get_date_from_gmt($date_gmt),
 			'post_category' => array($category),
 			'comment_status' => 'closed',
 			'ping_status' => 'closed',
@@ -1331,9 +1375,32 @@ function import_content() {
 		if ($post_doc) {
 			save_like_editor($id);
 		}
+		$service_ids[] = $id;
 	}
 
 	fill_menu($state, $menu, array_values($page_ids));
+	// Services menu: one item per service article; contacts menu: phone, e-mail and address (custom links
+	// whose CSS class gives each its icon)
+	if (isset($menus['services'])) {
+		add_menu_items($state, $menus['services'], array_map(function ($id) {
+			return array('menu-item-object-id' => $id, 'menu-item-object' => 'post', 'menu-item-type' => 'post_type', 'menu-item-title' => get_the_title($id));
+		}, $service_ids));
+	}
+	if (isset($menus['contacts']) && !empty($menu_data['contacts']['items'])) {
+		$contact_items = array();
+		foreach ((array) $menu_data['contacts']['items'] as $item) {
+			if (!empty($item['title']) && !empty($item['url'])) {
+				$contact_items[] = array(
+					'menu-item-type' => 'custom',
+					'menu-item-title' => $item['title'],
+					'menu-item-url' => $item['url'],
+					'menu-item-classes' => isset($item['classes']) ? (string) $item['classes'] : '',
+					'menu-item-target' => preg_match('#^https?://#', $item['url']) ? '_blank' : '',
+				);
+			}
+		}
+		add_menu_items($state, $menus['contacts'], $contact_items);
+	}
 
 	// Header, footer and single post: Elementor Pro theme templates. Without Pro the theme document
 	// types do not exist: the templates are saved as sections and this plugin displays header and footer.
