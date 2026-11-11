@@ -359,3 +359,41 @@ test('WordPress plugin: Yoast SEO scores, every page and article opened in the e
   const js = /<script>\s*(\(function \(\) \{[\s\S]*?\}\)\(\);)\s*<\/script>/.exec(php)[1].replace(/<\?php echo wp_json_encode\(\$config\); \?>/, '{}');
   assert.doesNotThrow(() => new Function(js));
 });
+
+test('service names: capital letter, spelling corrected by the AI, other changes ignored', async () => {
+  const { capitalizeFirst, isSpellingFix, tidyServiceNames } = await import('../src/generation/service-names.js');
+  const { all, run } = await import('../src/db/index.js');
+  assert.equal(capitalizeFirst('  riparazione   caldaie '), 'Riparazione caldaie');
+  assert.equal(capitalizeFirst('SEO e marketing'), 'SEO e marketing');
+  assert.equal(capitalizeFirst('24h pronto intervento'), '24h pronto intervento', 'a name starting with a figure stays as typed');
+  assert.equal(capitalizeFirst('élagage'), 'Élagage');
+  assert.ok(isSpellingFix('riparzione caldaie', 'Riparazione caldaie'));
+  assert.ok(isSpellingFix('pulizia citta', 'Pulizia città'), 'a missing accent');
+  assert.ok(!isSpellingFix('riparazione caldaie', 'Riparazione e manutenzione caldaie'), 'added words');
+  assert.ok(!isSpellingFix('bagni', 'Cucine'), 'another word');
+  assert.ok(!isSpellingFix('bagni', '<b>Bagni</b>'));
+
+  const { lastInsertRowid: pid } = run('INSERT INTO projects (site_name, language, platform) VALUES (?, ?, ?)', 'Prova', 'it', 'wordpress');
+  const add = (name, slug, position) => Number(run('INSERT INTO services (project_id, name, description, slug, position) VALUES (?, ?, ?, ?, ?)', pid, name, '', slug, position).lastInsertRowid);
+  const a = add('riparzione caldaie', 'riparzione-caldaie', 0);
+  const b = add('bagni su misura', 'bagni', 1);
+  const c = add('Impianti', 'impianti', 2);
+  let asked = '';
+  const changed = await tidyServiceNames(Number(pid), { language: 'it', industry: 'Idraulico' }, async (prompt, options) => {
+    asked = prompt;
+    assert.equal(options.task, 'service-names');
+    return { text: JSON.stringify({ [`s${a}`]: 'Riparazione caldaie', [`s${b}`]: 'Bagni e cucine su misura per tutti', [`s${c}`]: 'Impianti' }) };
+  });
+  assert.match(asked, /"s\d+": "riparzione caldaie"/);
+  assert.deepEqual(changed.map((x) => [x.from, x.to]), [['riparzione caldaie', 'Riparazione caldaie'], ['bagni su misura', 'Bagni su misura']]);
+  const rows = all('SELECT name, slug FROM services WHERE project_id = ? ORDER BY position', Number(pid));
+  assert.deepEqual(rows.map((r) => ({ ...r })), [
+    { name: 'Riparazione caldaie', slug: 'riparazione-caldaie' }, // the automatic address follows the corrected name
+    { name: 'Bagni su misura', slug: 'bagni' }, // rewritten by the AI: only the capital letter; the address typed by the user stays
+    { name: 'Impianti', slug: 'impianti' },
+  ]);
+  // The AI fails: the names keep what the user typed, with the capital letter
+  add('pronto intervento', 'pronto-intervento', 3);
+  const again = await tidyServiceNames(Number(pid), { language: 'it' }, async () => { throw new Error('offline'); });
+  assert.deepEqual(again.map((x) => x.to), ['Pronto intervento']);
+});

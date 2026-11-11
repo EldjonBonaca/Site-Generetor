@@ -7,6 +7,7 @@ import { config } from '../config.js';
 import { badRequest, notFound, pick, slugify, LANGUAGES } from '../lib/util.js';
 import { loadContext, checkReadiness, defaultSettings } from '../generation/plan.js';
 import { resolveMapsLink } from '../lib/maps.js';
+import { capitalizeFirst } from '../generation/service-names.js';
 import { SOCIAL_KEYS } from '../lib/socials.js';
 
 const router = Router();
@@ -170,7 +171,7 @@ router.get('/languages', (req, res) => res.json(LANGUAGES));
 
 router.post('/projects/:id/services', (req, res) => {
   const p = requireProject(req.params.id);
-  const name = String(req.body?.name || '').trim().slice(0, 200);
+  const name = capitalizeFirst(String(req.body?.name || '').slice(0, 200));
   const description = String(req.body?.description || '').slice(0, 3000);
   const { max } = get('SELECT COALESCE(MAX(position), -1) AS max FROM services WHERE project_id = ?', p.id);
   const slug = uniqueSlug(p.id, req.body?.slug || name || 'service');

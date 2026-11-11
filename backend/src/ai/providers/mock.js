@@ -91,6 +91,8 @@ export default class MockProvider extends AIProvider {
   async generate(prompt, options = {}) {
     await new Promise((r) => setTimeout(r, 250));
     if (!options.json) return { text: 'OK', usage: { inputTokens: 5, outputTokens: 1 } };
+    // Spelling of the service names (demo): nothing to correct
+    if (options.task === 'service-names') return { text: '{}', usage: { inputTokens: Math.round(prompt.length / 4), outputTokens: 1 } };
     if (options.task === 'industry') {
       const text = JSON.stringify(demoProfile(options.context || {}));
       return { text, usage: { inputTokens: Math.round(prompt.length / 4), outputTokens: Math.round(text.length / 4) } };

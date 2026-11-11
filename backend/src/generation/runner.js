@@ -12,6 +12,7 @@ import { loadContext, buildPages, analyzePage, classifyField, siteLinks, fallbac
 import { sitePromptFor } from './site-prompt.js';
 import { sleep, stripHtml } from '../lib/util.js';
 import { believableFigure } from '../templates/spec.js';
+import { tidyServiceNames } from './service-names.js';
 import { EMAIL_IN_TEXT, PHONE_IN_TEXT, looksLikePhone } from '../elementor/analyze.js';
 
 const CHUNK_SIZE = 45; // max fields per AI call, keeps answers reliable on long pages
@@ -392,8 +393,15 @@ export async function runGeneration(generationId, { pageKeys = null } = {}) {
   cancelled.delete(id);
 
   try {
-    const ctx = loadContext(gen.project_id);
     const provider = getProvider(gen.provider_id);
+    // A new generation: the service names typed by the user are tidied first (capital letter, spelling), since
+    // they become titles, menu items and addresses of the site
+    if (!pageKeys && !state.output.pages?.length) {
+      const project = get('SELECT * FROM projects WHERE id = ?', gen.project_id);
+      const fixed = await tidyServiceNames(gen.project_id, project, (prompt, options) => callWithRetry(provider, prompt, options, log));
+      for (const f of fixed) log('info', `Service name corrected: "${f.from}" → "${f.to}".`);
+    }
+    const ctx = loadContext(gen.project_id);
     if (!state.output.pages?.length) state.output = { pages: initPages(ctx) };
     const targets = state.output.pages.filter((p) => !pageKeys || pageKeys.includes(p.key));
 
