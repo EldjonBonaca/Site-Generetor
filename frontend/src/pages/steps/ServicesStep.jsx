@@ -150,8 +150,8 @@ function ServiceRow({ service, index, image, onChange, onRemove, onSaved }) {
         <Field label={t('Slug')} hint={`/${form.slug}`}>
           {(id) => <Input id={id} value={form.slug} onChange={set('slug')} />}
         </Field>
-        <Field label={t('Short description')} hint={t('Optional: the AI will expand it.')} className="sm:col-span-2">
-          {(id) => <Textarea id={id} rows={2} value={form.description} onChange={set('description')} />}
+        <Field label={t('Short description')} hint={t('Optional: what you write here is the base of the texts about this service (the AI corrects and expands it).')} className="sm:col-span-2">
+          {(id) => <Textarea id={id} rows={3} value={form.description} onChange={set('description')} />}
         </Field>
       </div>
       <div className="flex w-24 shrink-0 flex-col items-end justify-between gap-2">

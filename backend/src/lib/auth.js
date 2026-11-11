@@ -14,7 +14,7 @@ import crypto from 'node:crypto';
 
 export const SESSION_COOKIE = 'esg_session';
 /** Session lengths offered on the login page, in minutes (the first one when none is chosen). */
-export const SESSION_MINUTES = [60, 15, 30, 120, 240, 480];
+export const SESSION_MINUTES = [15, 5, 10, 20, 30];
 const sessionMinutes = (v) => (SESSION_MINUTES.includes(Number(v)) ? Number(v) : SESSION_MINUTES[0]);
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest();
@@ -209,6 +209,6 @@ document.getElementById('f').addEventListener('submit', async function (ev) {
   '__SESSION_OPTIONS__',
   SESSION_MINUTES.slice()
     .sort((a, b) => a - b)
-    .map((m) => `<option value="${m}"${m === SESSION_MINUTES[0] ? ' selected' : ''}>${m < 60 ? `${m} minuti` : m === 60 ? '1 ora' : `${m / 60} ore`}</option>`)
+    .map((m) => `<option value="${m}"${m === SESSION_MINUTES[0] ? ' selected' : ''}>${m} minuti</option>`)
     .join('')
 );

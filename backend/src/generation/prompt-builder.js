@@ -192,8 +192,9 @@ const ROLE_DESCRIPTION = {
 
 /**
  * The "Additional notes for the AI" of the site: instructions of the site owner that every text must
- * follow. Added by the generator to every prompt (also when the prompt has no {{NOTE}} variable),
- * before the output format, so they always reach the AI with the priority of a requirement.
+ * follow, and often the content itself (who the business is, texts about single services). Added by the
+ * generator to every prompt (also when the prompt has no {{NOTE}} variable), before the output format,
+ * so they always reach the AI with the priority of a requirement.
  */
 export function clientInstructions(notes) {
   const text = String(notes || '').trim();
@@ -203,7 +204,38 @@ export function clientInstructions(notes) {
 === INSTRUCTIONS OF THE CLIENT (written by the site owner — mandatory) ===
 ${text}
 === END OF THE INSTRUCTIONS OF THE CLIENT ===
-Follow every instruction of the client above in the texts you write: tone of voice, facts to mention (years of experience, strengths, areas served, certifications…), words, claims or topics to avoid, and any other request. They take priority over the tone of the template, the demo and sample texts and the general guidelines above; only the output format rules below come first. Never contradict the facts given by the client and never invent different ones.`;
+Follow every instruction of the client above in the texts you write: tone of voice, facts to mention (years of experience, strengths, areas served, certifications…), words, claims or topics to avoid, and any other request. They take priority over the tone of the template, the demo and sample texts and the general guidelines above; only the output format rules below come first. Never contradict the facts given by the client and never invent different ones.
+The client may also have written there the content itself, not only instructions: who they are and their story (the "about us" texts), what a service consists of, how they work, their strengths, the areas they serve. Treat that as the SOURCE of the corresponding texts:
+- the About page and every "about us" section are built on what the client wrote about the business: same facts, names, figures and meaning, never a generic presentation in its place;
+- the text about a service goes into the article of that service and wherever that service is presented, not into the other services;
+- correct its spelling and grammar, write it in the language and tone of the site, and expand or shorten it to fit each field; when it is longer than a field, keep what matters most there and use the rest in the other fields of the page it belongs to;
+- use each piece only where it belongs, and do not repeat the same sentences on several pages.`;
+}
+
+/**
+ * The descriptions the user typed for the services (Services step), given to the AI as the material of
+ * the texts about them, whatever the prompt of the site contains: on the article of a service its own
+ * description, on the other parts of the site the descriptions of all of them.
+ */
+export function serviceMaterial(services = [], service = null) {
+  const described = services.filter((s) => String(s.description || '').trim());
+  if (service) {
+    const text = String(service.description || '').trim();
+    if (!text) return '';
+    return `
+
+=== WHAT THE CLIENT WROTE ABOUT THIS SERVICE ("${service.name}") ===
+${text}
+=== END ===
+Build the texts of this service on it: keep its facts, details and meaning (corrected, in the language and tone of the site, expanded to fit the fields) and add only what is consistent with it. Never replace it with a generic description.`;
+  }
+  if (!described.length) return '';
+  return `
+
+=== WHAT THE CLIENT WROTE ABOUT THE SERVICES ===
+${described.map((s) => `- ${s.name}: ${String(s.description).trim()}`).join('\n')}
+=== END ===
+Wherever one of these services is presented or mentioned, stay faithful to what the client wrote about it (same facts and meaning, corrected and adapted to the field).`;
 }
 
 /** Instructions appended after the user prompt so the output is machine-readable. */
@@ -259,6 +291,7 @@ export function buildPagePrompt({ promptContent, project, services, service, fie
   const prompt =
     userPart +
     clientInstructions(notes) +
+    serviceMaterial(services, service) +
     technicalInstructions({ fields, languageLabel: vars.language, pageTitle, role, links, includeStructure: !usesStructure, extra, kit: Boolean(ctx?.kit), notes });
   return { prompt, system: notes.trim() ? `${SYSTEM_PROMPT} ${CLIENT_SYSTEM}` : SYSTEM_PROMPT, vars };
 }

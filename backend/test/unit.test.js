@@ -397,3 +397,23 @@ test('service names: capital letter, spelling corrected by the AI, other changes
   const again = await tidyServiceNames(Number(pid), { language: 'it' }, async () => { throw new Error('offline'); });
   assert.deepEqual(again.map((x) => x.to), ['Pronto intervento']);
 });
+
+test('texts of the client (notes, service descriptions) reach every prompt as the source of the pages', async () => {
+  const { buildPagePrompt, serviceMaterial } = await import('../src/generation/prompt-builder.js');
+  const services = [
+    { id: 1, name: 'Riparazione caldaie', description: 'Interveniamo in giornata su caldaie a condensazione di ogni marca.', slug: 'riparazione-caldaie' },
+    { id: 2, name: 'Bagni', description: '', slug: 'bagni' },
+  ];
+  const project = { site_name: 'Rossi', language: 'it', phone: '', email: '', address: '', notes: 'Chi siamo: azienda di famiglia nata nel 1998 a Roma, tre generazioni di idraulici.' };
+  const fields = [{ id: 'about.text', format: 'html', hint: 'presentation', max: 600 }];
+  const about = buildPagePrompt({ promptContent: 'Scrivi i testi.', project, services, service: null, fields, pageTitle: 'Chi siamo', role: 'about' }).prompt;
+  assert.ok(about.includes('azienda di famiglia nata nel 1998'), 'the notes of the site');
+  assert.match(about, /About page and every "about us" section are built on what the client wrote/);
+  assert.ok(about.includes('- Riparazione caldaie: Interveniamo in giornata'), 'what the client wrote about the services');
+  assert.ok(!about.includes('- Bagni:'), 'a service without description is not listed there');
+  const article = buildPagePrompt({ promptContent: 'Scrivi i testi.', project, services, service: services[0], fields, pageTitle: 'Riparazione caldaie', role: 'post' }).prompt;
+  assert.match(article, /WHAT THE CLIENT WROTE ABOUT THIS SERVICE \("Riparazione caldaie"\)/);
+  assert.ok(article.includes('Interveniamo in giornata su caldaie a condensazione'));
+  assert.equal(serviceMaterial(services, services[1]), '', 'nothing written about this service');
+  assert.equal(serviceMaterial([services[1]]), '');
+});

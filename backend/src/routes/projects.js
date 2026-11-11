@@ -15,7 +15,7 @@ const router = Router();
 /** What a project is exported as: a WordPress site (plugin) or a static website (HTML, CSS, JavaScript). */
 const PLATFORMS = ['wordpress', 'code'];
 const PROJECT_FIELDS = ['platform', 'site_name', 'phone', 'phone2', 'email', 'address', 'google_business_url', 'city', 'industry', 'language', 'notes', 'image_base_url', 'copyright', 'vat_number', 'whatsapp_enabled', 'whatsapp_number', ...SOCIAL_KEYS];
-const MAX_LEN = { platform: 20, site_name: 200, phone: 40, phone2: 40, email: 200, address: 1000, google_business_url: 2000, city: 200, industry: 200, notes: 5000, image_base_url: 500, copyright: 600, vat_number: 40, whatsapp_enabled: 1, whatsapp_number: 40, ...Object.fromEntries(SOCIAL_KEYS.map((k) => [k, 500])) };
+const MAX_LEN = { platform: 20, site_name: 200, phone: 40, phone2: 40, email: 200, address: 1000, google_business_url: 2000, city: 200, industry: 200, notes: 15000, image_base_url: 500, copyright: 600, vat_number: 40, whatsapp_enabled: 1, whatsapp_number: 40, ...Object.fromEntries(SOCIAL_KEYS.map((k) => [k, 500])) };
 
 export function serializeProject(row) {
   const { settings_json, ...rest } = row;
@@ -172,7 +172,7 @@ router.get('/languages', (req, res) => res.json(LANGUAGES));
 router.post('/projects/:id/services', (req, res) => {
   const p = requireProject(req.params.id);
   const name = capitalizeFirst(String(req.body?.name || '').slice(0, 200));
-  const description = String(req.body?.description || '').slice(0, 3000);
+  const description = String(req.body?.description || "").slice(0, 6000);
   const { max } = get('SELECT COALESCE(MAX(position), -1) AS max FROM services WHERE project_id = ?', p.id);
   const slug = uniqueSlug(p.id, req.body?.slug || name || 'service');
   const { lastInsertRowid } = run(
@@ -187,7 +187,7 @@ router.patch('/services/:sid', (req, res) => {
   const s = get('SELECT * FROM services WHERE id = ?', req.params.sid);
   if (!s) throw notFound('Service');
   const name = req.body?.name !== undefined ? String(req.body.name).slice(0, 200) : s.name;
-  const description = req.body?.description !== undefined ? String(req.body.description).slice(0, 3000) : s.description;
+  const description = req.body?.description !== undefined ? String(req.body.description).slice(0, 6000) : s.description;
   let slug = s.slug;
   if (req.body?.slug !== undefined && req.body.slug !== s.slug) slug = uniqueSlug(s.project_id, req.body.slug || name, s.id);
   else if (req.body?.name !== undefined && s.slug === uniqueSlug(s.project_id, s.name, s.id)) {

@@ -25,7 +25,7 @@ export const isGoogleMapsLink = (v) => {
   }
 };
 
-const NOTES_MAX = 5000; // same limit as the API (routes/projects.js)
+const NOTES_MAX = 15000; // same limit as the API (routes/projects.js)
 /** Social networks (all optional): icons in the footer of the site (same list as backend/src/lib/socials.js). */
 const SOCIALS = [
   { key: 'facebook_url', name: 'Facebook', placeholder: 'https://www.facebook.com/…' },
@@ -175,10 +175,10 @@ export default function SiteDataStep({ project, setProject }) {
           </Field>
           <Field
             label={t('Additional notes for the AI')}
-            hint={t('Instructions the AI must follow in every text of the site (and in the templates generated for it): tone of voice, strengths, years of experience, things to avoid… ({n}/{max} characters)', { n: form.notes.length, max: NOTES_MAX })}
+            hint={t('Instructions the AI must follow in every text of the site, and the texts you already have: who the business is (About page), what each service consists of, strengths, years of experience, tone of voice, things to avoid… The AI builds the pages on them. ({n}/{max} characters)', { n: form.notes.length, max: NOTES_MAX })}
             className="sm:col-span-2"
           >
-            {(id) => <Textarea id={id} rows={4} value={form.notes} onChange={set('notes')} maxLength={NOTES_MAX} />}
+            {(id) => <Textarea id={id} rows={7} value={form.notes} onChange={set('notes')} maxLength={NOTES_MAX} />}
           </Field>
         </div>
       </Card>
