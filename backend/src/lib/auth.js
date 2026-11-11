@@ -6,12 +6,16 @@
  *
  * The session cookie is signed (HMAC) and holds the username, an expiry and a fingerprint of the
  * password: removing a user or changing their password in .env ends their sessions.
+ * The user chooses at login how many minutes the session lasts (SESSION_MINUTES); it ends at that time
+ * unless it is extended (POST /api/session/extend: the same number of minutes again, from now).
  * req.user is the logged-in username (null when the login is disabled).
  */
 import crypto from 'node:crypto';
 
 export const SESSION_COOKIE = 'esg_session';
-const SESSION_DAYS = 30;
+/** Session lengths offered on the login page, in minutes (the first one when none is chosen). */
+export const SESSION_MINUTES = [60, 15, 30, 120, 240, 480];
+const sessionMinutes = (v) => (SESSION_MINUTES.includes(Number(v)) ? Number(v) : SESSION_MINUTES[0]);
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest();
 const safeEqual = (a, b) => crypto.timingSafeEqual(sha256(a), sha256(b));
@@ -71,23 +75,32 @@ export function createAuth({ users, secret }) {
   const sign = (data) => b64url(crypto.createHmac('sha256', key).update(data).digest());
   const fingerprint = (u) => b64url(sha256(`${u.user}:${u.password}`)).slice(0, 12);
 
-  const issue = (u) => {
-    const data = b64url(JSON.stringify({ u: u.user, f: fingerprint(u), exp: Date.now() + SESSION_DAYS * 86400000 }));
-    return `${data}.${sign(data)}`;
+  /** A session of `minutes` from now: { token, expiresAt }. */
+  const issue = (u, minutes) => {
+    const expiresAt = Date.now() + minutes * 60000;
+    const data = b64url(JSON.stringify({ u: u.user, f: fingerprint(u), exp: expiresAt, m: minutes }));
+    return { token: `${data}.${sign(data)}`, expiresAt };
   };
-  const verify = (token) => {
+  /** The session of a cookie: { user, expiresAt, minutes }, or null (no cookie, forged, expired, user removed). */
+  const session = (token) => {
     const [data, mac] = String(token || '').split('.');
     if (!data || !mac || !safeEqual(mac, sign(data))) return null;
     try {
       const s = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
       const u = users.find((x) => x.user === s.u);
-      return u && s.exp > Date.now() && s.f === fingerprint(u) ? u.user : null;
+      return u && s.exp > Date.now() && s.f === fingerprint(u) ? { user: u.user, expiresAt: s.exp, minutes: sessionMinutes(s.m) } : null;
     } catch {
       return null;
     }
   };
-  const setCookie = (req, res, value, maxAge) =>
+  const start = (req, res, u, minutes) => {
+    const { token, expiresAt } = issue(u, minutes);
+    setCookie(req, res, token, minutes * 60);
+    return expiresAt;
+  };
+  function setCookie(req, res, value, maxAge) {
     res.append('Set-Cookie', `${SESSION_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${req.secure ? '; Secure' : ''}`);
+  }
 
   const PUBLIC = new Set(['/login', '/api/login', '/api/health']);
 
@@ -97,7 +110,8 @@ export function createAuth({ users, secret }) {
     middleware(req, res, next) {
       req.user = null;
       if (!users.length || PUBLIC.has(req.path)) return next();
-      req.user = verify(cookies(req)[SESSION_COOKIE]);
+      req.session = session(cookies(req)[SESSION_COOKIE]);
+      req.user = req.session?.user || null;
       if (req.user) return next();
       if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Login required' });
       const next_ = req.originalUrl && req.originalUrl !== '/' ? `?next=${encodeURIComponent(req.originalUrl)}` : '';
@@ -112,8 +126,15 @@ export function createAuth({ users, secret }) {
         return res.status(401).json({ error: 'Wrong username or password.' });
       }
       failures.delete(req.ip);
-      setCookie(req, res, issue(u), SESSION_DAYS * 86400);
-      res.json({ user: u.user });
+      const minutes = sessionMinutes(req.body?.minutes);
+      res.json({ user: u.user, minutes, expiresAt: start(req, res, u, minutes), now: Date.now() });
+    },
+
+    /** The session starts again for the minutes chosen at login ("continue" of the warning before it ends). */
+    extend(req, res) {
+      const u = users.find((x) => x.user === req.user);
+      if (!u || !req.session) return res.status(401).json({ error: 'Login required' });
+      res.json({ user: u.user, minutes: req.session.minutes, expiresAt: start(req, res, u, req.session.minutes), now: Date.now() });
     },
 
     logout(req, res) {
@@ -122,7 +143,7 @@ export function createAuth({ users, secret }) {
     },
 
     me(req, res) {
-      res.json({ user: req.user, auth: users.length > 0 });
+      res.json({ user: req.user, auth: users.length > 0, ...(req.session ? { expiresAt: req.session.expiresAt, minutes: req.session.minutes, now: Date.now() } : {}) });
     },
   };
 }
@@ -145,19 +166,22 @@ h1{margin:0 0 16px;font-size:22px;font-weight:600}
 .warn b{display:block;color:#b45309;letter-spacing:.04em}
 .warn span{font-size:20px;line-height:1.1}
 label{display:block;margin-bottom:16px;font-size:14px;font-weight:500;color:#334155}
-input{display:block;width:100%;margin-top:6px;padding:11px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px}
-input:focus{outline:none;border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.15)}
+input,select{display:block;width:100%;margin-top:6px;padding:11px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px;font-family:inherit;background:#fff;color:inherit}
+input:focus,select:focus{outline:none;border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.15)}
+/* The password is typed in a plain field drawn as dots: the browser does not offer to save it */
+.secret{-webkit-text-security:disc;text-security:disc}
 button{width:100%;margin-top:8px;padding:12px;border:0;border-radius:8px;background:#4f46e5;color:#fff;font-size:15px;font-weight:600;cursor:pointer}
 button:disabled{opacity:.6;cursor:wait}
 .error{min-height:20px;margin:12px 0 0;font-size:14px;color:#b91c1c}
 </style>
 </head>
 <body>
-<form id="f" autocomplete="on">
+<form id="f" autocomplete="off">
 <h1>Login</h1>
 <div class="warn"><span aria-hidden="true">&#9888;&#65039;</span><p style="margin:0"><b>KUJDES!</b>Po hap di&ccedil;ka t&euml; paligjshme. Vazhdo me p&euml;rgjegj&euml;sin&euml; t&euml;nde &#128517;</p></div>
-<label>Username<input name="username" autocomplete="username" required autofocus></label>
-<label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+<label>Username<input name="username" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required autofocus></label>
+<label>Password<input name="password" class="secret" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required></label>
+<label>Durata della sessione<select name="minutes">__SESSION_OPTIONS__</select></label>
 <button type="submit">Sign in</button>
 <p class="error" id="e" role="alert"></p>
 </form>
@@ -167,8 +191,10 @@ document.getElementById('f').addEventListener('submit', async function (ev) {
   var btn = this.querySelector('button'), err = document.getElementById('e');
   btn.disabled = true; err.textContent = '';
   try {
-    var res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: this.username.value, password: this.password.value }) });
+    var res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: this.username.value, password: this.password.value, minutes: Number(this.minutes.value) }) });
+    this.password.value = '';
     if (res.ok) {
+      this.username.value = '';
       var next = new URLSearchParams(location.search).get('next') || '/';
       location.href = next.charAt(0) === '/' && next.charAt(1) !== '/' ? next : '/';
       return;
@@ -179,4 +205,10 @@ document.getElementById('f').addEventListener('submit', async function (ev) {
 });
 </script>
 </body>
-</html>`;
+</html>`.replace(
+  '__SESSION_OPTIONS__',
+  SESSION_MINUTES.slice()
+    .sort((a, b) => a - b)
+    .map((m) => `<option value="${m}"${m === SESSION_MINUTES[0] ? ' selected' : ''}>${m < 60 ? `${m} minuti` : m === 60 ? '1 ora' : `${m / 60} ore`}</option>`)
+    .join('')
+);

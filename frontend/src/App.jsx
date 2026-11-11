@@ -6,6 +6,7 @@ import { useT, LOCALES } from './i18n/index.jsx';
 import { cx } from './components/ui.jsx';
 import { SECTIONS, SECTION_LABELS, useSection } from './section.js';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
+import { SessionTimer } from './components/SessionTimer.jsx';
 import ProjectsPage from './pages/ProjectsPage.jsx';
 import ProjectWizard from './pages/ProjectWizard.jsx';
 import TemplatesPage from './pages/TemplatesPage.jsx';
@@ -167,7 +168,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <main className="mx-auto max-w-7xl px-4 pt-8 pb-20 sm:px-6">
         <ErrorBoundary t={t} resetKey={pathname}>
           <Routes>
             <Route path="/" element={<Navigate to="/projects" replace />} />
@@ -183,6 +184,7 @@ export default function App() {
           </Routes>
         </ErrorBoundary>
       </main>
+      <SessionTimer />
     </div>
   );
 }

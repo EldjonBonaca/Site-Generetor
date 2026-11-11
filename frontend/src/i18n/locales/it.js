@@ -754,4 +754,12 @@ export default {
   "Simple and tidy: white pages, clear titles, soft cards, one brand color and nothing decorative. Professional at first sight.": "Semplice e ordinato: pagine bianche, titoli chiari, card morbide, un solo colore del brand e nessuna decorazione. Professionale al primo sguardo.",
   "Simple elegant": "Semplice elegante",
   "Calm and refined: a lot of air, elegant titles, thin outlines and soft neutral tones. Simple, but with taste.": "Calmo e raffinato: molta aria, titoli eleganti, contorni sottili e toni neutri morbidi. Semplice, ma con gusto.",
+  "Session time left": "Tempo rimasto della sessione",
+  "Session": "Sessione",
+  "Extend": "Prolunga",
+  "Start the session again for the time chosen at login": "Fa ripartire la sessione per il tempo scelto al login",
+  "Your session is about to end": "La sessione sta per scadere",
+  "Continue": "Continua",
+  "You will be logged out in {time}. Do you want to continue?": "Verrai disconnesso tra {time}. Vuoi continuare?",
+  "Without an answer the session closes by itself. Work already saved is not lost.": "Senza risposta la sessione si chiude da sola. Il lavoro già salvato non va perso.",
 };

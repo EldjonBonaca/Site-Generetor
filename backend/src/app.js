@@ -47,6 +47,7 @@ app.use(auth.middleware);
 app.get('/login', (req, res) => (auth.enabled ? res.type('html').send(LOGIN_PAGE) : res.redirect(302, '/')));
 app.post('/api/login', auth.login);
 app.post('/api/logout', auth.logout);
+app.post('/api/session/extend', auth.extend);
 app.get('/api/me', auth.me);
 
 for (const r of [projects, images, library, templates, kits, providers, prompts, generations, bundledPlugins]) app.use('/api', r);

@@ -66,9 +66,33 @@ test('login, session, logout', async () => {
   assert.equal((await login('mz', 'Dr-2026')).status, 401, "another user's password does not work");
   const mz = await login('mz', 'Pass-mz1');
   assert.equal(mz.status, 200);
-  assert.match(mz.setCookie, /esg_session=.+; Path=\/; HttpOnly; SameSite=Lax; Max-Age=2592000/);
+  // Without a choice the session lasts one hour
+  assert.match(mz.setCookie, /esg_session=.+; Path=\/; HttpOnly; SameSite=Lax; Max-Age=3600/);
   assert.equal((await as(mz.cookie, 'GET', '/api/projects')).status, 200);
-  assert.deepEqual((await as(mz.cookie, 'GET', '/api/me')).body, { user: 'mz', auth: true });
+  const me = (await as(mz.cookie, 'GET', '/api/me')).body;
+  assert.deepEqual({ user: me.user, auth: me.auth, minutes: me.minutes }, { user: 'mz', auth: true, minutes: 60 });
+  assert.ok(Math.abs(me.expiresAt - me.now - 3600000) < 5000, 'the end of the session, with the time of the server');
+
+  // The length chosen on the login page (one of the offered ones); "continue" starts the same length again
+  const post = (path, body, cookie = '') => fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify(body) });
+  const short = await post('/api/login', { username: 'mz', password: 'Pass-mz1', minutes: 15 });
+  assert.match(short.headers.get('set-cookie'), /Max-Age=900/);
+  const shortCookie = short.headers.get('set-cookie').split(';')[0];
+  assert.equal((await short.json()).minutes, 15);
+  assert.match((await post('/api/login', { username: 'mz', password: 'Pass-mz1', minutes: 999999 })).headers.get('set-cookie'), /Max-Age=3600/, 'an unknown length is not accepted');
+  const extended = await post('/api/session/extend', {}, shortCookie);
+  assert.equal(extended.status, 200);
+  assert.match(extended.headers.get('set-cookie'), /esg_session=.+; Path=\/; HttpOnly; SameSite=Lax; Max-Age=900/);
+  const ext = await extended.json();
+  assert.equal(ext.minutes, 15);
+  assert.ok(Math.abs(ext.expiresAt - ext.now - 900000) < 5000);
+  assert.equal((await post('/api/session/extend', {})).status, 401, 'no session to extend');
+
+  // The login page asks for the length and gives the browser nothing to remember
+  const form = (await as('', 'GET', '/login')).body;
+  assert.match(form, /<select name="minutes">.*<option value="15">15 minuti<\/option>.*<option value="60" selected>1 ora<\/option>.*<option value="480">8 ore<\/option>/);
+  assert.match(form, /<form id="f" autocomplete="off">/);
+  assert.doesNotMatch(form, /type="password"|autocomplete="(username|current-password|on)"/);
   assert.equal((await login('eb', 's3cret:eb')).status, 200, 'a password may contain a colon');
 
   // A forged cookie (another username, same signature) is refused
