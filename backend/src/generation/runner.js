@@ -171,7 +171,7 @@ export async function generatePage({ provider, ctx, page, promptRow, log, onlyFi
   const wantSeo = !onlyFieldIds ? page.slug !== null : onlyFieldIds.some((id) => id.startsWith('_seo.'));
   const seoFields = wantSeo
     ? [
-        { id: '_seo.keyphrase', format: 'text', maxLength: 60, label: 'Focus keyphrase', hint: 'Yoast SEO focus keyphrase: the 2–4 word search people type to find this page (main word of the page + service or business type + city), different on every page' },
+        { id: '_seo.keyphrase', format: 'text', maxLength: 60, label: 'Focus keyphrase', hint: 'Yoast SEO focus keyphrase: the 2–4 word search people type to find this page (main word of the page + service or business type + the place: the City / service area of the site data), different on every page' },
         { id: '_seo.title', format: 'text', maxLength: 60, label: 'SEO title', hint: 'SEO title of the page: starts with the exact focus keyphrase, 40–60 characters' },
         { id: '_seo.description', format: 'text', maxLength: 156, minLength: 120, label: 'Meta description', hint: 'meta description of the page, 120–156 characters: contains the exact focus keyphrase once' },
       ].filter((f) => !onlyFieldIds || onlyFieldIds.includes(f.id))

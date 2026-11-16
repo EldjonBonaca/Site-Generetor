@@ -317,7 +317,7 @@ export function buildPlugin({ ctx, pages, templates, posts, images, imagesDir, c
     // Social networks of the business: Yoast SEO organization profiles
     socials: socialLinks(project).map((s) => ({ key: s.key, url: s.url })),
     // The menu of the header is the Navigation Menu widget of UAE: installed also with Elementor Pro
-    uaeWidgets: /"widgetType":"(navigation-menu|hfe-basic-posts)"/.test(allDocs),
+    uaeWidgets: /"widgetType":"(navigation-menu|hfe-basic-posts|site-logo)"/.test(allDocs),
     // Without Elementor Pro the plugin itself displays the header and footer (no other addon needed)
     headerFooter: templates.some((t) => t.role === 'header' || t.role === 'footer'),
   };

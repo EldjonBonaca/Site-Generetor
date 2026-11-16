@@ -136,6 +136,9 @@ const WIDGETS = {
       .map((m) => `<li class="menu-item${m.url === R.current ? ' current-menu-item' : ''}"><a class="hfe-menu-item" href="${attr(m.url)}"${m.url === R.current ? ' aria-current="page"' : ''}>${esc(m.title)}</a></li>`)
       .join('')}</ul></nav>`;
   },
+  // The logo of the site (Site Logo widget of the WordPress site), leading to the Home page
+  'site-logo': (s, el, R) =>
+    `<div class="hfe-site-logo"><a href="${attr(R.home)}"><div class="hfe-site-logo-set"><div class="hfe-site-logo-container">${R.logo ? `<img class="hfe-site-logo-img" src="${attr(R.logo)}" alt="${attr(R.siteName)}">` : esc(R.siteName)}</div></div></a></div>`,
   // The services of the site (the posts widget of the WordPress site): one card per service page
   'hfe-basic-posts': (s, el, R) => {
     const posts = (R.posts || []).slice(0, Math.max(1, Number(s.posts_per_page) || 6));

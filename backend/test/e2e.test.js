@@ -331,7 +331,9 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   // Header: logo + the WordPress menu of the site; footer: services + contacts + copyright
   const header = zip.readAsText(root + 'templates/header.json');
   assert.equal(JSON.parse(header).type, 'header');
-  assert.match(header, /rossi-idraulica-logo\.webp/);
+  // The logo is the one of the site (Customizer), shown by the Site Logo widget: no image file in the header
+  assert.match(JSON.stringify(JSON.parse(header)), /"widgetType":"site-logo","settings":\{"site_logo_fallback":"no"/);
+  assert.doesNotMatch(header, /rossi-idraulica-logo\.webp/);
   assert.match(JSON.stringify(JSON.parse(header)), /"widgetType":"navigation-menu","settings":\{"menu":"main-menu"/, 'header menu: the WordPress menu (UAE Navigation Menu), not HTML links');
   assert.doesNotMatch(header, /<script|<style/, 'no code in the header');
   // The CSS of the whole site: a file for the manual import, the Additional CSS with the plugin

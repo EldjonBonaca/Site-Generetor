@@ -239,7 +239,12 @@ Wherever one of these services is presented or mentioned, stay faithful to what 
 }
 
 /** Instructions appended after the user prompt so the output is machine-readable. */
-export function technicalInstructions({ fields, languageLabel, pageTitle, role, links = [], includeStructure, extra = '', kit = false, notes = '' }) {
+export function technicalInstructions({ fields, languageLabel, pageTitle, role, links = [], includeStructure, extra = '', kit = false, notes = '', city = '' }) {
+  // The place of the focus keyphrases: the "City / service area" of the site data, never the town of the street address
+  const area = String(city || '').replace(/\s+/g, ' ').trim();
+  const place = area
+    ? `the place. The place is the "City / service area" of the site data: "${area}". Use it, written exactly like that, as the place of the focus keyphrase of every page (when it lists several places, the first one); never take the place from the street address, which is only shown in the contact details`
+    : 'the city';
   const shape = `{\n${fields.map((f) => `  ${JSON.stringify(f.id)}: "..."`).join(',\n')}\n}`;
   const hasLinks = fields.some((f) => f.format === 'link');
   const kitRules = kit
@@ -263,7 +268,7 @@ ${pages.length ? `Site structure: ${pages.map((l) => `${l.label} (${l.url})`).jo
       ? `\n- Fields marked [link]: the value must be exactly one of these URLs (choose the one matching the button/link text): ${links.map((l) => l.url).join(' , ')}`
       : ''
   }
-- SEO (Yoast SEO must rate every page green). "_seo.keyphrase" (if present): the focus keyphrase, the 2–4 word search that should find this page, in ${languageLabel}: the main word of the page or its service + the business type or service + the city (e.g. "galleria lavori idraulico Roma", "contatti idraulico Roma"); never the same keyphrase on two pages. Use the EXACT keyphrase (same words, same order):
+- SEO (Yoast SEO must rate every page green). "_seo.keyphrase" (if present): the focus keyphrase, the 2–4 word search that should find this page, in ${languageLabel}: the main word of the page or its service + the business type or service + ${place} (e.g. "galleria lavori idraulico Roma", "contatti idraulico Roma"); never the same keyphrase on two pages. Use the EXACT keyphrase (same words, same order):
   · at the beginning of "_seo.title" (40–60 characters) and once in "_seo.description" (120–156 characters);
   · in the short sentence under the page title in the banner (it is the first paragraph of the page) and in the first sentence of each long text;
   · in at least one subheading (the titles of the sections, h2/h3) but not in all of them;
@@ -292,7 +297,7 @@ export function buildPagePrompt({ promptContent, project, services, service, fie
     userPart +
     clientInstructions(notes) +
     serviceMaterial(services, service) +
-    technicalInstructions({ fields, languageLabel: vars.language, pageTitle, role, links, includeStructure: !usesStructure, extra, kit: Boolean(ctx?.kit), notes });
+    technicalInstructions({ fields, languageLabel: vars.language, pageTitle, role, links, includeStructure: !usesStructure, extra, kit: Boolean(ctx?.kit), notes, city: project.city });
   return { prompt, system: notes.trim() ? `${SYSTEM_PROMPT} ${CLIENT_SYSTEM}` : SYSTEM_PROMPT, vars };
 }
 

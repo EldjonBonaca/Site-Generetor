@@ -39,7 +39,7 @@ export const TEMPLATE_IMAGE = 'https://template.invalid/placeholder.jpg';
  * Version of the generated structure. Field ids depend on it: a generation made with another
  * version cannot be exported (exporter.js), it has to be generated again.
  */
-export const BUILDER_VERSION = 18;
+export const BUILDER_VERSION = 19;
 
 export const DOC_ROLES = ['home', 'about', 'services', 'gallery', 'contact', 'single_post', 'header', 'footer'];
 
@@ -1997,9 +1997,24 @@ function uaeMenu(b, site, o) {
   });
 }
 
-/** Logo image, or the site name when the project has no logo. */
+/**
+ * The logo of the site, or the site name when the project has no logo. The logo is the one of WordPress
+ * (Appearance → Customize → Site identity), shown by the Site Logo widget of UAE: changed there once, it
+ * changes in the header, the footer and wherever a template shows it. It leads to the Home page.
+ */
 function brand(b, site, o = {}) {
-  if (site.hasLogo) return b.picture('logo', { width: o.width || 180, mobileWidth: o.mobileWidth, align: o.align || 'left', size: o.size || 'medium', round: false });
+  if (site.hasLogo) {
+    return b.widget('site-logo', {
+      site_logo_fallback: 'no',
+      site_logo_size_size: o.size || 'medium',
+      align: o.align || 'left',
+      caption_source: 'no',
+      link_to: 'default',
+      width: px(o.width || 180),
+      ...(o.mobileWidth ? { width_mobile: px(o.mobileWidth) } : {}),
+      space: px(100, '%'),
+    });
+  }
   return b.heading(site.siteName, { tag: 'p', size: 24, align: o.align || 'left', color: o.color || b.ink.kicker, fixed: true });
 }
 
@@ -2287,7 +2302,8 @@ function headerCss(b) {
   return `.esg-header{position:relative;z-index:100}
 .esg-header .esg-hd-brand,.esg-header .esg-hd-cta{flex:0 0 auto!important;width:auto!important;max-width:none}
 .esg-header .esg-hd-nav{flex:1 1 auto!important;width:auto!important;min-width:0}
-.esg-ft-brand .elementor-widget-image img{max-width:100%;max-height:130px;object-fit:contain;object-position:left center}
+.esg-ft-brand .elementor-widget-image img,.esg-ft-brand .hfe-site-logo img{max-width:100%;max-height:130px;object-fit:contain;object-position:left center}
+.hfe-site-logo img{height:auto}
 .esg-nav .hfe-nav-menu__layout-horizontal .hfe-nav-menu{flex-wrap:nowrap}
 .esg-nav a.hfe-menu-item{white-space:nowrap}
 @media (max-width:1024px){

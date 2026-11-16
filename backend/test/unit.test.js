@@ -416,4 +416,9 @@ test('texts of the client (notes, service descriptions) reach every prompt as th
   assert.ok(article.includes('Interveniamo in giornata su caldaie a condensazione'));
   assert.equal(serviceMaterial(services, services[1]), '', 'nothing written about this service');
   assert.equal(serviceMaterial([services[1]]), '');
+  // The City / service area of the site data is the place of the focus keyphrases (not the town of the address)
+  const withCity = buildPagePrompt({ promptContent: 'Scrivi.', project: { ...project, city: 'Bergamo e provincia', address: 'Via Roma 1, Milano' }, services, service: null, fields, pageTitle: 'Home', role: 'home' }).prompt;
+  assert.ok(withCity.includes('The place is the "City / service area" of the site data: "Bergamo e provincia"'));
+  assert.ok(withCity.includes('never take the place from the street address'));
+  assert.ok(!about.includes('City / service area'), 'no city in the site data: the general rule');
 });

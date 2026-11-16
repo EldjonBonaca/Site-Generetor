@@ -271,6 +271,13 @@ const WIDGET_CSS = {
     sheet.add(`${sel} .esg-carousel img`, { 'border-radius': box(s.image_border_radius) });
     sheet.add(`${sel} .esg-carousel-arrow`, { color: color(s, 'arrows_color'), 'font-size': unit(s.arrows_size) });
   },
+  'site-logo'(sheet, sel, s) {
+    for (const [suffix, device] of DEVICES) {
+      sheet.add(`${sel} .hfe-site-logo-container`, { 'text-align': s[`align${suffix}`] }, device);
+      sheet.add(`${sel} .hfe-site-logo .hfe-site-logo-container img`, { width: unit(s[`width${suffix}`]) }, device);
+      sheet.add(`${sel} .hfe-site-logo img`, { 'max-width': unit(s[`space${suffix}`]) }, device);
+    }
+  },
   'hfe-basic-posts'(sheet, sel, s) {
     for (const [suffix, device] of DEVICES) {
       const cols = Number(s[`columns${suffix}`]);
@@ -402,6 +409,8 @@ button{font:inherit;cursor:pointer}
 .hfe-nav-menu{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;align-items:center}
 .hfe-nav-menu a.hfe-menu-item{display:block;transition:color .3s,background-color .3s}
 .hfe-nav-menu__layout-vertical .hfe-nav-menu{display:block}
+.hfe-site-logo a{display:block;text-decoration:none;color:inherit}
+.hfe-site-logo img{height:auto;vertical-align:middle}
 .hfe-posts-grid{display:grid}
 .hfe-post-image img{width:100%;height:auto;display:block}
 .hfe-post-title{margin-top:0;font-size:20px}

@@ -1015,6 +1015,23 @@ function prepare_elementor($node, array $r) {
 				array('wp' => array('title' => ''))
 			);
 		}
+		// Site Logo widget of UAE when UAE could not be installed: the logo as an image of free Elementor, linked
+		// to the Home page (it no longer follows the logo of the Customizer)
+		if ($node['widgetType'] === 'site-logo' && empty($r['uae_widgets'])) {
+			$old = $node['settings'];
+			$node['widgetType'] = 'image';
+			$node['settings'] = array_merge(
+				array_filter($old, function ($key) {
+					return strpos($key, '_') === 0 || in_array($key, array('align', 'width', 'width_mobile', 'width_tablet'), true);
+				}, ARRAY_FILTER_USE_KEY),
+				array(
+					'image' => array('url' => isset($r['logo']['url']) ? $r['logo']['url'] : '', 'id' => isset($r['logo']['id']) ? $r['logo']['id'] : '', 'source' => 'library'),
+					'image_size' => 'medium',
+					'link_to' => 'custom',
+					'link' => array('url' => home_url('/'), 'is_external' => '', 'nofollow' => ''),
+				)
+			);
+		}
 		// "WordPress Menu" widget: the site menu (Appearance -> Menus); the id also selects it in the Elementor editor
 		if ($node['widgetType'] === 'wp-widget-nav_menu') {
 			$wp = isset($node['settings']['wp']) && is_array($node['settings']['wp']) ? $node['settings']['wp'] : array();
@@ -1301,6 +1318,7 @@ function import_content() {
 		}, $menus),
 		'uae_menu' => use_uae(),
 		'uae_widgets' => uae_active(),
+		'logo' => (!empty($data['logo']) && isset($images[$data['logo']])) ? $images[$data['logo']] : array('id' => '', 'url' => ''),
 		'relative' => isset($data['relativeLinks']) ? (array) $data['relativeLinks'] : array(),
 		'form_fallback' => (!defined('ELEMENTOR_PRO_VERSION') && $shortcode) ? $shortcode : '',
 		'strings' => ($shortcode && !empty($data['contactForm']['placeholder'])) ? array($data['contactForm']['placeholder'] => $shortcode) : array(),
