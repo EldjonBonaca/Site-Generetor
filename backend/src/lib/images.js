@@ -1,6 +1,6 @@
 /** Export file names of the project images (shared by the exporter and the prompt variables). */
 import path from 'node:path';
-import { slugify } from './util.js';
+import { mainPlace, slugify } from './util.js';
 
 /**
  * Map(imageId -> exported file name), e.g. "plumber-london-boiler-repair.webp".
@@ -32,7 +32,7 @@ export function exportNames(images, imageSettings) {
  * @returns {(ext: string, fallback: string) => string}
  */
 export function clientNamer(project, existing) {
-  const base = slugify([project.site_name, project.city].filter((s) => s && s.trim()).join(' '), 60);
+  const base = slugify([project.site_name, mainPlace(project.city)].filter((s) => s && s.trim()).join(' '), 60);
   const used = new Set(existing.map((n) => path.parse(n || '').name));
   let n = 0;
   return (ext, fallback) => {

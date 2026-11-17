@@ -11,7 +11,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { AdmZip } from '../lib/zip.js';
-import { slugify } from '../lib/util.js';
+import { mainPlace, slugify } from '../lib/util.js';
 import { builtSite, contactForm, contactMenuItems, whatsappNumber } from './plan.js';
 import { cf7FromTemplate } from '../kits/form-template.js';
 import { LEGAL_PAGES, siteMenus } from '../templates/builder.js';
@@ -159,7 +159,7 @@ const IN_PLACE = { it: 'a', en: 'in', es: 'en', fr: 'à', de: 'in', pt: 'em' };
 export function siteTagline(ctx) {
   const { project, services } = ctx;
   const main = (services?.[0]?.name || project.industry || '').trim();
-  const city = (project.city || '').trim();
+  const city = mainPlace(project.city);
   if (!main) return city ? `${project.site_name} – ${city}` : '';
   return city ? `${main} ${IN_PLACE[project.language] || IN_PLACE.en} ${city}` : main;
 }

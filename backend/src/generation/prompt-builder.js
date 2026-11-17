@@ -2,7 +2,7 @@
  * Prompt construction: variable substitution + automatic technical instructions
  * that force a strict JSON answer.
  */
-import { LANGUAGES, stripHtml } from '../lib/util.js';
+import { LANGUAGES, placeOfPage, servicePlaces, stripHtml } from '../lib/util.js';
 import { exportNames, galleryPool } from '../lib/images.js';
 import { builtSite, copyrightText, projectMap } from './plan.js';
 import { DEFAULT_SECTIONS, describeSections, describeSpec } from '../templates/spec.js';
@@ -239,11 +239,17 @@ Wherever one of these services is presented or mentioned, stay faithful to what 
 }
 
 /** Instructions appended after the user prompt so the output is machine-readable. */
-export function technicalInstructions({ fields, languageLabel, pageTitle, role, links = [], includeStructure, extra = '', kit = false, notes = '', city = '' }) {
-  // The place of the focus keyphrases: the "City / service area" of the site data, never the town of the street address
+export function technicalInstructions({ fields, languageLabel, pageTitle, role, links = [], includeStructure, extra = '', kit = false, notes = '', city = '', areas = [] }) {
+  // The place of the focus keyphrase: one of the places of the "City / service area" of the site data (the main
+  // one; a service page takes them in turn: placeOfPage), never the town of the street address
   const area = String(city || '').replace(/\s+/g, ' ').trim();
+  const others = areas.filter((a) => a !== area);
   const place = area
-    ? `the place. The place is the "City / service area" of the site data: "${area}". Use it, written exactly like that, as the place of the focus keyphrase of every page (when it lists several places, the first one); never take the place from the street address, which is only shown in the contact details`
+    ? `the place. The place of THIS page is "${area}" (from the "City / service area" of the site data): use it, written exactly like that, as the place of its focus keyphrase, of its SEO title and of its texts; never take the place from the street address, which is only shown in the contact details${
+        others.length
+          ? `. The business serves ${areas.map((a) => `"${a}"`).join(', ')}: the other pages of the site aim at the other places, so do not put them in the keyphrase of this page; name the whole area served once where it is natural (who we are, where we work, the contact page), as a sentence, never as a list of keywords`
+          : ''
+      }`
     : 'the city';
   const shape = `{\n${fields.map((f) => `  ${JSON.stringify(f.id)}: "..."`).join(',\n')}\n}`;
   const hasLinks = fields.some((f) => f.format === 'link');
@@ -297,7 +303,7 @@ export function buildPagePrompt({ promptContent, project, services, service, fie
     userPart +
     clientInstructions(notes) +
     serviceMaterial(services, service) +
-    technicalInstructions({ fields, languageLabel: vars.language, pageTitle, role, links, includeStructure: !usesStructure, extra, kit: Boolean(ctx?.kit), notes, city: project.city });
+    technicalInstructions({ fields, languageLabel: vars.language, pageTitle, role, links, includeStructure: !usesStructure, extra, kit: Boolean(ctx?.kit), notes, city: placeOfPage(project.city, service ? services.findIndex((s) => s === service || (s.id != null && s.id === service.id)) : -1), areas: servicePlaces(project.city) });
   return { prompt, system: notes.trim() ? `${SYSTEM_PROMPT} ${CLIENT_SYSTEM}` : SYSTEM_PROMPT, vars };
 }
 

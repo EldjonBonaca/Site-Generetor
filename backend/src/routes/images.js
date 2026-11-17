@@ -4,7 +4,7 @@ import path from 'node:path';
 import { Router } from 'express';
 import { all, get, run, tx } from '../db/index.js';
 import { config } from '../config.js';
-import { badRequest, notFound, slugify } from '../lib/util.js';
+import { badRequest, mainPlace, notFound, slugify } from '../lib/util.js';
 import { requireOwnProvider } from '../lib/owner.js';
 import { loadContext } from '../generation/plan.js';
 import { createProvider } from '../ai/registry.js';
@@ -195,7 +195,7 @@ router.post('/projects/:id/images/seo-rename', (req, res) => {
   const ctx = loadContext(req.params.id);
   if (!ctx) throw notFound('Project');
   const { project, services } = ctx;
-  const head = [project.industry || project.site_name, project.city];
+  const head = [project.industry || project.site_name, mainPlace(project.city)];
   const used = new Set();
   let galleryN = 0;
   tx(() => {
@@ -246,7 +246,7 @@ router.post('/projects/:id/images/alt-text', async (req, res) => {
   const p = ctx.project;
   const prompt =
     `Write concise, descriptive ALT texts (max 125 characters, no "image of") for the images of the website of "${p.site_name}", ` +
-    `a ${p.industry || 'local'} business in ${p.city || 'its area'}. Include the business type or location only where natural.` +
+    `a ${p.industry || 'local'} business in ${mainPlace(p.city) || 'its area'}. Include the business type or location only where natural.` +
     clientInstructions(p.notes) +
     technicalInstructions({ fields, languageLabel: languageName(p.language), pageTitle: 'Image ALT texts', includeStructure: true, notes: p.notes });
 

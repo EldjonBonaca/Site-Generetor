@@ -15,7 +15,7 @@ const router = Router();
 /** What a project is exported as: a WordPress site (plugin) or a static website (HTML, CSS, JavaScript). */
 const PLATFORMS = ['wordpress', 'code'];
 const PROJECT_FIELDS = ['platform', 'site_name', 'phone', 'phone2', 'email', 'address', 'google_business_url', 'city', 'industry', 'language', 'notes', 'image_base_url', 'copyright', 'vat_number', 'whatsapp_enabled', 'whatsapp_number', ...SOCIAL_KEYS];
-const MAX_LEN = { platform: 20, site_name: 200, phone: 40, phone2: 40, email: 200, address: 1000, google_business_url: 2000, city: 200, industry: 200, notes: 15000, image_base_url: 500, copyright: 600, vat_number: 40, whatsapp_enabled: 1, whatsapp_number: 40, ...Object.fromEntries(SOCIAL_KEYS.map((k) => [k, 500])) };
+const MAX_LEN = { platform: 20, site_name: 200, phone: 40, phone2: 40, email: 200, address: 1000, google_business_url: 2000, city: 500, industry: 200, notes: 15000, image_base_url: 500, copyright: 600, vat_number: 40, whatsapp_enabled: 1, whatsapp_number: 40, ...Object.fromEntries(SOCIAL_KEYS.map((k) => [k, 500])) };
 
 export function serializeProject(row) {
   const { settings_json, ...rest } = row;

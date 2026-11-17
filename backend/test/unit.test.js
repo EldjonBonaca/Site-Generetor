@@ -418,7 +418,22 @@ test('texts of the client (notes, service descriptions) reach every prompt as th
   assert.equal(serviceMaterial([services[1]]), '');
   // The City / service area of the site data is the place of the focus keyphrases (not the town of the address)
   const withCity = buildPagePrompt({ promptContent: 'Scrivi.', project: { ...project, city: 'Bergamo e provincia', address: 'Via Roma 1, Milano' }, services, service: null, fields, pageTitle: 'Home', role: 'home' }).prompt;
-  assert.ok(withCity.includes('The place is the "City / service area" of the site data: "Bergamo e provincia"'));
+  assert.ok(withCity.includes('The place of THIS page is "Bergamo e provincia" (from the "City / service area" of the site data)'));
   assert.ok(withCity.includes('never take the place from the street address'));
+  assert.ok(!withCity.includes('The business serves'), 'one place: nothing about other places');
+
+  // Several places: the first is the main one, the service pages take them in turn
+  const { servicePlaces, mainPlace, placeOfPage } = await import('../src/lib/util.js');
+  assert.deepEqual(servicePlaces(' Milano,  Monza ; Bergamo\nmilano,, '), ['Milano', 'Monza', 'Bergamo']);
+  assert.equal(mainPlace('Bergamo, provincia di Bergamo, Lombardia'), 'Bergamo');
+  assert.equal(mainPlace(''), '');
+  assert.deepEqual([-1, 0, 1, 2, 3].map((i) => placeOfPage('Milano, Monza, Bergamo', i)), ['Milano', 'Milano', 'Monza', 'Bergamo', 'Milano']);
+  const many = { ...project, city: 'Milano, Monza, Bergamo' };
+  const three = [...services, { id: 3, name: 'Impianti', description: '', slug: 'impianti' }];
+  const homePrompt = buildPagePrompt({ promptContent: 'Scrivi.', project: many, services: three, service: null, fields, pageTitle: 'Home', role: 'home' }).prompt;
+  assert.ok(homePrompt.includes('The place of THIS page is "Milano"'), 'main pages: the main place');
+  assert.ok(homePrompt.includes('The business serves "Milano", "Monza", "Bergamo"'), 'the whole area is named in the texts');
+  const placeOf = (service) => /The place of THIS page is "([^"]+)"/.exec(buildPagePrompt({ promptContent: 'Scrivi.', project: many, services: three, service, fields, pageTitle: service.name, role: 'post' }).prompt)[1];
+  assert.deepEqual(three.map(placeOf), ['Milano', 'Monza', 'Bergamo'], 'each service page aims at the next place');
   assert.ok(!about.includes('City / service area'), 'no city in the site data: the general rule');
 });

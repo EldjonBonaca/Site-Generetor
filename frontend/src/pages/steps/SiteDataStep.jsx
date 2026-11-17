@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { X } from 'lucide-react';
 import { api } from '../../api.js';
 import { useT } from '../../i18n/index.jsx';
 import { useAutosave } from '../../hooks/useAutosave.js';
@@ -43,6 +44,58 @@ const isUrl = (v) => {
   }
 };
 const FIELDS = ['site_name', 'phone', 'phone2', 'email', 'address', 'google_business_url', 'city', 'industry', 'language', 'notes', 'copyright', 'vat_number', 'whatsapp_enabled', 'whatsapp_number', ...SOCIALS.map((s) => s.key)];
+
+/** Places typed separated by commas (same rule as the generator: backend/src/lib/util.js servicePlaces). */
+export function splitPlaces(value) {
+  const seen = new Set();
+  return String(value || '')
+    .split(/[,;\n]+/)
+    .map((p) => p.replace(/\s+/g, ' ').trim())
+    .filter((p) => p && !seen.has(p.toLowerCase()) && seen.add(p.toLowerCase()));
+}
+
+/**
+ * The places of the service area as labels in one field: Enter, a comma or leaving the field adds the place
+ * being typed, the × of a label (or Backspace in the empty field) removes it. The value stays one text, the
+ * places separated by ", ".
+ */
+function PlacesInput({ id, value, onChange, placeholder, mainLabel, removeLabel }) {
+  const places = splitPlaces(value);
+  const [draft, setDraft] = useState('');
+  const commit = (text) => {
+    const next = splitPlaces([...places, ...splitPlaces(text)].join(','));
+    setDraft('');
+    if (next.join(', ') !== places.join(', ')) onChange(next.join(', '));
+  };
+  const remove = (i) => onChange(places.filter((_, n) => n !== i).join(', '));
+  return (
+    <div className="flex min-h-[42px] flex-wrap items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2 py-1.5 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-100">
+      {places.map((place, i) => (
+        <span key={place} className={`inline-flex items-center gap-1 rounded-md py-0.5 pr-1 pl-2 text-sm ${i === 0 ? 'bg-brand-50 text-brand-800' : 'bg-slate-100 text-slate-700'}`}>
+          {place}
+          {i === 0 && places.length > 1 && <span className="rounded bg-brand-100 px-1 text-[10px] font-semibold tracking-wide text-brand-700 uppercase">{mainLabel}</span>}
+          <button type="button" onClick={() => remove(i)} className="rounded p-0.5 text-slate-400 hover:bg-white hover:text-slate-700" aria-label={`${removeLabel}: ${place}`} title={removeLabel}>
+            <X className="size-3" />
+          </button>
+        </span>
+      ))}
+      <input
+        id={id}
+        value={draft}
+        placeholder={places.length ? '' : placeholder}
+        className="min-w-[8rem] flex-1 border-0 bg-transparent p-1 text-sm text-slate-900 placeholder:text-slate-400 focus:ring-0 focus:outline-none"
+        onChange={(e) => (/[,;]/.test(e.target.value) ? commit(e.target.value) : setDraft(e.target.value))}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            commit(draft);
+          } else if (e.key === 'Backspace' && !draft && places.length) remove(places.length - 1);
+        }}
+        onBlur={() => draft.trim() && commit(draft)}
+      />
+    </div>
+  );
+}
 
 export default function SiteDataStep({ project, setProject }) {
   const { t } = useT();
@@ -134,8 +187,23 @@ export default function SiteDataStep({ project, setProject }) {
           <Field label={t('Email')} required error={err('email')}>
             {(id) => <Input id={id} type="email" value={form.email} onChange={set('email')} onBlur={blur('email')} placeholder="info@example.com" invalid={!!err('email')} />}
           </Field>
-          <Field label={t('City / Service area')}>
-            {(id) => <Input id={id} value={form.city} onChange={set('city')} placeholder="London" />}
+          <Field
+            label={t('City / Service area')}
+            hint={t('One or more places (two cities, a city and its province, a region…): type a place and press Enter or a comma. The first is the main one, used in the SEO keyphrase of the main pages; the service pages take the places in turn, so the site is found in each of them.')}
+          >
+            {(id) => (
+              <PlacesInput
+                id={id}
+                value={form.city}
+                placeholder="London"
+                mainLabel={t('main')}
+                removeLabel={t('Remove')}
+                onChange={(value) => {
+                  setForm((f) => ({ ...f, city: value }));
+                  schedule({ city: value });
+                }}
+              />
+            )}
           </Field>
           <Field label={t('Address')} required error={err('address')}>
             {(id) => <Textarea id={id} rows={2} value={form.address} onChange={set('address')} onBlur={blur('address')} placeholder="1 High Street&#10;London W1 1AA" />}

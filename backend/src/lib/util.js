@@ -53,6 +53,30 @@ export function pick(obj, keys) {
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * The places of the "City / service area" of a site, as typed separated by commas (or semicolons, new
+ * lines): two cities, a city and its province, a region... The first one is the main place.
+ */
+export function servicePlaces(city) {
+  const seen = new Set();
+  return String(city || '')
+    .split(/[,;\n]+/)
+    .map((p) => p.replace(/\s+/g, ' ').trim())
+    .filter((p) => p && !seen.has(p.toLowerCase()) && seen.add(p.toLowerCase()));
+}
+/** The main place of a site (the first of its service area), '' when none. */
+export const mainPlace = (city) => servicePlaces(city)[0] || '';
+/**
+ * The place of a page: the main one, except the page of a service, which takes the places in turn
+ * (service 1 the first, service 2 the second... then again from the first), so the site is found in
+ * every place it serves and no two pages aim at the same search.
+ */
+export function placeOfPage(city, serviceIndex = -1) {
+  const places = servicePlaces(city);
+  if (!places.length) return '';
+  return serviceIndex >= 0 ? places[serviceIndex % places.length] : places[0];
+}
+
 /** Remove HTML tags (used for previews, content.md and length estimates). */
 export function stripHtml(html) {
   return String(html || '')

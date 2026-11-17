@@ -764,4 +764,7 @@ export default {
   "Without an answer the session closes by itself. Work already saved is not lost.": "Senza risposta la sessione si chiude da sola. Il lavoro già salvato non va perso.",
   "Instructions the AI must follow in every text of the site, and the texts you already have: who the business is (About page), what each service consists of, strengths, years of experience, tone of voice, things to avoid… The AI builds the pages on them. ({n}/{max} characters)": "Istruzioni che l'AI deve seguire in ogni testo del sito, e i testi che hai già: chi è l'attività (pagina Chi siamo), in cosa consiste ogni servizio, punti di forza, anni di esperienza, tono di voce, cose da evitare… L'AI costruisce le pagine su di essi. ({n}/{max} caratteri)",
   "Optional: what you write here is the base of the texts about this service (the AI corrects and expands it).": "Facoltativo: quello che scrivi qui è la base dei testi su questo servizio (l'AI lo corregge e lo amplia).",
+  "One or more places (two cities, a city and its province, a region…): type a place and press Enter or a comma. The first is the main one, used in the SEO keyphrase of the main pages; the service pages take the places in turn, so the site is found in each of them.": "Uno o più luoghi (due città, una città e la sua provincia, una regione…): scrivi un luogo e premi Invio o la virgola. Il primo è il principale, usato nella parola chiave SEO delle pagine principali; le pagine dei servizi prendono i luoghi a turno, così il sito si trova in ognuno.",
+  "main": "principale",
+  "Remove": "Rimuovi",
 };
