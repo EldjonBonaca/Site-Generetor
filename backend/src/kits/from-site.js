@@ -21,7 +21,7 @@ import path from 'node:path';
 import { parse } from 'node-html-parser';
 import { analyzeReference, referenceUrl, safeGet } from '../templates/reference.js';
 import { badRequest } from '../lib/util.js';
-import { CAPTURE_CSS, captureContent, captureElement, cleanPage, findSiteFooter, findSiteHeader, htmlWidget, stableId } from './html-capture.js';
+import { CAPTURE_CSS, CAROUSEL_SCRIPT, captureContent, captureElement, captureHeader, cleanPage, findSiteFooter, findSiteHeader, htmlWidget, stableId } from './html-capture.js';
 
 const MAX_PAGES = 8;
 const MAX_HTML = 3_000_000;
@@ -79,12 +79,18 @@ export function undoLazyLoading(root, base) {
       .filter(Boolean)
       .join(', ');
   const first = (el, names) => names.map((n) => el.getAttribute(n)).find((v) => v && !/^data:/i.test(v));
+  // Any other plugin: an attribute named data-…src / data-…srcset holding an address (WP Fastest Cache: data-wpfc-original-src)
+  const other = (el, pattern) =>
+    Object.entries(el.attributes || {}).find(([name, value]) => pattern.test(name) && value && !/^data:/i.test(value) && /^(https?:)?\/\/|^\/|\.(jpe?g|png|gif|webp|svg|avif|mp4|webm)(\?|$|\s)/i.test(value));
   for (const el of root.querySelectorAll('img, source, iframe, video')) {
-    const src = first(el, ['data-src', 'data-lazy-src', 'data-orig-src', 'data-original', 'data-litespeed-src', 'data-lazy']);
+    const extra = other(el, /^data-[\w-]*src$/i);
+    const extraSet = other(el, /^data-[\w-]*srcset$/i);
+    const src = first(el, ['data-src', 'data-lazy-src', 'data-orig-src', 'data-original', 'data-litespeed-src', 'data-lazy']) || extra?.[1];
     const current = el.getAttribute('src');
     if (src) el.setAttribute('src', abs(src));
     else if (current && !/^data:/i.test(current)) el.setAttribute('src', abs(current));
-    const srcset = first(el, ['data-srcset', 'data-lazy-srcset']) || el.getAttribute('srcset');
+    const srcset = first(el, ['data-srcset', 'data-lazy-srcset']) || extraSet?.[1] || el.getAttribute('srcset');
+    for (const found of [extra, extraSet]) if (found) el.removeAttribute(found[0]);
     if (srcset && !/^data:/i.test(srcset)) el.setAttribute('srcset', absSet(srcset));
     const sizes = first(el, ['data-sizes', 'data-lazy-sizes']);
     if (sizes && sizes !== 'auto') el.setAttribute('sizes', sizes);
@@ -444,10 +450,6 @@ function prepareCarousels(node) {
   }
   return found;
 }
-
-/** Moves the carousels of the widget it is in: autoplay (paused under the mouse), arrows, back to the first slide at the end. */
-const CAROUSEL_SCRIPT =
-  '<script>(function(s){var root=s.parentNode;if(!root)return;root.querySelectorAll("[data-esg-carousel]").forEach(function(w){var step=function(d){var max=w.scrollWidth-w.clientWidth;var slide=w.children[0]?w.children[0].getBoundingClientRect().width+(parseFloat(getComputedStyle(w).columnGap)||0):w.clientWidth;var to=w.scrollLeft+d*slide;if(d>0&&w.scrollLeft>=max-4)to=0;if(d<0&&w.scrollLeft<=4)to=max;w.scrollTo({left:to,behavior:"smooth"})};var box=w.closest(".swiper,.swiper-container")||w.parentNode;var scope=box.parentNode||box;scope.querySelectorAll(".swiper-button-next,.slick-next,.owl-next").forEach(function(b){b.addEventListener("click",function(e){e.preventDefault();step(1)})});scope.querySelectorAll(".swiper-button-prev,.slick-prev,.owl-prev").forEach(function(b){b.addEventListener("click",function(e){e.preventDefault();step(-1)})});var delay=+w.getAttribute("data-esg-carousel");if(delay&&!matchMedia("(prefers-reduced-motion: reduce)").matches)setInterval(function(){if(!w.matches(":hover")&&w.scrollWidth>w.clientWidth+4)step(1)},delay)})})(document.currentScript)</script>';
 
 /** Layout of the carousels of prepareCarousels: one row of slides that snaps, no scrollbar; one slide per view on phones. */
 export const CAROUSEL_CSS = `
@@ -851,6 +853,61 @@ export function fontImports(css, fontLinks = []) {
     .map((f) => `@import url("https://fonts.googleapis.com/css?family=${encodeURIComponent(f).replace(/%20/g, '+')}:100,200,300,400,500,600,700,800,900,400italic,700italic&display=swap");`);
 }
 
+/** Icon fonts: never replaced by a text font. */
+const ICON_FONT = /icon|awesome|glyph|slick|swiper|dashicons|eicons|icomoon|themify|linearicons|material|symbols|star|flaticon|ionicons|feather|bootstrap/i;
+/** Font files any website may load (fonts served by a CDN allow it; the fonts of a site do not). */
+const OPEN_FONT_HOST = /fonts\.gstatic\.com|fonts\.googleapis\.com|cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|use\.fontawesome\.com|use\.typekit\.net|fonts\.bunny\.net|unpkg\.com|url\(\s*["']?data:/i;
+const FONT_AWESOME_4 =
+  '@font-face{font-family:"FontAwesome";src:url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/fonts/fontawesome-webfont.woff2") format("woff2"),url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/fonts/fontawesome-webfont.woff") format("woff");font-weight:normal;font-style:normal}';
+
+/** Google font used in place of a font hosted by the other site: { family, generic, weight, italic } from its name ("BwGradual-BoldItalic"). */
+export function fontSubstitute(name, block = '') {
+  const n = String(name);
+  const weight = /thin|hairline/i.test(n) ? 100
+    : /extra[-_ ]?light|ultra[-_ ]?light/i.test(n) ? 200
+    : /light/i.test(n) ? 300
+    : /medium/i.test(n) ? 500
+    : /semi[-_ ]?bold|demi[-_ ]?bold/i.test(n) ? 600
+    : /extra[-_ ]?bold|ultra[-_ ]?bold/i.test(n) ? 800
+    : /black|heavy/i.test(n) ? 900
+    : /bold/i.test(n) ? 700
+    : Number(/font-weight\s*:\s*(\d{3})/i.exec(block)?.[1]) || (/font-weight\s*:\s*bold/i.test(block) ? 700 : 400);
+  const italic = /italic|oblique/i.test(n) || /font-style\s*:\s*(italic|oblique)/i.test(block);
+  if (/mono|code|courier/i.test(n)) return { family: 'Roboto Mono', generic: 'monospace', weight, italic };
+  if (/serif|garamond|playfair|times|georgia|baskerville|didot|bodoni|caslon|minion|merriweather|lora\b/i.test(n) && !/sans/i.test(n)) return { family: 'Playfair Display', generic: 'serif', weight, italic };
+  return { family: 'Plus Jakarta Sans', generic: 'sans-serif', weight, italic };
+}
+
+/**
+ * Fonts the other site hosts itself (@font-face with its own files) cannot be loaded by another website
+ * (the browser refuses font files of another site), and they are that site's licence: the texts would fall
+ * back to a default serif font. Each of them is replaced by a similar Google font of the same weight;
+ * Font Awesome 4 is loaded from its public CDN. Sheets are changed in place ([{ text }]).
+ */
+export function substituteFonts(sheets) {
+  const map = new Map();
+  for (const sheet of sheets) {
+    sheet.text = String(sheet.text || '').replace(/@font-face\s*\{[^}]*\}/gi, (block) => {
+      const name = /font-family\s*:\s*["']?([^;"'}]+)/i.exec(block)?.[1]?.trim();
+      if (!name || OPEN_FONT_HOST.test(block)) return block;
+      if (/^font ?awesome$/i.test(name)) return FONT_AWESOME_4;
+      if (ICON_FONT.test(name)) return block;
+      map.set(name.toLowerCase(), fontSubstitute(name, block));
+      return '';
+    });
+  }
+  if (!map.size) return map;
+  for (const sheet of sheets) {
+    sheet.text = sheet.text.replace(/font-family\s*:\s*([^;}]+)/gi, (decl, list) => {
+      const sub = map.get(list.split(',')[0].replace(/["']/g, '').replace(/!important/i, '').trim().toLowerCase());
+      if (!sub) return decl;
+      const important = /!important/i.test(list) ? '!important' : '';
+      return `font-family:"${sub.family}",${sub.generic}${important};font-weight:${sub.weight}${sub.italic ? ';font-style:italic' : ''}`;
+    });
+  }
+  return map;
+}
+
 // ------------------------------------------------------------------------------------ the kit --
 
 /** Title of a page template, from which the kit reader guesses its role (home, about, services, contact, gallery). */
@@ -871,13 +928,22 @@ export function writeKitFromSite(site, dir) {
   let footer = null;
   const docs = [];
   let htmlPages = 0;
+  // Before anything reads the CSS: the fonts only the other site can load become Google fonts
+  substituteFonts([...site.css, ...(site.coreCss || [])]);
+  const cssText = site.css.map((c) => c.text).join('\n');
+  let headerCss = '';
   site.pages.forEach((page, i) => {
     cleanPage(page.root);
     const found = pageDocuments(page.root, page.url.href);
     header ||= found.header;
     const siteHeader = findSiteHeader(page.root);
     const siteFooter = findSiteFooter(page.root);
-    // A footer that is not made with Elementor is copied from its HTML (the header is not: html-capture.js)
+    // A header that is not made with Elementor is rebuilt from its HTML (logo, menu of the new site, button) in
+    // its look; a footer is copied from its HTML
+    if (!header && siteHeader) {
+      header = captureHeader(siteHeader, `${page.url.pathname}|header`, cssText, page.url.href);
+      headerCss = header?.css || '';
+    }
     if (!footer) footer = found.footer || captureElement(page.root, siteFooter, `${page.url.pathname}|footer`);
     if (found.page) docs.push({ title: pageTitle(page, i), doc: found.page });
     else {
@@ -928,12 +994,12 @@ export function writeKitFromSite(site, dir) {
   // they place beyond the edge of the page scrolls sideways inside the widget instead of widening the whole page
   // Their blocks hidden until a script reveals them (on load / on scroll) are shown as they are
   // (clipped at the edge of the page, without scrollbars: "clip" keeps sticky elements working)
-  const addonSafety = notes.size
+  const addonSafety = notes.size || htmlPages
     ? '\nhtml,body{overflow-x:clip}\n.elementor-widget-html{max-width:100%}' +
       CAROUSEL_CSS +
       '\n.elementor-widget-html :is([class*="--load"],[class*="scroll-reveal"],[class*="-reveal "],.wow,[data-aos],.elementor-invisible,.reveal,.is-hidden-until-load){opacity:1!important;visibility:visible!important}'
     : '';
-  fs.writeFileSync(path.join(dir, 'site.css'), `${fontImports(css, site.fontLinks).join('\n')}\n${themeVariables(css, site.vars)}${css}${addonSafety}${CAPTURE_CSS}`);
+  fs.writeFileSync(path.join(dir, 'site.css'), `${fontImports(css, site.fontLinks).join('\n')}\n${themeVariables(css, site.vars)}${css}${addonSafety}${CAPTURE_CSS}${headerCss}`);
   // Elementor frontend of the other site, for the preview only (kits/preview.js)
   if (site.coreCss?.length) fs.writeFileSync(path.join(dir, 'preview.css'), adaptCss(site.coreCss, ids, used).css);
   const title = (site.pages[0].root.querySelector('title')?.text || new URL(site.url).hostname).replace(/\s+/g, ' ').trim().slice(0, 150);

@@ -186,7 +186,7 @@ test('a website not built with Elementor is copied from its HTML: sections with 
   const site = await crawlSite('plain.example', { fetchImpl: fetchPlain, lookup });
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esg-kit-'));
   const out = writeKitFromSite(site, dir);
-  assert.deepEqual([out.pages, out.htmlPages, out.header, out.footer], [1, 1, false, true], 'the page and the footer from the HTML; the header is built by the generator');
+  assert.deepEqual([out.pages, out.htmlPages, out.header, out.footer], [1, 1, true, true], 'the page and the footer from the HTML; the header rebuilt as widgets');
 
   const info = readKit(dir);
   const home = loadKitTemplate(dir, info.templates.find((t) => t.suggestedRole === 'home').id);
@@ -356,4 +356,59 @@ ${w('l000001', 'icon-list', 'elementor-icon-list--layout-inline elementor-list-i
   // A selector that already starts at the body stays valid
   const { css } = adaptCss([{ base: 'https://x.example/a.css', text: 'body:not(.rtl) .elementor-12 .elementor-element.elementor-element-i000001{right:24px}.elementor-12 .elementor-element.elementor-element-i000001{bottom:24px}' }], new Map([['i000001', {}]]));
   assert.equal(css, ':is(body,.esg-body):not(.rtl) .elementor .elementor-element.elementor-element-i000001{right:24px}body .elementor .elementor-element.elementor-element-i000001{bottom:24px}');
+});
+
+test('a website not built with Elementor: its header rebuilt as widgets, its own fonts replaced, its sliders and lazy images working', async () => {
+  const { substituteFonts, fontSubstitute, undoLazyLoading } = await import('../src/kits/from-site.js');
+  const { captureHeader, prepareSliders } = await import('../src/kits/html-capture.js');
+  const { parse } = await import('node-html-parser');
+
+  // Fonts hosted by the other site cannot be loaded from another website: a Google font of the same weight
+  const sheets = [
+    { text: "@font-face{font-family:'BwGradual-Bold';src:url(//ref.example/fonts/BwGradual-Bold.woff2) format('woff2')}@font-face{font-family:'FontAwesome';src:url(//ref.example/fa/fontawesome-webfont.woff2)}@font-face{font-family:'Inter';src:url(https://fonts.gstatic.com/s/inter/v1/a.woff2)}@font-face{font-family:'slick';src:url(//ref.example/slick.woff)}" },
+    { text: "h1{font-family:'BwGradual-Bold'}p{font-family:'BwGradual-Light',Arial!important}i{font-family:FontAwesome}b{font-family:'Inter'}" },
+  ];
+  const fonts = substituteFonts(sheets);
+  assert.deepEqual([...fonts.keys()], ['bwgradual-bold']);
+  assert.doesNotMatch(sheets[0].text, /BwGradual/);
+  assert.match(sheets[0].text, /cdnjs\.cloudflare\.com\/ajax\/libs\/font-awesome\/4\.7\.0\/fonts\/fontawesome-webfont\.woff2/, 'Font Awesome 4 from its public CDN');
+  assert.match(sheets[0].text, /fonts\.gstatic\.com\/s\/inter/, 'a font any site may load stays');
+  assert.match(sheets[0].text, /font-family:'slick'/, 'an icon font is never replaced by a text font');
+  assert.match(sheets[1].text, /h1\{font-family:"Plus Jakarta Sans",sans-serif;font-weight:700\}/);
+  assert.match(sheets[1].text, /p\{font-family:'BwGradual-Light',Arial!important\}/, 'a font without a file on the site is left alone');
+  assert.deepEqual(fontSubstitute('Acme Serif-SemiBoldItalic'), { family: 'Playfair Display', generic: 'serif', weight: 600, italic: true });
+  assert.equal(fontSubstitute('Brand-ExtraLight').weight, 200);
+
+  // Lazy loading of any cache plugin (WP Fastest Cache keeps the address in data-wpfc-original-src)
+  const lazy = parse('<img src="/blank.gif" data-wpfc-original-src="/img/team.jpg" data-wpfc-original-srcset="/img/team-2x.jpg 2x"><img src="/img/logo.svg" data-title="x">');
+  undoLazyLoading(lazy, 'https://ref.example/');
+  assert.equal(lazy.querySelectorAll('img')[0].getAttribute('src'), 'https://ref.example/img/team.jpg');
+  assert.equal(lazy.querySelectorAll('img')[0].getAttribute('srcset'), 'https://ref.example/img/team-2x.jpg 2x');
+  assert.equal(lazy.querySelectorAll('img')[1].getAttribute('src'), 'https://ref.example/img/logo.svg');
+
+  // Sliders made by a script: the element whose children are the slides becomes a carousel of ours
+  const page = parse('<section class="home-slider-section"><div class="home-slider"><div class="home-slider-content"><div class="slider-item"></div><div class="slider-item"></div><div class="slider-item"></div></div></div><ul class="slider-menu"><li class="a">x</li><li class="a">y</li></ul><div class="reviews-slider"><div class="col">' + 'Una recensione lunga abbastanza da contare come testo. '.repeat(2) + '</div><div class="col">' + 'Un\'altra recensione lunga abbastanza da contare. '.repeat(2) + '</div><div class="col">' + 'Terza recensione lunga abbastanza da contare come testo. '.repeat(2) + '</div><div class="col">' + 'Quarta recensione lunga abbastanza da contare come testo. '.repeat(2) + '</div></div></section>');
+  prepareSliders(page);
+  assert.equal(page.querySelector('.home-slider-content').getAttribute('data-esg-carousel'), '5000');
+  assert.match(page.querySelector('.home-slider-content').getAttribute('style'), /--esg-per-d:1;--esg-gap:0px/, 'photo slides: one at a time');
+  assert.match(page.querySelector('.reviews-slider').getAttribute('style'), /--esg-per-d:3;--esg-gap:24px/, 'text slides: three in view');
+  for (const sel of ['.home-slider-section', '.home-slider', '.slider-menu']) assert.equal(page.querySelector(sel).getAttribute('data-esg-carousel') ?? null, null, sel + ' is not the row of slides');
+
+  // Header: logo, the menu of the new site, the button; look read from the CSS of the site
+  const css = "header{position:fixed;top:0}.wrap{padding-left:50px;padding-right:50px}.grt-menu li a{color:#222222;font-family:'Plus Jakarta Sans',sans-serif;font-size:15px;font-weight:500}.grt-menu li a:hover{color:#FF6600}.standard-button1{background-color:#FF6600;color:#FFFFFF;border-radius:2px;font-size:14px}";
+  const headerEl = parse('<header><div class="wrap"><a class="logo-header" href="/"><img src="/img/logo1.svg" alt="logo"></a><nav><a href="https://app.example/get" class="standard-button1 header-getapp">Scarica l\'app</a><ul class="grt-menu"><li><a href="/chi-siamo/">Chi Siamo</a></li><li><a href="/servizi/">Servizi</a></li></ul></nav></div></header>').querySelector('header');
+  const header = captureHeader(headerEl, '/|header', css, 'https://ref.example/');
+  const row = header.content[0];
+  assert.deepEqual(row.elements.map((e) => e.widgetType), ['image', 'navigation-menu', 'button']);
+  assert.equal(row.settings.css_classes, 'esg-hd-copied esg-hd-pinned', 'the header of the site stays at the top of the screen: this one too');
+  assert.equal(row.settings.content_width, 'full', 'no maximum width on the site: the whole screen');
+  assert.equal(row.settings.padding.left, '50');
+  const [logo, menu, button] = row.elements;
+  assert.equal(logo.settings.image.url, 'https://ref.example/img/logo1.svg');
+  assert.deepEqual([menu.settings.color_menu_item, menu.settings.color_menu_item_hover, menu.settings.menu_typography_font_family, menu.settings.menu_typography_font_size.size, menu.settings.menu_typography_font_weight], ['#222222', '#FF6600', 'Plus Jakarta Sans', 15, '500']);
+  assert.equal(menu.settings.menu, '', 'the menu of the new site, not the links of the other one');
+  assert.deepEqual([button.settings.text, button.settings.background_color, button.settings.button_text_color, button.settings.border_radius.top], ["Scarica l'app", '#FF6600', '#FFFFFF', '2']);
+  assert.match(header.css, /\.esg-hd-copied\.esg-hd-pinned\{position:fixed;top:0;left:0;right:0;z-index:9999\}/);
+  assert.match(header.css, /\.esg-hd-copied \.elementor-button\{background-color:#FF6600;color:#FFFFFF;border-radius:2px/);
+  assert.equal(captureHeader(parse('<header><p>Solo testo</p></header>').querySelector('header'), 'k', ''), null, 'nothing to rebuild');
 });
