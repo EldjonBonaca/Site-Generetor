@@ -128,7 +128,8 @@ function ServiceRow({ service, index, image, onChange, onRemove, onSaved }) {
   });
 
   const set = (key) => (e) => {
-    const value = e.target.value;
+    // The name of a service starts with a capital letter, also when it is typed in lowercase
+    const value = key === 'name' ? e.target.value.replace(/^\p{Ll}/u, (c) => c.toLocaleUpperCase()) : e.target.value;
     if (key === 'slug') slugEdited.current = true;
     setForm((f) => ({ ...f, [key]: value }));
     schedule({ [key]: value });

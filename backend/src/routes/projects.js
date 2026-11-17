@@ -186,7 +186,8 @@ router.post('/projects/:id/services', (req, res) => {
 router.patch('/services/:sid', (req, res) => {
   const s = get('SELECT * FROM services WHERE id = ?', req.params.sid);
   if (!s) throw notFound('Service');
-  const name = req.body?.name !== undefined ? String(req.body.name).slice(0, 200) : s.name;
+  // First letter uppercase (nothing else changes while the name is being typed: no trimming here)
+  const name = req.body?.name !== undefined ? String(req.body.name).slice(0, 200).replace(/^\p{Ll}/u, (c) => c.toLocaleUpperCase()) : s.name;
   const description = req.body?.description !== undefined ? String(req.body.description).slice(0, 6000) : s.description;
   let slug = s.slug;
   if (req.body?.slug !== undefined && req.body.slug !== s.slug) slug = uniqueSlug(s.project_id, req.body.slug || name, s.id);
