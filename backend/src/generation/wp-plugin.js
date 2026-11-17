@@ -12,7 +12,8 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { AdmZip } from '../lib/zip.js';
 import { slugify } from '../lib/util.js';
-import { contactForm, contactMenuItems, whatsappNumber } from './plan.js';
+import { builtSite, contactForm, contactMenuItems, whatsappNumber } from './plan.js';
+import { cf7FromTemplate } from '../kits/form-template.js';
 import { LEGAL_PAGES, siteMenus } from '../templates/builder.js';
 import { listBundledPlugins, bundledPluginPath } from '../lib/bundled-plugins.js';
 import { socialLinks } from '../lib/socials.js';
@@ -228,6 +229,7 @@ function cf7Form(texts) {
 function contactFormInfo(ctx) {
   const form = contactForm(ctx);
   const texts = FORM_TEXTS[ctx.project.language] || FORM_TEXTS.en;
+  const template = ctx.kit ? builtSite(ctx)?.formTemplate : null;
   return {
     plugin: form.plugin,
     name: form.name,
@@ -236,7 +238,8 @@ function contactFormInfo(ctx) {
     recipient: ctx.project.email,
     subject: `${texts.subject} – ${ctx.project.site_name}`,
     success: texts.success,
-    ...cf7Form(texts),
+    // A site copied from a website: the form keeps the markup of the form of that page (its CSS styles it)
+    ...(template ? cf7FromTemplate(template, texts) : cf7Form(texts)),
   };
 }
 

@@ -412,3 +412,57 @@ test('a website not built with Elementor: its header rebuilt as widgets, its own
   assert.match(header.css, /\.esg-hd-copied \.elementor-button\{background-color:#FF6600;color:#FFFFFF;border-radius:2px/);
   assert.equal(captureHeader(parse('<header><p>Solo testo</p></header>').querySelector('header'), 'k', ''), null, 'nothing to rebuild');
 });
+
+test('the contact form of a copied page keeps its markup: Contact Form 7 form and plain HTML form written from it', async () => {
+  const { contactFormRegion, formTemplate, cf7FromTemplate, htmlFromTemplate } = await import('../src/kits/form-template.js');
+  const block =
+    '<section class="contact"><h2>Scrivici</h2><form role="search"><input name="s"></form>' +
+    '<div class="wpcf7"><form action="/#wpcf7-f1" method="post" class="wpcf7-form init my-form"><fieldset class="hidden-fields-container"><input type="hidden" name="_wpcf7" value="217"></fieldset>' +
+    '<div class="row"><div class="col"><span class="wpcf7-form-control-wrap" data-name="your-name"><input class="wpcf7-form-control wpcf7-text big" placeholder="nome (richiesto)" type="text" name="your-name"></span>' +
+    '<input class="wpcf7-form-control wpcf7-email" placeholder="email" type="email" name="your-email"><input class="wpcf7-form-control wpcf7-text" placeholder="telefono" type="text" name="your-number">' +
+    '<input type="text" name="azienda" placeholder="Azienda"><select name="x"><option>a</option></select></div>' +
+    '<div class="col"><textarea class="wpcf7-form-control wpcf7-textarea" name="your-message"></textarea><div class="terms"><span class="wpcf7-form-control wpcf7-acceptance"><span class="wpcf7-list-item"><label><input type="checkbox" name="ok" value="1"><span>Accetto la <a href="https://ref.example/privacy/">informativa</a></span></label></span></span></div></div></div>' +
+    '<input class="wpcf7-form-control wpcf7-submit has-spinner send" type="submit" value="Invia"><p style="display: none !important;" class="akismet-fields-container"><textarea name="hp"></textarea></p><div class="wpcf7-response-output"></div></form></div></section>';
+  const region = contactFormRegion(block);
+  assert.match(region.html, /^<form action="\/#wpcf7-f1"/, 'the search form is not the contact form');
+  const tpl = formTemplate(region.html);
+  assert.deepEqual(tpl.fields.map((x) => x.kind), ['name', 'email', 'phone', 'extra', 'message', 'consent', 'submit']);
+  assert.equal(tpl.wrapClass, 'my-form');
+  assert.equal(tpl.markup, '<div class="row"><div class="col"><esg-f i="0"></esg-f><esg-f i="1"></esg-f><esg-f i="2"></esg-f><esg-f i="3"></esg-f></div><div class="col"><esg-f i="4"></esg-f><div class="terms"><esg-f i="5"></esg-f></div></div></div><esg-f i="6"></esg-f>');
+  assert.doesNotMatch(tpl.markup, /hidden|akismet|select|response-output|_wpcf7/);
+
+  const texts = { name: ['Nome e cognome', 'Il tuo nome'], email: ['Email', 'La tua email'], phone: ['Telefono', 'Il tuo telefono'], message: ['Messaggio', 'Come possiamo aiutarti?'], consent: 'Ho letto la privacy.', submit: 'Invia messaggio' };
+  const cf = cf7FromTemplate(tpl, texts);
+  assert.equal(
+    cf.form,
+    '<div class="row"><div class="col">[text* your-name autocomplete:name class:big placeholder "Il tuo nome"][email* your-email autocomplete:email placeholder "La tua email"][text your-phone autocomplete:tel placeholder "Il tuo telefono"][text your-field-1 placeholder "Azienda"]</div>' +
+      '<div class="col">[textarea* your-message placeholder "Come possiamo aiutarti?"]<div class="terms">[acceptance your-consent] Ho letto la privacy. [/acceptance]</div></div></div>[submit class:send "Invia messaggio"]'
+  );
+  assert.doesNotMatch(cf.form, /\n/, 'one line: Contact Form 7 adds no paragraphs');
+  assert.equal(cf.body, 'Nome e cognome: [your-name]\nEmail: [your-email]\nTelefono: [your-phone]\nAzienda: [your-field-1]\n\nMessaggio:\n[your-message]');
+  const html = htmlFromTemplate(tpl, { name: 'Nome', email: 'Email', phone: 'Telefono', message: 'Messaggio', privacy: 'Accetto', send: 'Invia' });
+  assert.match(html, /<div class="row"><div class="col"><span class="wpcf7-form-control-wrap"><input class="wpcf7-form-control wpcf7-text big" type="text" name="name"/);
+  assert.match(html, /type="text" inputmode="tel" name="phone"/, 'the phone was a text field on the page: it stays one (its CSS styles input[type=text])');
+  assert.match(html, /<input class="wpcf7-form-control wpcf7-submit send" type="submit" value="Invia">/);
+  // Not a contact form the site can answer (no e-mail field): the old behaviour (the widget becomes the form of the site)
+  assert.equal(formTemplate('<form><input type="text" name="a"><input type="text" name="b"><textarea name="c"></textarea></form>'), null);
+  assert.equal(contactFormRegion('<form><input name="q"><button>Cerca</button></form>'), null);
+
+  // In the pipeline of a copied site: the block stays, its form becomes the placeholder of the site form
+  const { buildKitSite } = await import('../src/kits/site.js');
+  const pageHtml = '<!doctype html><html><head><title>Studio</title><style>.contact .row{display:flex}</style></head><body><main><section class="hero"><h1>Studio Verdi architetti</h1><p>Progettiamo case dal 1998 in tutta la provincia.</p></section>' + block.replace('<form role="search"><input name="s"></form>', '') + '</main></body></html>';
+  const fetchPlain = async (url) => (new URL(url).pathname === '/' ? new Response(pageHtml, { headers: { 'content-type': 'text/html' } }) : new Response('', { status: 404 }));
+  const site = await crawlSite('plain.example', { fetchImpl: fetchPlain, lookup });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esg-kit-'));
+  writeKitFromSite(site, dir);
+  const info = readKit(dir);
+  const roles = effectiveRoles(info, heuristicAnalysis(info.templates, {}), {});
+  const shortcode = '[contact-form-7 id="INSERIRE_ID" title="Modulo"]';
+  const pages = { home: { title: 'Home', url: '/' }, about: { title: 'Chi siamo', url: '/chi-siamo/' }, services: { title: 'Servizi', url: '/servizi/' }, gallery: { title: 'Galleria', url: '/galleria/' }, contact: { title: 'Contatti', url: '/contatti/' } };
+  const built = buildKitSite({ id: 1, name: 'k', dir, info, roles, analysis: heuristicAnalysis(info.templates, {}), demoImages: null }, { lang: 'it', siteName: 'Rossi', phone: '+39 06 1234', email: 'info@rossi.it', address: 'Via Roma 1', copyright: '© Rossi', hasLogo: false, mapEmbed: false, contactShortcode: shortcode, menuSlug: 'menu', pages, services: [] });
+  assert.deepEqual(built.formTemplate.fields.map((x) => x.kind), ['name', 'email', 'phone', 'extra', 'message', 'consent', 'submit']);
+  const home = JSON.stringify(built.docs.home.doc);
+  assert.ok(home.includes('<section class=\\"contact\\">'), 'the copied block stays as it is');
+  assert.ok(home.includes('<div class=\\"esg-form-copied my-form\\">[contact-form-7 id=\\"INSERIRE_ID\\" title=\\"Modulo\\"]</div>'), 'only its form becomes the form of the site');
+  assert.doesNotMatch(home, /your-number|_wpcf7/, 'nothing of the form of the other site is left');
+});

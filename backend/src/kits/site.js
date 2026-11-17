@@ -35,6 +35,7 @@ import { socialOf } from '../lib/socials.js';
 import { loadKitTemplate } from './read.js';
 import { KIT_SITE_CSS } from './from-site.js';
 import { SECTION_TYPES } from './analysis.js';
+import { contactFormRegion, formTemplate } from './form-template.js';
 
 /** Options of analyzeDocument for kit documents (texts of HTML widgets, counters and prices are demo content too). */
 export const KIT_ANALYZE_OPTIONS = Object.freeze({ htmlText: true, numbers: true });
@@ -226,11 +227,29 @@ function cleanDemo(doc) {
  *  - a form that points to a form of a plugin (RomethemeForm, WPForms, Fluent Forms, a form
  *    shortcode, an HTML form) cannot work on the site, because that form is not in the kit: the
  *    widget becomes the Contact Form 7 form of the site, in the same place, with its layout settings;
+ *  - a form inside copied markup (a website copied from its HTML): the block stays as it is and only
+ *    its form is replaced by the form of the site, written with the markup of the original one so the
+ *    CSS of the page still styles it (site.formTemplate, kits/form-template.js);
  *  - the Elementor Pro form widget has its fields in the widget and stays (the WordPress plugin
  *    shows the site form instead only when Elementor Pro is missing);
  *  - maps show the address of the site.
  * @returns {{ forms: number, swaps: string[] }}
  */
+/**
+ * Copied markup holding a contact form: the form is replaced, in place, by the form of the site inside a
+ * wrapper with the classes of the original form. The first form found gives the site its form template.
+ * False when the markup has no contact form the site can use (the whole widget is then swapped).
+ */
+function copiedForm(s, site) {
+  const region = contactFormRegion(s.html || '');
+  if (!region) return false;
+  site.formTemplate ||= formTemplate(region.html);
+  if (!site.formTemplate) return false;
+  const own = formTemplate(region.html)?.wrapClass || '';
+  s.html = `${s.html.slice(0, region.start)}<div class="${`esg-form-copied ${own}`.trim()}">${site.contactShortcode}</div>${s.html.slice(region.end)}`;
+  return true;
+}
+
 function prepareForms(doc, info, site) {
   let forms = 0;
   const swaps = [];
@@ -241,7 +260,10 @@ function prepareForms(doc, info, site) {
       const type = el.widgetType || '';
       const s = settingsOf(el);
       if (type === 'form') forms++;
-      else if (isPluginForm(type) || (type === 'shortcode' && /form/i.test(s.shortcode || '')) || (type === 'html' && /<form\b/i.test(s.html || ''))) {
+      else if (type === 'html' && Array.isArray(s.esg_parts) && copiedForm(s, site)) {
+        swaps.push('html-form');
+        forms++;
+      } else if (isPluginForm(type) || (type === 'shortcode' && /form/i.test(s.shortcode || '')) || (type === 'html' && /<form\b/i.test(s.html || ''))) {
         swaps.push(type);
         el.widgetType = 'shortcode';
         el.settings = { shortcode: site.contactShortcode, ...Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith('_'))) };
@@ -602,7 +624,8 @@ export function buildKitSite(kit, site, custom = {}) {
   // from a website (kits/from-site.js) brings the Elementor CSS of that site
   const kitCss = kitSiteCss(kit);
   const siteCss = [kitCss, docs.header?.source === 'builder' ? builder.siteCss : null].filter(Boolean).join('\n') || null;
-  return { docs, globalStyles: kit.info.globalStyles || null, siteCss, analyzeOptions: KIT_ANALYZE_OPTIONS };
+  // formTemplate: the markup of the contact form of a copied page, for the form of the site (kits/form-template.js)
+  return { docs, globalStyles: kit.info.globalStyles || null, siteCss, analyzeOptions: KIT_ANALYZE_OPTIONS, formTemplate: site.formTemplate || null };
 }
 
 /**

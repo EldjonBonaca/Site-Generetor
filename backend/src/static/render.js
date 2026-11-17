@@ -8,6 +8,7 @@
  * from the settings of every element.
  */
 import { compileParts } from '../elementor/html-parts.js';
+import { htmlFromTemplate } from '../kits/form-template.js';
 import { Sheet, elementCss, unit } from './css.js';
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -161,7 +162,13 @@ const WIDGETS = {
   // The contact form of the site (a WordPress shortcode in the documents)
   shortcode: (s, el, R) => (/contact-form|wpcf7|form/i.test(s.shortcode || '') ? contactForm(R) : ''),
   form: (s, el, R) => contactForm(R),
-  html: (s) => compileParts(s),
+  // Copied markup; its contact form (the shortcode of the WordPress site) as a form sent by send.php, in the markup of the original form
+  html: (s, el, R) => {
+    const html = compileParts(s);
+    if (!R.formTemplate || !R.formPlaceholder || !html.includes(R.formPlaceholder)) return html;
+    const form = `<div class="wpcf7"><form class="wpcf7-form esg-contact-form" action="${attr(R.formAction)}" method="post" novalidate>${htmlFromTemplate(R.formTemplate, R.texts)}<p class="esg-hp" aria-hidden="true"><label>Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label></p><div class="esg-form-status" role="status" hidden data-sent="${attr(R.texts.sent)}" data-failed="${attr(R.texts.failed)}"></div></form></div>`;
+    return html.split(R.formPlaceholder).join(form);
+  },
   google_maps: (s) => (s.address ? `<div class="elementor-custom-embed"><iframe loading="lazy" src="https://maps.google.com/maps?q=${encodeURIComponent(s.address)}&t=m&z=${Number(s.zoom?.size) || 14}&output=embed&iwloc=near" title="${attr(s.address)}" style="border:0;width:100%;height:${attr(unit(s.height) || '400px')}"></iframe></div>` : ''),
   progress: (s) => {
     const percent = Math.max(0, Math.min(100, Number(s.percent?.size) || 0));
