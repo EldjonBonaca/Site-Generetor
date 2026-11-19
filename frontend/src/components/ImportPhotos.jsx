@@ -110,13 +110,27 @@ export function ImportPhotos({ open, onClose, project, onAdded }) {
   // Is the downloader running on this computer?
   const checkHelper = useCallback(async (address) => {
     if (!address) return setHelperOn(false);
-    try {
-      await fetch(`${address}/`, { signal: AbortSignal.timeout(2500), mode: 'no-cors' });
-      setHelperOn(true);
-    } catch {
-      setHelperOn(false);
+    const other = address.includes('127.0.0.1') ? address.replace('127.0.0.1', 'localhost') : address.replace('localhost', '127.0.0.1');
+    for (const candidate of [address, other]) {
+      try {
+        // targetAddressSpace: tells Chrome the request goes to this computer (it then asks the user once for permission)
+        await fetch(`${candidate}/`, { signal: AbortSignal.timeout(2500), mode: 'no-cors', targetAddressSpace: 'loopback' });
+        if (candidate !== address) {
+          setHelper(candidate);
+          try {
+            localStorage.setItem(HELPER_KEY, candidate);
+          } catch {
+            /* private mode */
+          }
+        }
+        setHelperOn(true);
+        return true;
+      } catch {
+        /* next */
+      }
     }
-    return undefined;
+    setHelperOn(false);
+    return false;
   }, []);
 
   useEffect(() => {
@@ -143,6 +157,7 @@ export function ImportPhotos({ open, onClose, project, onAdded }) {
     async (source, extra = {}) => {
       setScanning(source);
       setError(null);
+      setFound((old) => (old?.items?.length ? old : null));
       try {
         const res = await api.post(`/projects/${project.id}/images/import/scan`, { source, ...extra });
         addFound(res, res.items.map((i) => ({ ...i, key: i.token })));
@@ -157,8 +172,15 @@ export function ImportPhotos({ open, onClose, project, onAdded }) {
 
   /** A link: Instagram and Google Maps through the downloader on this computer when it runs, else through the server. */
   const search = async (address = link, offset = 0) => {
-    const viaHelper = helperUrl && helperOn && (isInstagram(address) || isMaps(address));
-    if (!viaHelper) return scan('link', { url: address });
+    const network = isInstagram(address) || isMaps(address);
+    // The downloader may have been started after the dialog was opened
+    const running = network && helperUrl ? helperOn || (await checkHelper(helperUrl)) : false;
+    setFound((old) => (old?.items?.length ? old : null));
+    if (!running && isMaps(address) && !sources?.google) {
+      setError(t('A Google Maps link is read by the downloader on this computer, which is not running. Start it (in its folder: "Avvia downloader.bat"), wait until it says it is running, then press Search again.'));
+      return undefined;
+    }
+    if (!running) return scan('link', { url: address });
     setScanning('link');
     setError(null);
     try {
@@ -354,6 +376,14 @@ export function ImportPhotos({ open, onClose, project, onAdded }) {
           <span className="font-medium">
             {helperOn ? t('Downloader on this computer: connected. Instagram and Google Maps links give all their photos.') : t('Downloader on this computer: not running. Start "insta-downloader" on this computer to get all the photos of Instagram and Google Maps links.')}
           </span>
+          {!helperOn && (
+            <span className="basis-full pl-7 text-[11px] leading-relaxed text-slate-500">
+              {t('1. Open the folder of insta-downloader and double click "Avvia downloader.bat" (a black window stays open). 2. Press "Check" here. If the browser asks whether this site may reach programs on your computer, allow it.')}{' '}
+              <a href={helperUrl || DEFAULT_HELPER} target="_blank" rel="noreferrer" className="font-medium text-brand-700 underline">
+                {t('Open the downloader in a new tab to see if it is running')}
+              </a>
+            </span>
+          )}
           <span className="ml-auto flex items-center gap-1.5">
             <input value={helper} onChange={(e) => saveHelper(e.target.value)} className="w-44 rounded border border-slate-300 bg-white px-2 py-1 font-mono text-[11px] text-slate-700" aria-label={t('Address of the downloader')} />
             <button type="button" onClick={() => checkHelper(helperUrl)} className="rounded px-1.5 py-1 font-medium underline">
