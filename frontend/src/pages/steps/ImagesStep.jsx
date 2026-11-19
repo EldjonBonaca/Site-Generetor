@@ -25,12 +25,28 @@ export default function ImagesStep({ project, setProject, reload }) {
     api.get(`/projects/${project.id}/images`).then(setImages).catch((e) => toast(e.message, 'error'));
   }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const upload = async (files) => {
+  const upload = async (all) => {
     setUploading(true);
-    const fd = new FormData();
-    files.forEach((f) => fd.append('files', f));
+    // A zip of photos (the one a photo downloader gives) is unpacked by the server
+    const zips = all.filter((f) => /\.zip$/i.test(f.name));
+    const files = all.filter((f) => !/\.zip$/i.test(f.name));
     try {
-      const res = await api.upload(`/projects/${project.id}/images`, fd);
+      const res = { created: [], errors: [], optimized: [] };
+      const merge = (r) => {
+        res.created.push(...r.created);
+        res.errors.push(...r.errors);
+        res.optimized.push(...r.optimized);
+      };
+      for (const zip of zips) {
+        const fd = new FormData();
+        fd.append('file', zip);
+        merge(await api.upload(`/projects/${project.id}/images/zip`, fd));
+      }
+      if (files.length) {
+        const fd = new FormData();
+        files.forEach((f) => fd.append('files', f));
+        merge(await api.upload(`/projects/${project.id}/images`, fd));
+      }
       setImages((list) => [...list, ...res.created]);
       // Partial failure: the errors, then what was uploaded (and compressed)
       if (res.errors.length) toast(res.errors.join(' '), 'error');
@@ -129,7 +145,7 @@ export default function ImagesStep({ project, setProject, reload }) {
           }
         >
           <div className="grid gap-3 sm:grid-cols-[1fr_220px]">
-            <Dropzone accept=".jpg,.jpeg,.jpe,.jfif,.pjpeg,.pjp,.png,.webp,.svg,.gif,.avif,.tif,.tiff,.heic,.heif,image/*" multiple onFiles={upload} busy={uploading} title={t('Drop images here or click to browse')} hint={t('JPG, PNG, WEBP or SVG; JFIF, GIF, AVIF, TIFF and other formats are converted to WEBP · images of 1 MB or more are compressed automatically')} />
+            <Dropzone accept=".jpg,.jpeg,.jpe,.jfif,.pjpeg,.pjp,.png,.webp,.svg,.gif,.avif,.tif,.tiff,.heic,.heif,.zip,image/*" multiple onFiles={upload} busy={uploading} title={t('Drop images here or click to browse')} hint={t('JPG, PNG, WEBP or SVG; JFIF, GIF, AVIF, TIFF and other formats are converted to WEBP; a ZIP of photos is unpacked · images of 1 MB or more are compressed automatically')} />
             <button
               type="button"
               onClick={() => setPicking(true)}

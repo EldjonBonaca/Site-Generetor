@@ -12,7 +12,7 @@ import { extractJson, validateValues } from '../ai/json.js';
 import { clientInstructions, CLIENT_SYSTEM, languageName, SYSTEM_PROMPT, technicalInstructions } from '../generation/prompt-builder.js';
 import { touch } from './projects.js';
 import { AdmZip } from '../lib/zip.js';
-import { imageUpload, prepareUpload, sendImage, storedName } from '../lib/upload.js';
+import { imageUpload, imagesOfZip, prepareUpload, sendImage, storedName, zipUpload } from '../lib/upload.js';
 import { fetchFound, imagesOfList, isMapsLink, placeNameOfLink, scanGooglePlace, scanPage, tokenFor, urlOfToken } from '../lib/photo-import.js';
 import { clientNamer } from '../lib/images.js';
 
@@ -62,6 +62,53 @@ router.post('/projects/:id/images', imageUpload.array('files'), async (req, res)
   touch(project.id);
   if (!created.length) throw badRequest(errors.join(' '));
   res.status(201).json({ created, errors, optimized });
+});
+
+/**
+ * A zip of photos added to the project (the photos chosen in a photo downloader, a folder of photos zipped):
+ * every image inside is checked and stored like an uploaded file. Images that are small (icons, thumbnails)
+ * are skipped. -> { created, errors, optimized, small, found }
+ */
+router.post('/projects/:id/images/zip', zipUpload.single('file'), async (req, res) => {
+  const project = get('SELECT * FROM projects WHERE id = ?', req.params.id);
+  try {
+    if (!project) throw notFound('Project');
+    if (!req.file) throw badRequest('No zip uploaded.');
+    const files = imagesOfZip(req.file.path, AdmZip);
+    if (!files.length) throw badRequest('No image was found in this zip.');
+    const dir = path.join(config.imagesDir, String(project.id));
+    fs.mkdirSync(dir, { recursive: true });
+    const nameFor = clientNamer(project, all('SELECT file_name FROM images WHERE project_id = ?', project.id).map((r) => r.file_name));
+    const created = [];
+    const errors = [];
+    const optimized = [];
+    let small = 0;
+    for (const file of files) {
+      try {
+        const up = await prepareUpload(file);
+        if (up.info.mime !== 'image/svg+xml' && ((up.info.width || 0) < 300 || (up.info.height || 0) < 200)) {
+          small++;
+          continue;
+        }
+        const stored = storedName(up.info.ext);
+        fs.writeFileSync(path.join(dir, stored), up.buffer);
+        const { lastInsertRowid } = run(
+          `INSERT INTO images (project_id, file_path, file_name, original_name, mime, width, height, size)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          project.id, `images/${project.id}/${stored}`, nameFor(up.info.ext, slugify(path.parse(file.originalname).name)), file.originalname.slice(0, 255), up.info.mime, up.info.width, up.info.height, up.buffer.length
+        );
+        created.push(get('SELECT * FROM images WHERE id = ?', lastInsertRowid));
+        if (up.optimized) optimized.push(up.optimized);
+      } catch (err) {
+        errors.push(err.message);
+      }
+    }
+    touch(project.id);
+    if (!created.length) throw badRequest(small ? 'The images of this zip are too small to be photos.' : [...new Set(errors)].join(' '));
+    res.status(201).json({ created, errors: [...new Set(errors)], optimized, small, found: files.length });
+  } finally {
+    if (req.file) fs.rmSync(req.file.path, { force: true });
+  }
 });
 
 /** Serve the stored file. */

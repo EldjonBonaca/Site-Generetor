@@ -18,6 +18,42 @@ export const imageUpload = multer({
   fileFilter: (req, file, cb) => cb(ALLOWED_EXT.test(file.originalname) ? null : badRequest(`Unsupported file type: ${file.originalname} (JPG, JFIF, PNG, WEBP, GIF, AVIF, TIFF, HEIC or SVG)`), true),
 });
 
+/** A zip of photos (e.g. the one a photo downloader gives): up to 300 MB, read from a temporary file. */
+export const MAX_ZIP_BYTES = 300 * 1024 * 1024;
+export const MAX_ZIP_IMAGES = 300;
+export const zipUpload = multer({
+  dest: config.tmpDir,
+  limits: { fileSize: MAX_ZIP_BYTES, files: 1 },
+  fileFilter: (req, file, cb) => cb(/\.zip$/i.test(file.originalname) ? null : badRequest('Upload a .zip file of photos.'), true),
+});
+
+/**
+ * The images inside a zip, as uploaded files: [{ buffer, originalname }]. Folders, hidden files and files
+ * that are not images by their name are skipped; entries are read one by one into memory (nothing is
+ * written to disk, so the names inside the zip cannot reach outside it), within size and count limits.
+ */
+export function imagesOfZip(zipPath, AdmZip) {
+  let zip;
+  try {
+    zip = new AdmZip(zipPath);
+  } catch {
+    throw badRequest('This file is not a valid zip.');
+  }
+  const out = [];
+  let total = 0;
+  for (const entry of zip.getEntries()) {
+    const name = String(entry.entryName).replace(/\\/g, '/').split('/').pop() || '';
+    if (entry.isDirectory || !name || name.startsWith('.') || /(^|\/)__MACOSX\//.test(entry.entryName) || !ALLOWED_EXT.test(name)) continue;
+    const size = Number(entry.header?.size) || 0;
+    if (size > config.maxImageBytes) continue; // larger than a single upload may be
+    total += size;
+    if (total > MAX_ZIP_BYTES * 2) throw badRequest('The zip holds too much data once unpacked.');
+    out.push({ buffer: entry.getData(), originalname: name });
+    if (out.length >= MAX_ZIP_IMAGES) break;
+  }
+  return out;
+}
+
 /** A length of an SVG attribute in pixels ("120", "120px", "2.5in"…), null for "100%" / missing. */
 function svgLength(value) {
   const m = /^\s*([\d.]+)\s*(px|pt|pc|mm|cm|in)?\s*$/i.exec(value || '');
