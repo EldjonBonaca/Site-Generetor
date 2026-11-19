@@ -236,7 +236,7 @@ export default function GalleryPage() {
               {categoryOptions}
             </Select>
           </div>
-          <Dropzone accept=".jpg,.jpeg,.png,.webp,.svg,image/jpeg,image/png,image/webp,image/svg+xml" multiple onFiles={upload} busy={uploading} title={t('Drop images here or click to browse')} hint={t('JPG, PNG, WEBP or SVG · images of 1 MB or more are compressed automatically')} />
+          <Dropzone accept=".jpg,.jpeg,.jpe,.jfif,.pjpeg,.pjp,.png,.webp,.svg,.gif,.avif,.tif,.tiff,.heic,.heif,image/*" multiple onFiles={upload} busy={uploading} title={t('Drop images here or click to browse')} hint={t('JPG, PNG, WEBP or SVG; JFIF, GIF, AVIF, TIFF and other formats are converted to WEBP · images of 1 MB or more are compressed automatically')} />
 
           <div className="mt-5">
             {!visible.length ? (

@@ -8,12 +8,14 @@ import { config } from '../config.js';
 import { badRequest, notFound } from './util.js';
 import { optimizeImage } from './optimize.js';
 
-const ALLOWED_EXT = /\.(jpe?g|png|webp|svg)$/i;
+// JPG, PNG, WEBP and SVG are stored as they are; the other formats (JFIF, GIF, AVIF, TIFF, HEIC…) become WEBP
+const ALLOWED_EXT = /\.(jpe?g|jpe|jfif|pjpeg|pjp|png|webp|svg|gif|avif|tiff?|heic|heif)$/i;
+const STORED_AS_IS = /\.(jpe?g|png|webp|svg)$/i;
 
 export const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: config.maxImageBytes, files: 40 },
-  fileFilter: (req, file, cb) => cb(ALLOWED_EXT.test(file.originalname) ? null : badRequest(`Unsupported file type: ${file.originalname} (JPG, PNG, WEBP, SVG only)`), true),
+  fileFilter: (req, file, cb) => cb(ALLOWED_EXT.test(file.originalname) ? null : badRequest(`Unsupported file type: ${file.originalname} (JPG, JFIF, PNG, WEBP, GIF, AVIF, TIFF, HEIC or SVG)`), true),
 });
 
 /** A length of an SVG attribute in pixels ("120", "120px", "2.5in"…), null for "100%" / missing. */
@@ -76,7 +78,15 @@ export async function inspectImage(buffer, originalName) {
     throw badRequest(`${originalName}: the file is not a valid image.`);
   }
   const map = { jpeg: ['image/jpeg', '.jpg'], png: ['image/png', '.png'], webp: ['image/webp', '.webp'] };
-  if (!map[meta.format]) throw badRequest(`${originalName}: format "${meta.format}" not allowed.`);
+  // Another format, or a JPEG saved with another extension (.jfif, .jpe): converted to WEBP (turned upright, sRGB)
+  if (!map[meta.format] || !STORED_AS_IS.test(originalName)) {
+    try {
+      const { data, info } = await sharp(buffer, { animated: meta.format === 'gif' && (meta.pages || 1) > 1 }).rotate().toColourspace('srgb').webp({ quality: 88, alphaQuality: 100, smartSubsample: true }).toBuffer({ resolveWithObject: true });
+      return { mime: 'image/webp', ext: '.webp', width: info.width, height: info.pageHeight || info.height, buffer: data, converted: meta.format };
+    } catch {
+      throw badRequest(`${originalName}: this ${String(meta.format || 'image').toUpperCase()} file could not be converted (a HEIC photo of an iPhone must be exported as JPG first).`);
+    }
+  }
   return { mime: map[meta.format][0], ext: map[meta.format][1], width: meta.width, height: meta.height };
 }
 
@@ -85,8 +95,8 @@ export async function inspectImage(buffer, originalName) {
  * @returns {Promise<{ buffer: Buffer, info: { mime, ext, width, height }, optimized: null | { name, from, to } }>}
  */
 export async function prepareUpload(file) {
-  const { buffer: cleaned, ...info } = await inspectImage(file.buffer, file.originalname);
-  const buffer = cleaned || file.buffer; // an SVG is stored cleaned
+  const { buffer: cleaned, converted, ...info } = await inspectImage(file.buffer, file.originalname);
+  const buffer = cleaned || file.buffer; // an SVG is stored cleaned, another format converted to WEBP
   let out;
   try {
     out = await optimizeImage(buffer, info);

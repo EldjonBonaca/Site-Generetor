@@ -767,4 +767,5 @@ export default {
   "One or more places (two cities, a city and its province, a region…): type a place and press Enter or a comma. The first is the main one, used in the SEO keyphrase of the main pages; the service pages take the places in turn, so the site is found in each of them.": "Uno o più luoghi (due città, una città e la sua provincia, una regione…): scrivi un luogo e premi Invio o la virgola. Il primo è il principale, usato nella parola chiave SEO delle pagine principali; le pagine dei servizi prendono i luoghi a turno, così il sito si trova in ognuno.",
   "main": "principale",
   "Remove": "Rimuovi",
+  "JPG, PNG, WEBP or SVG; JFIF, GIF, AVIF, TIFF and other formats are converted to WEBP · images of 1 MB or more are compressed automatically": "JPG, PNG, WEBP o SVG; JFIF, GIF, AVIF, TIFF e altri formati vengono convertiti in WEBP · le immagini da 1 MB in su vengono compresse automaticamente",
 };
