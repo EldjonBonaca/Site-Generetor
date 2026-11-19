@@ -14,7 +14,7 @@ import { AIError } from '../ai/AIProvider.js';
 import { estimateTokens, languageName } from '../generation/prompt-builder.js';
 import { TEMPLATE_PROMPT } from '../generation/site-prompt.js';
 import { COLOR_KEYS, COPY_KEYS, ICONS, MAX_FEATURES, SECTION_NAMES_IT, sanitizeSpec, similarColor } from './spec.js';
-import { applyPlan, designPlan, pickDirection } from './directions.js';
+import { applyPlan, designPlan, pickDirection, simpleDirections } from './directions.js';
 import { describeProfile } from './industry.js';
 
 const RETRIES = 2;
@@ -231,14 +231,11 @@ Follow every instruction above that concerns the design and the texts of the tem
  *   - rng            random source (tests)
  * @returns {Promise<{ spec, tokens, direction }>}
  */
-/** Directions offered for every category (simple and professional looks), whatever its industry analysis lists. */
-const ALWAYS_SUITABLE = ['clean', 'simple'];
-
 export async function generateTemplateSpec(provider, { category, instructions = '', language = 'it', existing = [], direction: requested = '', exclude = [], avoidColors = [], profile = null, library = [], clientNotes = '', brandColors = null, rng = Math.random }) {
   const brand = sanitizeBrandColors(brandColors);
-  // The simple, tidy directions suit every industry: they come first, also for the categories analyzed before they existed
-  const suitable = profile?.directions?.length ? [...ALWAYS_SUITABLE.filter((id) => !profile.directions.includes(id)), ...profile.directions] : profile?.directions;
-  const direction = pickDirection(existing, { requested, exclude, suitable, library, rng });
+  // New templates are simple and modern: one of those directions (the ones the industry analysis prefers first),
+  // unless another one is asked for. Each template of a category takes a direction not used yet, then other layouts.
+  const direction = pickDirection(existing, { requested, exclude, suitable: simpleDirections(profile?.directions), library, rng, only: true });
   const plan = designPlan(direction, existing, rng, profile, library);
   const { prompt, system } = buildTemplatePrompt({ category, instructions, language, direction, plan, existing, avoidColors, profile, library, clientNotes, brandColors: brand });
   // With the brand colors of the user, the colors of the other templates do not count

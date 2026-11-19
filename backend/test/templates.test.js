@@ -13,6 +13,7 @@ process.env.ENCRYPTION_KEY ||= 'd'.repeat(64);
 const { analyzeDocument } = await import('../src/elementor/analyze.js');
 const { sanitizeSpec, DEFAULT_SPEC, FONTS, tint, siteColors: siteColorsOf } = await import('../src/templates/spec.js');
 const { buildSite, DOC_ROLES, TEMPLATE_IMAGE, highlightTitles, siteMenus } = await import('../src/templates/builder.js');
+const { SIMPLE_MODERN, simpleDirections } = await import('../src/templates/directions.js');
 /** Documents of a built site, with the site CSS (Additional CSS of WordPress) as their non-enumerable `css`. */
 const withCss = ({ docs, siteCss }) => Object.defineProperty(docs, 'css', { value: siteCss });
 const { buildTemplatePrompt, generateTemplateSpec } = await import('../src/templates/generate.js');
@@ -946,7 +947,7 @@ test('industry analysis of a category drives directions and sections of its temp
   const saved = [];
   for (let i = 0; i < 5; i++) {
     const { spec } = await generateTemplateSpec(new MockProvider({}), { category, existing: saved, profile });
-    assert.ok([...profile.directions, 'clean', 'simple'].includes(spec.direction), 'a direction suitable for the industry, or one of the simple ones offered to every category');
+    assert.ok(SIMPLE_MODERN.includes(spec.direction), `a simple and modern direction: ${spec.direction}`);
     for (const s of REQUIRED_SECTIONS) assert.ok(spec.sections.includes(s));
     assert.ok(spec.sections.filter((s) => OPTIONAL_SECTIONS.includes(s)).every((s) => profile.sections.includes(s)), 'only recommended optional sections');
     saved.push(spec);
@@ -1281,4 +1282,42 @@ test('reference website: the default colors of a new Elementor kit are not the b
   const { referenceColors } = await import('../src/templates/reference.js');
   assert.equal(referenceColors({ colors: { globals: { primary: '#6EC1E4', secondary: '#54595F', text: '#7A7A7A', accent: '#61CE70' } } }), null);
   assert.deepEqual(referenceColors({ colors: { globals: { primary: '#0A6E8A', accent: '#61CE70' } } }), { primary: '#0A6E8A' });
+});
+
+test('new templates are simple and modern, and each one of a category differs from the others', async () => {
+  const { generateTemplateSpec } = await import('../src/templates/generate.js');
+  const { compareTemplates, pickDirection, DIRECTIONS } = await import('../src/templates/directions.js');
+  // The directions of the industry analysis that are simple and modern come first, then the rest of the family
+  assert.deepEqual(simpleDirections(['urban', 'swiss', 'luxury', 'clean']), ['swiss', 'clean', 'simple', 'modern', 'minimal', 'corporate', 'clinical']);
+  assert.deepEqual(simpleDirections(null), SIMPLE_MODERN);
+  assert.ok(SIMPLE_MODERN.every((id) => DIRECTIONS.some((d) => d.id === id)));
+  // Light pages, no uppercase titles, straight or softly curved edges, no scrolling strip
+  for (const d of DIRECTIONS.filter((x) => SIMPLE_MODERN.includes(x.id))) {
+    assert.deepEqual(d.style.theme, ['light'], d.id);
+    assert.ok(d.layout.divider.every((v) => ['none', 'curve'].includes(v)), d.id + ': edges');
+    assert.ok(!d.layout.highlights.includes('marquee'), d.id + ': no scrolling strip');
+    assert.ok(d.style.decor.every((v) => ['none', 'dots', 'lines'].includes(v)), d.id + ': decor');
+  }
+  // When every simple direction has a template, one of them is taken again: never a dark or showy one
+  const used = SIMPLE_MODERN.map((direction) => ({ direction }));
+  assert.ok(SIMPLE_MODERN.includes(pickDirection(used, { suitable: SIMPLE_MODERN, only: true }).id));
+  assert.equal(pickDirection(used, { requested: 'urban', suitable: SIMPLE_MODERN, only: true }).id, 'urban', 'another look can still be asked for');
+
+  // Ten templates of one category, then of another: all simple and modern, each with its own first screen and Home
+  const library = [];
+  for (const name of ['Idraulici', 'Parrucchieri']) {
+    const saved = [];
+    for (let i = 0; i < 10; i++) {
+      const { spec } = await generateTemplateSpec(new MockProvider({}), { category: { name }, existing: saved, library });
+      assert.ok(SIMPLE_MODERN.includes(spec.direction), spec.direction);
+      assert.equal(spec.style.theme, 'light');
+      for (const other of saved) assert.ok(compareTemplates(other, spec).likeness <= 60, name + ' ' + (i + 1) + ': ' + compareTemplates(other, spec).likeness + '% like another template of the category');
+      saved.push(spec);
+    }
+    assert.equal(new Set(saved.slice(0, 7).map((x) => x.direction)).size, 7, 'the first seven templates take the seven directions');
+    assert.ok(new Set(saved.map((x) => x.layout.hero)).size >= 7, 'heroes: ' + saved.map((x) => x.layout.hero).join(', '));
+    assert.ok(new Set(saved.map((x) => x.sections.join('>'))).size >= 8, 'Home pages built of different sections');
+    assert.ok(new Set(saved.map((x) => x.style.fonts.heading)).size >= 7, 'title fonts');
+    library.push(...saved);
+  }
 });

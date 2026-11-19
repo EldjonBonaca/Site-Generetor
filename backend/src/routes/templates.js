@@ -18,7 +18,7 @@ import { badRequest, notFound, HttpError, LANGUAGES } from '../lib/util.js';
 import { createProvider } from '../ai/registry.js';
 import { AIError } from '../ai/AIProvider.js';
 import { COLOR_KEYS, FONTS, ICONS, LAYOUTS, SPACINGS, STYLE_OPTIONS, WEIGHTS, sanitizeSpec } from '../templates/spec.js';
-import { compareTemplates, directionById, directionList, diversify } from '../templates/directions.js';
+import { compareTemplates, directionById, directionList, diversify, simpleDirections } from '../templates/directions.js';
 import { generateTemplateSpec } from '../templates/generate.js';
 import { analyzeCategory, sanitizeProfile } from '../templates/industry.js';
 import { analyzeReference, fetchReference, generateFromReference } from '../templates/reference.js';
@@ -302,7 +302,8 @@ router.post('/templates/:tid/diversify', (req, res) => {
   const spec = req.body?.spec && typeof req.body.spec === 'object' ? sanitizeSpec(req.body.spec) : tpl.spec;
   const others = all('SELECT spec_json FROM site_templates WHERE category_id = ? AND id != ? ORDER BY id', tpl.category_id, tpl.id).map((t) => sanitizeSpec(parseJson(t.spec_json, {})));
   const library = all('SELECT spec_json FROM site_templates WHERE category_id != ? ORDER BY id DESC LIMIT 80', tpl.category_id).map((t) => sanitizeSpec(parseJson(t.spec_json, {})));
-  const suitable = serializeCategory(requireCategory(tpl.category_id)).profile?.directions || null;
+  // The simple and modern directions (the ones the industry analysis prefers first), like a new template
+  const suitable = simpleDirections(serializeCategory(requireCategory(tpl.category_id)).profile?.directions);
   const next = sanitizeSpec(diversify(spec, others, { library, suitable }));
   const direction = directionById(next.direction);
   res.json({ spec: next, direction: { id: direction.id, name: direction.name } });
