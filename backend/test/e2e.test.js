@@ -319,7 +319,9 @@ test('full generation flow (English, template, WordPress plugin)', async () => {
   assert.equal(aboutDoc.content[0].settings.background_image.url, `${baseUrl}plumber-roma-banner-subheader.webp`);
   assert.match(homeJson, /Idraulico a Roma <span class=\\"esg-hl-w\\">24\/7<\/span>/, 'hero title with its last word highlighted (no script on the site)');
   assert.match(homeJson, /tel:\+390612345678/);
-  assert.match(homeJson, /plumber-roma-riparazione-caldaie\.webp/, 'service card uses the service image');
+  // The services of the Home page are the articles (posts widget): the photo of a service is the featured image of its
+  // article (checked with the plugin data below), not an image of the page
+  assert.match(JSON.stringify(JSON.parse(homeJson)), /"widgetType":"hfe-basic-posts"/);
   for (const f of names.filter((n) => n.startsWith(root + 'templates/'))) {
     const urls = [...JSON.stringify(JSON.parse(zip.readAsText(f))).matchAll(/"url":"([^"]*)"/g)].map((m) => m[1]).filter((u) => /\.(jpe?g|png|webp)$/.test(u));
     for (const u of urls) assert.ok(u.startsWith(baseUrl), `${f}: placeholder image ${u}`);
