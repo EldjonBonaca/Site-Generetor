@@ -785,4 +785,13 @@ export default {
   "Deselect all": "Deseleziona tutte",
   "Select all": "Seleziona tutte",
   "{n} image(s) skipped: too small to be photos": "{n} immagini saltate: troppo piccole per essere foto",
+  "From Instagram, Facebook or Google Maps, with your own browser": "Da Instagram, Facebook o Google Maps, con il tuo browser",
+  "Drag this button to the bookmarks bar of your browser (once):": "Trascina questo pulsante nella barra dei preferiti del browser (una volta sola):",
+  "Drag me to the bookmarks bar": "Trascinami nella barra dei preferiti",
+  "Copy photos": "Copia foto",
+  "Open the profile or the photos of the listing in another tab (logged in with your account) and scroll until the photos you want are on the page.": "Apri il profilo o le foto della scheda in un'altra scheda del browser (con il tuo account) e scorri finché le foto che vuoi sono nella pagina.",
+  "Click the \"Copy photos\" bookmark, then \"Copia\" in the small window that appears.": "Clicca il preferito \"Copia foto\", poi \"Copia\" nella finestrella che compare.",
+  "Come back here, paste and press \"Show the photos\".": "Torna qui, incolla e premi \"Mostra le foto\".",
+  "Paste here the addresses copied (Ctrl+V)": "Incolla qui gli indirizzi copiati (Ctrl+V)",
+  "Show the photos": "Mostra le foto",
 };

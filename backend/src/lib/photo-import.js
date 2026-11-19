@@ -116,6 +116,36 @@ export async function scanPage(address, opts = {}) {
   return { page: res.url.href, images: imagesOfPage(res.text, res.url.href), loginOnly: LOGIN_ONLY.test(host) };
 }
 
+// ---------------------------------------------------- addresses pasted --
+
+/** The larger version of a photo served by Google (Maps, Photos): "=w203-h152-k-no" or "=s400" -> a width of 1600. */
+const largerGooglePhoto = (url) => (/^https:\/\/lh\d+\.googleusercontent\.com\//.test(url) ? url.replace(/=[whs]\d+[^/?#]*$/i, '=w1600') : url);
+
+/**
+ * Addresses of photos pasted by the user (copied in their own browser from a page they are logged in to:
+ * an Instagram or Facebook profile, the photos of a Google Maps listing): [{ url, width, height }].
+ * Each photo once, in its larger version where the address says its size; icons and avatars left out.
+ */
+export function imagesOfList(text) {
+  const found = new Map();
+  for (const m of String(text || '').matchAll(/https?:\/\/[^\s"'<>]+/gi)) {
+    let url;
+    try {
+      url = new URL(m[0].replace(/[),.;]+$/, '')).href;
+    } catch {
+      continue;
+    }
+    if (NOT_A_PHOTO.test(url) || /\.(svg|gif|ico|css|js)(\?|#|$)/i.test(url)) continue;
+    // Profile pictures of the networks (small, round) are not photos of the business
+    if (/\/s\d{2,3}x\d{2,3}\/|[?&]stp=[^&]*_s\d{2,3}x\d{2,3}|=s\d{2}(-[a-z0-9-]+)?$/i.test(url)) continue;
+    url = largerGooglePhoto(url);
+    // The same photo of a network in several sizes: its file name is the same
+    const key = /cdninstagram\.com|fbcdn\.net/.test(url) ? new URL(url).pathname.split('/').pop() : sizeless(url);
+    if (!found.has(key)) found.set(key, { url, width: null, height: null });
+  }
+  return [...found.values()].slice(0, MAX_FOUND * 2);
+}
+
 // ----------------------------------------------------------- Google Maps --
 
 /** Is the photo of Google Places (fetched with the key of the app, never shown to the browser)? */

@@ -13,7 +13,7 @@ import { clientInstructions, CLIENT_SYSTEM, languageName, SYSTEM_PROMPT, technic
 import { touch } from './projects.js';
 import { AdmZip } from '../lib/zip.js';
 import { imageUpload, prepareUpload, sendImage, storedName } from '../lib/upload.js';
-import { fetchFound, scanGooglePlace, scanPage, tokenFor, urlOfToken } from '../lib/photo-import.js';
+import { fetchFound, imagesOfList, scanGooglePlace, scanPage, tokenFor, urlOfToken } from '../lib/photo-import.js';
 import { clientNamer } from '../lib/images.js';
 
 const router = Router();
@@ -79,7 +79,8 @@ router.get('/projects/:id/images/import/sources', (req, res) => {
 /**
  * Photos of the business found elsewhere, to choose from (lib/photo-import.js).
  * Body: { source: 'google' } (its Google Maps listing: needs GOOGLE_MAPS_API_KEY), { source: 'instagram' | 'facebook' }
- * (the profile of the site data) or { source: 'link', url } (any public web page).
+ * (the profile of the site data), { source: 'link', url } (any public web page) or { source: 'list', text }
+ * (addresses of photos the user copied in their own browser, e.g. from a profile they are logged in to).
  * -> { source, page, items: [{ token, width, height }], loginOnly, googleKey }
  */
 router.post('/projects/:id/images/import/scan', async (req, res) => {
@@ -87,7 +88,11 @@ router.post('/projects/:id/images/import/scan', async (req, res) => {
   if (!project) throw notFound('Project');
   const source = String(req.body?.source || 'link');
   let found;
-  if (source === 'google') {
+  if (source === 'list') {
+    const images = imagesOfList(String(req.body?.text || '').slice(0, 400_000));
+    if (!images.length) throw badRequest('No address of a photo was found in the pasted text.');
+    found = { page: '', images, loginOnly: false };
+  } else if (source === 'google') {
     const g = await scanGooglePlace([project.site_name, String(project.address || '').replace(/\s+/g, ' ')].filter((x) => x && x.trim()).join(', '), config.googleMapsApiKey, { language: project.language || 'it' });
     found = { page: g.place, images: g.images, loginOnly: false };
   } else {

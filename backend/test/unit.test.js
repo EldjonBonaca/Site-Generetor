@@ -489,3 +489,23 @@ test('photos found elsewhere: images of a public page, signed tokens, Google Map
   }
   await assert.rejects(prepareUpload({ buffer: Buffer.from('not an image'), originalname: 'x.heic' }), /not a valid image/);
 });
+
+test('addresses of photos pasted by the user (copied in their own browser): each photo once, in its larger version', async () => {
+  const { imagesOfList } = await import('../src/lib/photo-import.js');
+  const text = [
+    'https://scontent.cdninstagram.com/v/t51.2885-15/123_n.jpg?stp=dst-jpg_e35_s1080x1080&_nc_ht=x&oh=aa',
+    'https://scontent.cdninstagram.com/v/t51.2885-15/123_n.jpg?stp=dst-jpg_e35_s640x640&_nc_ht=x&oh=bb', // the same photo, smaller
+    'https://scontent.cdninstagram.com/v/t51.2885-19/999_n.jpg?stp=dst-jpg_s150x150&oh=cc', // a profile picture
+    'https://lh3.googleusercontent.com/p/AF1QipAbc=w203-h152-k-no https://lh3.googleusercontent.com/p/AF1QipXyz=s400',
+    'https://static.xx.fbcdn.net/rsrc.php/v3/y4/r/icon.png',
+    'https://scontent.fmxp1-1.fna.fbcdn.net/v/t39.30808-6/456_n.jpg?_nc_cat=1&oh=dd,',
+    'testo qualsiasi senza indirizzi',
+  ].join('\n');
+  assert.deepEqual(imagesOfList(text).map((i) => i.url), [
+    'https://scontent.cdninstagram.com/v/t51.2885-15/123_n.jpg?stp=dst-jpg_e35_s1080x1080&_nc_ht=x&oh=aa',
+    'https://lh3.googleusercontent.com/p/AF1QipAbc=w1600',
+    'https://lh3.googleusercontent.com/p/AF1QipXyz=w1600',
+    'https://scontent.fmxp1-1.fna.fbcdn.net/v/t39.30808-6/456_n.jpg?_nc_cat=1&oh=dd',
+  ]);
+  assert.deepEqual(imagesOfList('nessun indirizzo'), []);
+});

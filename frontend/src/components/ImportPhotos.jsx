@@ -4,17 +4,19 @@
  * The server fetches the images (backend/src/lib/photo-import.js): the browser shows them from the app.
  */
 import { useEffect, useState } from 'react';
-import { Check, Facebook, Globe, Instagram, MapPin, Search } from 'lucide-react';
+import { Bookmark, Check, ClipboardPaste, Facebook, Globe, Instagram, MapPin, Search } from 'lucide-react';
 import { api } from '../api.js';
 import { useT } from '../i18n/index.jsx';
 import { useToast } from './Toast.jsx';
-import { Alert, Button, Input, Modal, Spinner, cx, uploadSummary } from './ui.jsx';
+import { Alert, Button, Input, Modal, Spinner, Textarea, cx, uploadSummary } from './ui.jsx';
+import { PHOTO_BOOKMARKLET } from '../photoBookmarklet.js';
 
 export function ImportPhotos({ open, onClose, project, onAdded }) {
   const { t } = useT();
   const toast = useToast();
   const [sources, setSources] = useState(null);
   const [link, setLink] = useState('');
+  const [pasted, setPasted] = useState('');
   const [scanning, setScanning] = useState(null);
   const [found, setFound] = useState(null); // { source, page, items, loginOnly }
   const [error, setError] = useState(null);
@@ -38,7 +40,7 @@ export function ImportPhotos({ open, onClose, project, onAdded }) {
     setChosen(new Set());
     setBroken(new Set());
     try {
-      setFound(await api.post(`/projects/${project.id}/images/import/scan`, { source, url: link }));
+      setFound(await api.post(`/projects/${project.id}/images/import/scan`, { source, url: link, text: pasted }));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -125,6 +127,35 @@ export function ImportPhotos({ open, onClose, project, onAdded }) {
             {t('Search')}
           </Button>
         </form>
+        {/* Photos of a page the user is logged in to (Instagram, Facebook, Google Maps): listed in their own browser by a bookmark, pasted here */}
+        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+          <p className="text-sm font-semibold text-slate-800">{t('From Instagram, Facebook or Google Maps, with your own browser')}</p>
+          <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-sm text-slate-600">
+            <li>
+              {t('Drag this button to the bookmarks bar of your browser (once):')}{' '}
+              <a
+                // React does not write javascript: addresses itself: the bookmark address is set on the element
+                ref={(el) => el && el.setAttribute('href', PHOTO_BOOKMARKLET)}
+                onClick={(e) => e.preventDefault()}
+                draggable
+                className="ml-1 inline-flex cursor-grab items-center gap-1.5 rounded-lg border border-brand-300 bg-white px-2.5 py-1 text-sm font-semibold text-brand-700 shadow-sm"
+                title={t('Drag me to the bookmarks bar')}
+              >
+                <Bookmark className="size-3.5" />
+                {t('Copy photos')}
+              </a>
+            </li>
+            <li>{t('Open the profile or the photos of the listing in another tab (logged in with your account) and scroll until the photos you want are on the page.')}</li>
+            <li>{t('Click the "Copy photos" bookmark, then "Copia" in the small window that appears.')}</li>
+            <li>{t('Come back here, paste and press "Show the photos".')}</li>
+          </ol>
+          <div className="mt-3 flex items-start gap-2">
+            <Textarea rows={2} value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder={t('Paste here the addresses copied (Ctrl+V)')} className="font-mono text-xs" />
+            <Button icon={ClipboardPaste} onClick={() => scan('list')} loading={scanning === 'list'} disabled={!pasted.trim() || (scanning && scanning !== 'list')} className="shrink-0">
+              {t('Show the photos')}
+            </Button>
+          </div>
+        </div>
         {sources && !sources.google && (
           <p className="text-xs text-slate-500">{t('Google Maps: the photos of the listing come from the official Google service, which needs a key of yours on the server (GOOGLE_MAPS_API_KEY). Google gives a free monthly allowance.')}</p>
         )}
@@ -148,7 +179,8 @@ export function ImportPhotos({ open, onClose, project, onAdded }) {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="min-w-0 truncate text-sm text-slate-600" title={found.page}>
                     <Globe className="mr-1.5 inline size-4 text-slate-400" />
-                    {t('{n} image(s) found', { n: shown.length })} · {found.page}
+                    {t('{n} image(s) found', { n: shown.length })}
+                    {found.page ? ` · ${found.page}` : ''}
                   </p>
                   <Button size="sm" onClick={() => setChosen(allChosen ? new Set() : new Set(shown.map((i) => i.token)))}>
                     {allChosen ? t('Deselect all') : t('Select all')}
