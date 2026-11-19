@@ -794,4 +794,11 @@ export default {
   "Come back here, paste and press \"Show the photos\".": "Torna qui, incolla e premi \"Mostra le foto\".",
   "Paste here the addresses copied (Ctrl+V)": "Incolla qui gli indirizzi copiati (Ctrl+V)",
   "Show the photos": "Mostra le foto",
+  "Close": "Chiudi",
+  "Paste here (Ctrl+V) or drag the photos here": "Incolla qui (Ctrl+V) o trascina qui le foto",
+  "Instagram, Facebook, Google Maps or any site: open the page with the photos, press Ctrl+A then Ctrl+C, come back here and press Ctrl+V. You then choose the photos to keep.": "Instagram, Facebook, Google Maps o qualsiasi sito: apri la pagina con le foto, premi Ctrl+A poi Ctrl+C, torna qui e premi Ctrl+V. Poi scegli le foto da tenere.",
+  "A single photo: right click on it → \"Copy image\", then Ctrl+V here.": "Una sola foto: tasto destro sulla foto → \"Copia immagine\", poi Ctrl+V qui.",
+  "Nothing to use in what you pasted: copy the page with the photos (Ctrl+A, then Ctrl+C) or a photo.": "Niente di utilizzabile in ciò che hai incollato: copia la pagina con le foto (Ctrl+A, poi Ctrl+C) oppure una foto.",
+  "This network shows its photos only to people logged in. Open the profile in your browser, press Ctrl+A then Ctrl+C, and paste here with Ctrl+V.": "Questo social mostra le foto solo a chi ha effettuato l'accesso. Apri il profilo nel tuo browser, premi Ctrl+A poi Ctrl+C e incolla qui con Ctrl+V.",
+  "No photo in what was given. Scroll the page until the photos are visible, then copy it again (Ctrl+A, Ctrl+C) and paste here.": "Nessuna foto in ciò che è stato dato. Scorri la pagina finché le foto sono visibili, poi copiala di nuovo (Ctrl+A, Ctrl+C) e incolla qui.",
 };

@@ -1,28 +1,65 @@
 /**
- * Photos of the business found elsewhere (its Google Maps listing, a public web page, its social
- * profiles): the app looks for them, the user chooses the ones to add to the project ("Select all").
- * The server fetches the images (backend/src/lib/photo-import.js): the browser shows them from the app.
+ * Photos of the business found elsewhere, added to the project in the simplest way:
+ *
+ *  - copy and paste: on the page with the photos (an Instagram or Facebook profile, the photos of a Google
+ *    Maps listing, any website) the user presses Ctrl+A and Ctrl+C, then Ctrl+V here: what the browser
+ *    copied holds the addresses of the photos of that page, which are listed to choose from;
+ *  - a copied photo (right click → Copy image) pasted here, or photos dragged here from another tab or
+ *    from the computer, are added at once;
+ *  - the address of a public page (the old website of the client);
+ *  - Google Maps through the official service, when the app has its key.
+ *
+ * The server fetches the listed images (backend/src/lib/photo-import.js): the browser shows them from the app.
  */
-import { useEffect, useState } from 'react';
-import { Bookmark, Check, ClipboardPaste, Facebook, Globe, Instagram, MapPin, Search } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Check, ClipboardPaste, Globe, MapPin, Search } from 'lucide-react';
 import { api } from '../api.js';
 import { useT } from '../i18n/index.jsx';
 import { useToast } from './Toast.jsx';
-import { Alert, Button, Input, Modal, Spinner, Textarea, cx, uploadSummary } from './ui.jsx';
-import { PHOTO_BOOKMARKLET } from '../photoBookmarklet.js';
+import { Alert, Button, Input, Modal, Spinner, cx, uploadSummary } from './ui.jsx';
+
+/** The largest version named in a srcset. */
+function largestOfSrcset(srcset) {
+  let best = '';
+  let top = 0;
+  for (const part of String(srcset || '').split(',')) {
+    const [u, size] = part.trim().split(/\s+/);
+    const n = parseFloat(size) || 1;
+    if (u && n >= top) {
+      top = n;
+      best = u;
+    }
+  }
+  return best;
+}
+
+/** Addresses of the images in what was copied from a web page (its HTML: images, background photos) or in plain text. */
+export function addressesOf(html, text) {
+  const out = [];
+  if (html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    for (const img of doc.querySelectorAll('img, source')) out.push(largestOfSrcset(img.getAttribute('srcset')) || img.getAttribute('src') || '');
+    for (const el of doc.querySelectorAll('[style]')) for (const m of el.getAttribute('style').matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/gi)) out.push(m[1]);
+    for (const a of doc.querySelectorAll('a[href]')) if (/\.(jpe?g|png|webp|avif)([?#]|$)/i.test(a.getAttribute('href'))) out.push(a.getAttribute('href'));
+  }
+  for (const m of String(text || '').matchAll(/https?:\/\/[^\s"'<>]+/gi)) out.push(m[0]);
+  return [...new Set(out.filter((u) => /^https?:\/\//i.test(u)))];
+}
+
+const imageFiles = (list) => [...(list || [])].filter((f) => /^image\//.test(f.type) || /\.(jpe?g|jfif|png|webp|gif|avif|tiff?|heic|svg)$/i.test(f.name));
 
 export function ImportPhotos({ open, onClose, project, onAdded }) {
   const { t } = useT();
   const toast = useToast();
   const [sources, setSources] = useState(null);
   const [link, setLink] = useState('');
-  const [pasted, setPasted] = useState('');
   const [scanning, setScanning] = useState(null);
   const [found, setFound] = useState(null); // { source, page, items, loginOnly }
   const [error, setError] = useState(null);
   const [chosen, setChosen] = useState(new Set());
   const [broken, setBroken] = useState(new Set());
   const [importing, setImporting] = useState(false);
+  const [over, setOver] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -33,20 +70,73 @@ export function ImportPhotos({ open, onClose, project, onAdded }) {
     api.get(`/projects/${project.id}/images/import/sources`).then(setSources).catch(() => setSources({}));
   }, [open, project.id]);
 
-  const scan = async (source) => {
-    setScanning(source);
-    setError(null);
-    setFound(null);
-    setChosen(new Set());
-    setBroken(new Set());
-    try {
-      setFound(await api.post(`/projects/${project.id}/images/import/scan`, { source, url: link, text: pasted }));
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setScanning(null);
-    }
-  };
+  const scan = useCallback(
+    async (source, extra = {}) => {
+      setScanning(source);
+      setError(null);
+      setFound(null);
+      setChosen(new Set());
+      setBroken(new Set());
+      try {
+        const res = await api.post(`/projects/${project.id}/images/import/scan`, { source, ...extra });
+        setFound(res);
+        // Copied from a page: everything is selected, the user removes what they do not want
+        if (source === 'list') setChosen(new Set(res.items.map((i) => i.token)));
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setScanning(null);
+      }
+    },
+    [project.id]
+  );
+
+  /** Photos given as files (a copied image, files dragged from the computer): added at once. */
+  const uploadFiles = useCallback(
+    async (files) => {
+      setScanning('files');
+      setError(null);
+      try {
+        const fd = new FormData();
+        files.forEach((f, i) => fd.append('files', f, f.name || `foto-${i + 1}.png`));
+        const res = await api.upload(`/projects/${project.id}/images`, fd);
+        if (res.errors.length) toast(res.errors.join(' '), 'error');
+        if (res.created.length) {
+          onAdded(res.created);
+          toast(uploadSummary(t, res));
+        }
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setScanning(null);
+      }
+    },
+    [project.id, onAdded, t, toast]
+  );
+
+  /** What was pasted or dropped: image files, or the content of a page with the addresses of its photos. */
+  const take = useCallback(
+    (data) => {
+      const files = imageFiles(data.files);
+      if (files.length) return uploadFiles(files);
+      const addresses = addressesOf(data.getData('text/html'), `${data.getData('text/uri-list')}\n${data.getData('text/plain')}`);
+      if (!addresses.length) return setError(t('Nothing to use in what you pasted: copy the page with the photos (Ctrl+A, then Ctrl+C) or a photo.'));
+      return scan('list', { text: addresses.join('\n') });
+    },
+    [scan, uploadFiles, t]
+  );
+
+  // Ctrl+V anywhere in the dialog (except while typing an address in the field)
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPaste = (e) => {
+      if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA') return;
+      e.preventDefault();
+      take(e.clipboardData);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [open, take]);
 
   const shown = found ? found.items.filter((i) => !broken.has(i.token)) : [];
   const toggle = (token) =>
@@ -56,12 +146,13 @@ export function ImportPhotos({ open, onClose, project, onAdded }) {
       else next.add(token);
       return next;
     });
-  const allChosen = shown.length > 0 && shown.every((i) => chosen.has(i.token));
+  const picked = shown.filter((i) => chosen.has(i.token));
+  const allChosen = shown.length > 0 && picked.length === shown.length;
 
   const add = async () => {
     setImporting(true);
     try {
-      const tokens = shown.filter((i) => chosen.has(i.token)).map((i) => i.token);
+      const tokens = picked.map((i) => i.token);
       let created = [];
       const errors = new Set();
       let small = 0;
@@ -88,12 +179,6 @@ export function ImportPhotos({ open, onClose, project, onAdded }) {
     }
   };
 
-  const sourceButton = (source, icon, label, enabled, missing) => (
-    <Button icon={icon} onClick={() => scan(source)} loading={scanning === source} disabled={!enabled || (scanning && scanning !== source)} title={enabled ? undefined : missing}>
-      {label}
-    </Button>
-  );
-
   return (
     <Modal
       open={open}
@@ -102,63 +187,53 @@ export function ImportPhotos({ open, onClose, project, onAdded }) {
       size="xl"
       footer={
         <>
-          <Button onClick={onClose}>{t('Cancel')}</Button>
-          <Button variant="primary" icon={Check} onClick={add} loading={importing} disabled={!shown.some((i) => chosen.has(i.token))}>
-            {t('Add {n} photo(s)', { n: shown.filter((i) => chosen.has(i.token)).length })}
+          <Button onClick={onClose}>{t('Close')}</Button>
+          <Button variant="primary" icon={Check} onClick={add} loading={importing} disabled={!picked.length}>
+            {t('Add {n} photo(s)', { n: picked.length })}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
-        <div className="flex flex-wrap gap-2">
-          {sourceButton('google', MapPin, 'Google Maps', sources?.google, t('Needs the Google key of the app (GOOGLE_MAPS_API_KEY on the server)'))}
-          {sourceButton('instagram', Instagram, 'Instagram', sources?.instagram, t('Enter the Instagram address in the site data first'))}
-          {sourceButton('facebook', Facebook, 'Facebook', sources?.facebook, t('Enter the Facebook address in the site data first'))}
+        {/* One place for everything: paste (a copied page or a copied photo) or drop photos */}
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setOver(true);
+          }}
+          onDragLeave={() => setOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setOver(false);
+            take(e.dataTransfer);
+          }}
+          className={cx('rounded-xl border-2 border-dashed px-5 py-6 text-center transition-colors', over ? 'border-brand-500 bg-brand-50' : 'border-slate-300 bg-slate-50/60')}
+        >
+          <ClipboardPaste className="mx-auto mb-2 size-8 text-slate-400" />
+          <p className="text-base font-semibold text-slate-800">{t('Paste here (Ctrl+V) or drag the photos here')}</p>
+          <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600">
+            {t('Instagram, Facebook, Google Maps or any site: open the page with the photos, press Ctrl+A then Ctrl+C, come back here and press Ctrl+V. You then choose the photos to keep.')}
+          </p>
+          <p className="mx-auto mt-1 max-w-2xl text-xs text-slate-500">{t('A single photo: right click on it → "Copy image", then Ctrl+V here.')}</p>
         </div>
+
         <form
           className="flex gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            if (link.trim()) scan('link');
+            if (link.trim()) scan('link', { url: link });
           }}
         >
           <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder={t('Or the address of a public page with the photos (the old website, a gallery…)')} />
           <Button type="submit" icon={Search} loading={scanning === 'link'} disabled={!link.trim() || (scanning && scanning !== 'link')}>
             {t('Search')}
           </Button>
-        </form>
-        {/* Photos of a page the user is logged in to (Instagram, Facebook, Google Maps): listed in their own browser by a bookmark, pasted here */}
-        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-          <p className="text-sm font-semibold text-slate-800">{t('From Instagram, Facebook or Google Maps, with your own browser')}</p>
-          <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-sm text-slate-600">
-            <li>
-              {t('Drag this button to the bookmarks bar of your browser (once):')}{' '}
-              <a
-                // React does not write javascript: addresses itself: the bookmark address is set on the element
-                ref={(el) => el && el.setAttribute('href', PHOTO_BOOKMARKLET)}
-                onClick={(e) => e.preventDefault()}
-                draggable
-                className="ml-1 inline-flex cursor-grab items-center gap-1.5 rounded-lg border border-brand-300 bg-white px-2.5 py-1 text-sm font-semibold text-brand-700 shadow-sm"
-                title={t('Drag me to the bookmarks bar')}
-              >
-                <Bookmark className="size-3.5" />
-                {t('Copy photos')}
-              </a>
-            </li>
-            <li>{t('Open the profile or the photos of the listing in another tab (logged in with your account) and scroll until the photos you want are on the page.')}</li>
-            <li>{t('Click the "Copy photos" bookmark, then "Copia" in the small window that appears.')}</li>
-            <li>{t('Come back here, paste and press "Show the photos".')}</li>
-          </ol>
-          <div className="mt-3 flex items-start gap-2">
-            <Textarea rows={2} value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder={t('Paste here the addresses copied (Ctrl+V)')} className="font-mono text-xs" />
-            <Button icon={ClipboardPaste} onClick={() => scan('list')} loading={scanning === 'list'} disabled={!pasted.trim() || (scanning && scanning !== 'list')} className="shrink-0">
-              {t('Show the photos')}
+          {sources?.google && (
+            <Button icon={MapPin} onClick={() => scan('google')} loading={scanning === 'google'} disabled={Boolean(scanning && scanning !== 'google')}>
+              Google Maps
             </Button>
-          </div>
-        </div>
-        {sources && !sources.google && (
-          <p className="text-xs text-slate-500">{t('Google Maps: the photos of the listing come from the official Google service, which needs a key of yours on the server (GOOGLE_MAPS_API_KEY). Google gives a free monthly allowance.')}</p>
-        )}
+          )}
+        </form>
 
         {error && <Alert kind="error">{error}</Alert>}
         {scanning && (
@@ -171,8 +246,8 @@ export function ImportPhotos({ open, onClose, project, onAdded }) {
             {!shown.length ? (
               <Alert kind="warning" title={t('No photos found')}>
                 {found.loginOnly
-                  ? t('Instagram and Facebook show their photos only to people logged in: a page opened without an account holds no photos. Download them from the profile and upload them here, or use another page (the website, Google Maps).')
-                  : t('This page shows no photos to a visitor (they may be loaded by a script). Try the page of its gallery.')}
+                  ? t('This network shows its photos only to people logged in. Open the profile in your browser, press Ctrl+A then Ctrl+C, and paste here with Ctrl+V.')
+                  : t('No photo in what was given. Scroll the page until the photos are visible, then copy it again (Ctrl+A, Ctrl+C) and paste here.')}
               </Alert>
             ) : (
               <>
@@ -186,7 +261,7 @@ export function ImportPhotos({ open, onClose, project, onAdded }) {
                     {allChosen ? t('Deselect all') : t('Select all')}
                   </Button>
                 </div>
-                <div className="grid max-h-[52vh] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-4">
+                <div className="grid max-h-[46vh] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-4">
                   {shown.map((item) => {
                     const on = chosen.has(item.token);
                     return (
@@ -202,7 +277,7 @@ export function ImportPhotos({ open, onClose, project, onAdded }) {
                           alt=""
                           loading="lazy"
                           className="size-full object-cover"
-                          // An address that is not an image after all (or cannot be reached) leaves the list
+                          // An address that is not a photo after all (an icon, or it cannot be reached) leaves the list
                           onError={() => setBroken((set) => new Set(set).add(item.token))}
                           onLoad={(e) => {
                             if (e.currentTarget.naturalWidth < 300 || e.currentTarget.naturalHeight < 200) setBroken((set) => new Set(set).add(item.token));
