@@ -13,7 +13,7 @@ import { clientInstructions, CLIENT_SYSTEM, languageName, SYSTEM_PROMPT, technic
 import { touch } from './projects.js';
 import { AdmZip } from '../lib/zip.js';
 import { imageUpload, prepareUpload, sendImage, storedName } from '../lib/upload.js';
-import { fetchFound, imagesOfList, scanGooglePlace, scanPage, tokenFor, urlOfToken } from '../lib/photo-import.js';
+import { fetchFound, imagesOfList, isMapsLink, placeNameOfLink, scanGooglePlace, scanPage, tokenFor, urlOfToken } from '../lib/photo-import.js';
 import { clientNamer } from '../lib/images.js';
 
 const router = Router();
@@ -92,15 +92,22 @@ router.post('/projects/:id/images/import/scan', async (req, res) => {
     const images = imagesOfList(String(req.body?.text || '').slice(0, 400_000));
     if (!images.length) throw badRequest('No address of a photo was found in the pasted text.');
     found = { page: '', images, loginOnly: false };
-  } else if (source === 'google') {
-    const g = await scanGooglePlace([project.site_name, String(project.address || '').replace(/\s+/g, ' ')].filter((x) => x && x.trim()).join(', '), config.googleMapsApiKey, { language: project.language || 'it' });
+  } else if (source === 'google' || (source === 'link' && isMapsLink(req.body?.url))) {
+    // A link to a Google Maps listing: its page holds no photos for a server, so the listing is looked up through the
+    // official service (by the name in the link, else the name and address of the site data)
+    if (!config.googleMapsApiKey) {
+      throw badRequest('Google Maps gives its photos only through its official service, which needs a key on the server (GOOGLE_MAPS_API_KEY). Without it: open the photos of the listing in your browser, press Ctrl+A then Ctrl+C, and paste here with Ctrl+V.');
+    }
+    const address = String(project.address || '').replace(/\s+/g, ' ').trim();
+    const query = [placeNameOfLink(req.body?.url) || project.site_name, address].filter((x) => x && x.trim()).join(', ');
+    const g = await scanGooglePlace(query, config.googleMapsApiKey, { language: project.language || 'it' });
     found = { page: g.place, images: g.images, loginOnly: false };
   } else {
     const url = source === 'instagram' ? project.instagram_url : source === 'facebook' ? project.facebook_url : req.body?.url;
     if (!String(url || '').trim()) throw badRequest(source === 'link' ? 'Enter the address of the page.' : 'Enter the address of this profile in the site data first.');
     found = await scanPage(url);
   }
-  res.json({ source, page: found.page, loginOnly: found.loginOnly, items: found.images.map((i) => ({ token: tokenFor(i.url), width: i.width, height: i.height })) });
+  res.json({ source, page: found.page, loginOnly: found.loginOnly, latestOnly: Boolean(found.latestOnly), items: found.images.map((i) => ({ token: tokenFor(i.url), width: i.width, height: i.height })) });
 });
 
 /** One found image, shown in the list to choose from (fetched by the server: the browser never contacts the other site). */

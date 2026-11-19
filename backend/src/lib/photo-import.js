@@ -50,6 +50,28 @@ const NOT_A_PHOTO = /(^|[\/_.-])(logo|icon|icons|sprite|favicon|emoji|pixel|blan
 
 /** The same photo in another size (…-300x200.jpg, ?w=300, =s400): one key for all, so it is listed once. */
 const sizeless = (u) => u.replace(/-\d{2,4}x\d{2,4}(?=\.\w+$|\.\w+\?)/, '').replace(/[?#].*$/, '').replace(/=[swh]\d+(-[a-z0-9-]+)?$/i, '').toLowerCase();
+/** Photos of Instagram / Facebook: the same photo is served in several sizes under the same file name. */
+const NETWORK_CDN = /cdninstagram\.com|fbcdn\.net/;
+const photoKey = (url) => {
+  try {
+    return NETWORK_CDN.test(url) ? new URL(url).pathname.split('/').pop() : sizeless(url);
+  } catch {
+    return sizeless(url);
+  }
+};
+/** How large the version of a network photo is, from its address ("…_p1080x1080…", "…_s640x640…"; no size: the original). */
+const declaredSize = (url) => {
+  const m = /[_=\/]([sp])(\d{2,4})x(\d{2,4})(?=[_&\/.]|$)/.exec(url);
+  return m ? Math.max(Number(m[2]), Number(m[3])) : 100000;
+};
+/** Keep, of the versions of a photo, the largest one. */
+function keep(found, key, entry) {
+  const old = found.get(key);
+  if (!old || (NETWORK_CDN.test(entry.url) && declaredSize(entry.url) > declaredSize(old.url))) found.set(key, old ? { ...entry, width: old.width, height: old.height } : entry);
+}
+/** Profile pictures of the networks (small, square crops) are not photos of the business. */
+const isAvatar = (url) => /\/s\d{2,3}x\d{2,3}\/|[?&]stp=[^&]*_s\d{2,3}x\d{2,3}|=s\d{2}(-[a-z0-9-]+)?$|\/t51\.2885-19\//i.test(url);
+
 /** The largest version named in a srcset. */
 function largestOfSrcset(srcset) {
   let best = null;
@@ -79,11 +101,10 @@ export function imagesOfPage(html, base) {
   const found = new Map();
   const add = (u, width = null, height = null) => {
     const url = abs(u);
-    if (!url || NOT_A_PHOTO.test(url) || /\.(svg|gif|ico)(\?|#|$)/i.test(url)) return;
+    if (!url || NOT_A_PHOTO.test(url) || isAvatar(url) || /\.(svg|gif|ico)(\?|#|$)/i.test(url)) return;
     // Known to be small: an icon or a thumbnail of the interface
     if ((width && width < 200) || (height && height < 150)) return;
-    const key = sizeless(url);
-    if (!found.has(key)) found.set(key, { url, width, height });
+    keep(found, photoKey(url), { url, width, height });
   };
   for (const meta of root.querySelectorAll('meta[property="og:image"], meta[property="og:image:secure_url"], meta[name="twitter:image"], link[rel="image_src"]')) add(meta.getAttribute('content') || meta.getAttribute('href'));
   for (const img of root.querySelectorAll('img')) {
@@ -95,8 +116,10 @@ export function imagesOfPage(html, base) {
   // Photos opened by a link (galleries with lightbox) and background photos
   for (const a of root.querySelectorAll('a[href]')) if (IMAGE_EXT.test(a.getAttribute('href'))) add(a.getAttribute('href'));
   for (const el of root.querySelectorAll('[style]')) for (const m of el.getAttribute('style').matchAll(/url\(\s*['"]?([^'")]+)['"]?\s*\)/gi)) add(m[1]);
-  // Addresses of image files written in the data of the page (galleries filled by a script)
-  for (const m of html.matchAll(/https?:\\?\/\\?\/[^"'\s<>\\]+(?:\\\/[^"'\s<>\\]+)*\.(?:jpe?g|png|webp)(?:\?(?:[^"'\s<>\\]|\\u0026|\\\/)*)?/gi)) add(m[0].replace(/\\\//g, '/').replace(/\\u0026/gi, '&'));
+  // Addresses of image files written in the data of the page (galleries filled by a script, the embed pages of
+  // the networks): there the slashes and the "&" are escaped, once or several times ("https:\\\/\\\/…", "\\u0026")
+  const data = html.replace(/\\+\//g, '/').replace(/\\+u0026/gi, '&').replace(/&amp;/g, '&');
+  for (const m of data.matchAll(/https?:\/\/[^"'\s<>\\]+\.(?:jpe?g|png|webp)(?:\?[^"'\s<>\\]*)?/gi)) add(m[0]);
   return [...found.values()].slice(0, MAX_FOUND);
 }
 
@@ -104,16 +127,44 @@ export function imagesOfPage(html, base) {
 const LOGIN_ONLY = /(^|\.)(instagram\.com|facebook\.com|fb\.com)$/i;
 
 /**
+ * Instagram and Facebook publish, for every public profile and post, a page made to be embedded in other
+ * websites (the "embed" of a profile or of a post, the "page plugin" of a Facebook page). It is open to
+ * anyone and shows the latest photos: for a link to a profile, that page is read instead of the profile
+ * itself (which holds no photos for a visitor without account). Null for any other address.
+ */
+export function embedPageOf(url) {
+  const host = url.hostname.replace(/^www\.|^m\./, '');
+  const parts = url.pathname.split('/').filter(Boolean);
+  if (/^(instagram\.com|instagr\.am)$/i.test(host)) {
+    if (parts[parts.length - 1] === 'embed') return null;
+    // A post or reel: its own embed
+    if (/^(p|reel|tv)$/.test(parts[0]) && parts[1]) return new URL('https://www.instagram.com/' + parts[0] + '/' + parts[1] + '/embed/');
+    // A profile (not the pages of the site itself)
+    if (parts.length === 1 && /^[a-z0-9._]{1,30}$/i.test(parts[0]) && !/^(explore|accounts|about|developer|legal|directory|stories|reels|direct)$/i.test(parts[0])) return new URL('https://www.instagram.com/' + parts[0] + '/embed/');
+    return null;
+  }
+  if (/^(facebook\.com|fb\.com)$/i.test(host)) {
+    if (parts[0] === 'plugins') return null;
+    const page = parts[0] === 'profile.php' ? url.href : parts[0] && !/^(login|watch|groups|events|marketplace|sharer|share|dialog|photo|photos|reel|stories)/i.test(parts[0]) ? 'https://www.facebook.com/' + (parts[0] === 'p' || parts[0] === 'people' || parts[0] === 'pages' ? parts.slice(0, 3).join('/') : parts[0]) : null;
+    return page ? new URL('https://www.facebook.com/plugins/page.php?tabs=timeline&width=500&height=3000&small_header=true&hide_cover=false&href=' + encodeURIComponent(page)) : null;
+  }
+  return null;
+}
+
+/**
  * The photos of a public web page. @returns {{ page, images: [{ url, width, height }], loginOnly: boolean }}
  * loginOnly: the page belongs to a network that hides its photos from visitors without account.
  */
 export async function scanPage(address, opts = {}) {
-  const start = referenceUrl(address);
+  const asked = referenceUrl(address);
+  // A profile of Instagram / a page of Facebook: its public embed page (embedPageOf)
+  const embed = embedPageOf(asked);
+  const start = embed || asked;
   const res = await safeGet(start, { ...opts, maxBytes: MAX_PAGE, accept: 'text/html,application/xhtml+xml' });
   const host = res.url.hostname;
   // An image address typed directly
   if (/^image\//i.test(res.type)) return { page: res.url.href, images: [{ url: res.url.href, width: null, height: null }], loginOnly: false };
-  return { page: res.url.href, images: imagesOfPage(res.text, res.url.href), loginOnly: LOGIN_ONLY.test(host) };
+  return { page: asked.href, images: imagesOfPage(res.text, res.url.href), loginOnly: LOGIN_ONLY.test(host), latestOnly: Boolean(embed) };
 }
 
 // ---------------------------------------------------- addresses pasted --
@@ -137,13 +188,24 @@ export function imagesOfList(text) {
     }
     if (NOT_A_PHOTO.test(url) || /\.(svg|gif|ico|css|js)(\?|#|$)/i.test(url)) continue;
     // Profile pictures of the networks (small, round) are not photos of the business
-    if (/\/s\d{2,3}x\d{2,3}\/|[?&]stp=[^&]*_s\d{2,3}x\d{2,3}|=s\d{2}(-[a-z0-9-]+)?$/i.test(url)) continue;
+    if (isAvatar(url)) continue;
     url = largerGooglePhoto(url);
     // The same photo of a network in several sizes: its file name is the same
-    const key = /cdninstagram\.com|fbcdn\.net/.test(url) ? new URL(url).pathname.split('/').pop() : sizeless(url);
-    if (!found.has(key)) found.set(key, { url, width: null, height: null });
+    keep(found, photoKey(url), { url, width: null, height: null });
   }
   return [...found.values()].slice(0, MAX_FOUND * 2);
+}
+
+/** A link to Google Maps (a listing, a short share link): its page gives a server no photos. */
+export const isMapsLink = (value) => /^(https?:\/\/)?((www\.|maps\.)?google\.[a-z.]{2,6}\/maps|maps\.google\.[a-z.]{2,6}|maps\.app\.goo\.gl|goo\.gl\/maps|g\.page|share\.google)/i.test(String(value || '').trim());
+/** The name of the place in a Google Maps listing link (/maps/place/<name>/…), '' when the link has none. */
+export function placeNameOfLink(value) {
+  const m = /\/maps\/place\/([^/@?]+)/.exec(String(value || ''));
+  try {
+    return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')).trim() : '';
+  } catch {
+    return '';
+  }
 }
 
 // ----------------------------------------------------------- Google Maps --

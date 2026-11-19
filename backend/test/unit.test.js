@@ -509,3 +509,36 @@ test('addresses of photos pasted by the user (copied in their own browser): each
   ]);
   assert.deepEqual(imagesOfList('nessun indirizzo'), []);
 });
+
+test('links to a profile: the public embed page of the network is read; a Google Maps link is told apart', async () => {
+  const { embedPageOf, imagesOfPage, isMapsLink, placeNameOfLink, scanPage } = await import('../src/lib/photo-import.js');
+  const embed = (u) => embedPageOf(new URL(u))?.href || null;
+  assert.equal(embed('https://www.instagram.com/rossi.impianti/'), 'https://www.instagram.com/rossi.impianti/embed/');
+  assert.equal(embed('https://instagram.com/rossi.impianti?igsh=abc'), 'https://www.instagram.com/rossi.impianti/embed/');
+  assert.equal(embed('https://www.instagram.com/p/Cabc123/?img_index=1'), 'https://www.instagram.com/p/Cabc123/embed/');
+  assert.equal(embed('https://www.instagram.com/explore/'), null);
+  assert.equal(embed('https://www.instagram.com/rossi/embed/'), null, 'already the embed page');
+  assert.match(embed('https://www.facebook.com/RossiImpianti/'), /^https:\/\/www\.facebook\.com\/plugins\/page\.php\?tabs=timeline.*href=https%3A%2F%2Fwww\.facebook\.com%2FRossiImpianti$/);
+  assert.equal(embed('https://www.facebook.com/login/'), null);
+  assert.equal(embed('https://www.rossi.it/instagram/'), null, 'another website is read as it is');
+
+  // The embed page holds the photos in its data, escaped several times, in several sizes: each photo once, the largest
+  const html = '<script>{"contextJSON":"{\\"display_url\\":\\"https:\\\\\\/\\\\\\/scontent.cdninstagram.com\\\\\\/v\\\\\\/t51.2885-15\\\\\\/111_n.jpg?stp=dst-jpg_e35_p640x640\\\\u0026oh=aa\\",\\"big\\":\\"https:\\\\\\/\\\\\\/scontent.cdninstagram.com\\\\\\/v\\\\\\/t51.2885-15\\\\\\/111_n.jpg?stp=dst-jpg_e35_p1080x1080\\\\u0026oh=bb\\",\\"pic\\":\\"https:\\\\\\/\\\\\\/scontent.cdninstagram.com\\\\\\/v\\\\\\/t51.2885-19\\\\\\/999_n.jpg?stp=dst-jpg_s150x150\\\\u0026oh=cc\\"}"}</script>';
+  assert.deepEqual(imagesOfPage(html, 'https://www.instagram.com/rossi/embed/').map((i) => i.url), ['https://scontent.cdninstagram.com/v/t51.2885-15/111_n.jpg?stp=dst-jpg_e35_p1080x1080&oh=bb']);
+
+  // scanPage asks the embed page and reports the profile the user gave
+  let fetched = '';
+  const fetchImpl = async (url) => {
+    fetched = url;
+    return new Response(html, { headers: { 'content-type': 'text/html' } });
+  };
+  const lookup = async () => [{ address: '93.184.216.34', family: 4 }];
+  const res = await scanPage('instagram.com/rossi/', { fetchImpl, lookup });
+  assert.equal(fetched, 'https://www.instagram.com/rossi/embed/');
+  assert.deepEqual([res.page, res.images.length, res.latestOnly, res.loginOnly], ['https://instagram.com/rossi/', 1, true, true]);
+
+  for (const u of ['https://maps.app.goo.gl/pkGDp', 'https://www.google.com/maps/place/LocalWeb/@45.4,9.1,17z', 'https://www.google.it/maps/place/X', 'g.page/rossi', 'https://goo.gl/maps/abc']) assert.ok(isMapsLink(u), u);
+  for (const u of ['https://www.rossi.it/maps', 'https://www.instagram.com/maps']) assert.ok(!isMapsLink(u), u);
+  assert.equal(placeNameOfLink('https://www.google.com/maps/place/Rossi+Impianti+S.r.l./@45,9,17z/data=x'), 'Rossi Impianti S.r.l.');
+  assert.equal(placeNameOfLink('https://maps.app.goo.gl/pkGDp'), '');
+});

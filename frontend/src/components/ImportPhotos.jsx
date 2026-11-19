@@ -74,14 +74,15 @@ export function ImportPhotos({ open, onClose, project, onAdded }) {
     async (source, extra = {}) => {
       setScanning(source);
       setError(null);
-      setFound(null);
-      setChosen(new Set());
-      setBroken(new Set());
       try {
         const res = await api.post(`/projects/${project.id}/images/import/scan`, { source, ...extra });
-        setFound(res);
-        // Copied from a page: everything is selected, the user removes what they do not want
-        if (source === 'list') setChosen(new Set(res.items.map((i) => i.token)));
+        // What is found is added to what is already listed (a long profile is copied in several steps, a profile
+        // and a page can be put together); everything new is selected, the user removes what they do not want
+        setFound((old) => {
+          const known = new Set((old?.items || []).map((i) => i.token));
+          return { ...res, page: old?.items?.length ? '' : res.page, items: [...(old?.items || []), ...res.items.filter((i) => !known.has(i.token))] };
+        });
+        setChosen((set) => new Set([...set, ...res.items.map((i) => i.token)]));
       } catch (e) {
         setError(e.message);
       } finally {
@@ -224,7 +225,7 @@ export function ImportPhotos({ open, onClose, project, onAdded }) {
             if (link.trim()) scan('link', { url: link });
           }}
         >
-          <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder={t('Or the address of a public page with the photos (the old website, a gallery…)')} />
+          <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder={t('Or a link: the Instagram profile, the Facebook page, the website…')} />
           <Button type="submit" icon={Search} loading={scanning === 'link'} disabled={!link.trim() || (scanning && scanning !== 'link')}>
             {t('Search')}
           </Button>
@@ -261,6 +262,9 @@ export function ImportPhotos({ open, onClose, project, onAdded }) {
                     {allChosen ? t('Deselect all') : t('Select all')}
                   </Button>
                 </div>
+                {found.latestOnly && (
+                  <p className="text-xs text-slate-500">{t('A link to a profile gives its latest posts only. For the older photos: open the profile, scroll down, press Ctrl+A then Ctrl+C and paste here (Ctrl+V): they are added to this list. You can repeat it while scrolling.')}</p>
+                )}
                 <div className="grid max-h-[46vh] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-4">
                   {shown.map((item) => {
                     const on = chosen.has(item.token);
