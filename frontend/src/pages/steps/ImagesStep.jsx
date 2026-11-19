@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Sparkles, Trash2, Wand2, ImageIcon, Images } from 'lucide-react';
+import { Sparkles, Trash2, Wand2, ImageIcon, Images, ImageDown } from 'lucide-react';
 import { api } from '../../api.js';
 import { useT } from '../../i18n/index.jsx';
 import { useToast } from '../../components/Toast.jsx';
@@ -7,6 +7,7 @@ import { useAutosave } from '../../hooks/useAutosave.js';
 import { Badge, Button, Card, Dropzone, EmptyState, Field, IconButton, Input, Select, Toggle, cx, uploadSummary } from '../../components/ui.jsx';
 import { StepIssues } from '../../components/StepIssues.jsx';
 import { LibraryPicker } from '../../components/LibraryPicker.jsx';
+import { ImportPhotos } from '../../components/ImportPhotos.jsx';
 
 const ROLE_COLORS = { hero_home: 'blue', subheader: 'purple', service: 'green', logo: 'yellow', gallery: 'gray' };
 
@@ -17,6 +18,7 @@ export default function ImagesStep({ project, setProject, reload }) {
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(null);
   const [picking, setPicking] = useState(false);
+  const [finding, setFinding] = useState(false);
   const settings = project.settings;
 
   useEffect(() => {
@@ -114,6 +116,9 @@ export default function ImagesStep({ project, setProject, reload }) {
           description={t('Upload and give each image a role: hero of the home page, subheader of inner pages, one image per service, logo. Every photo (all images except the logo) is shown on the Gallery page and also fills the other image spots of the site.')}
           actions={
             <>
+              <Button size="sm" icon={ImageDown} onClick={() => setFinding(true)} title={t('Photos of the business from its Google Maps listing, its website or its social profiles: you choose the ones to use')}>
+                {t('Find photos online')}
+              </Button>
               <Button size="sm" icon={Wand2} onClick={seoRename} loading={busy === 'rename'} disabled={!images?.some((i) => i.role)}>
                 {t('SEO rename')}
               </Button>
@@ -135,6 +140,15 @@ export default function ImagesStep({ project, setProject, reload }) {
               <span className="mt-1 text-xs text-slate-500">{t('Your saved images, by category')}</span>
             </button>
           </div>
+          <ImportPhotos
+            open={finding}
+            onClose={() => setFinding(false)}
+            project={project}
+            onAdded={(created) => {
+              setImages((list) => [...list, ...created]);
+              reload();
+            }}
+          />
           <LibraryPicker
             open={picking}
             onClose={() => setPicking(false)}

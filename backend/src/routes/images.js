@@ -13,6 +13,7 @@ import { clientInstructions, CLIENT_SYSTEM, languageName, SYSTEM_PROMPT, technic
 import { touch } from './projects.js';
 import { AdmZip } from '../lib/zip.js';
 import { imageUpload, prepareUpload, sendImage, storedName } from '../lib/upload.js';
+import { fetchFound, scanGooglePlace, scanPage, tokenFor, urlOfToken } from '../lib/photo-import.js';
 import { clientNamer } from '../lib/images.js';
 
 const router = Router();
@@ -65,6 +66,89 @@ router.post('/projects/:id/images', imageUpload.array('files'), async (req, res)
 
 /** Serve the stored file. */
 router.get('/images/:iid/file', (req, res) => sendImage(res, requireImage(req.params.iid)));
+
+// ------------------------------------------------- photos found elsewhere --
+
+/** Where photos can be looked for in this project: Google Maps (the key of the app is set), the social profiles of the site data. */
+router.get('/projects/:id/images/import/sources', (req, res) => {
+  const project = get('SELECT instagram_url, facebook_url FROM projects WHERE id = ?', req.params.id);
+  if (!project) throw notFound('Project');
+  res.json({ google: Boolean(config.googleMapsApiKey), instagram: Boolean(String(project.instagram_url || '').trim()), facebook: Boolean(String(project.facebook_url || '').trim()) });
+});
+
+/**
+ * Photos of the business found elsewhere, to choose from (lib/photo-import.js).
+ * Body: { source: 'google' } (its Google Maps listing: needs GOOGLE_MAPS_API_KEY), { source: 'instagram' | 'facebook' }
+ * (the profile of the site data) or { source: 'link', url } (any public web page).
+ * -> { source, page, items: [{ token, width, height }], loginOnly, googleKey }
+ */
+router.post('/projects/:id/images/import/scan', async (req, res) => {
+  const project = get('SELECT * FROM projects WHERE id = ?', req.params.id);
+  if (!project) throw notFound('Project');
+  const source = String(req.body?.source || 'link');
+  let found;
+  if (source === 'google') {
+    const g = await scanGooglePlace([project.site_name, String(project.address || '').replace(/\s+/g, ' ')].filter((x) => x && x.trim()).join(', '), config.googleMapsApiKey, { language: project.language || 'it' });
+    found = { page: g.place, images: g.images, loginOnly: false };
+  } else {
+    const url = source === 'instagram' ? project.instagram_url : source === 'facebook' ? project.facebook_url : req.body?.url;
+    if (!String(url || '').trim()) throw badRequest(source === 'link' ? 'Enter the address of the page.' : 'Enter the address of this profile in the site data first.');
+    found = await scanPage(url);
+  }
+  res.json({ source, page: found.page, loginOnly: found.loginOnly, items: found.images.map((i) => ({ token: tokenFor(i.url), width: i.width, height: i.height })) });
+});
+
+/** One found image, shown in the list to choose from (fetched by the server: the browser never contacts the other site). */
+router.get('/projects/:id/images/import/preview', async (req, res) => {
+  if (!get('SELECT id FROM projects WHERE id = ?', req.params.id)) throw notFound('Project');
+  const img = await fetchFound(urlOfToken(req.query.token), { maxBytes: config.maxImageBytes, key: config.googleMapsApiKey });
+  res.set({ 'Content-Type': /^image\/(jpeg|png|webp|avif|gif)$/.test(img.type) ? img.type : 'application/octet-stream', 'Cache-Control': 'private, max-age=600', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': 'inline' });
+  res.send(img.buffer);
+});
+
+/**
+ * Add the chosen found images to the project. Body: { tokens: [] } (at most 40 at a time).
+ * Each is downloaded, checked and stored like an uploaded file (converted / compressed when needed);
+ * images that turn out to be small (icons, thumbnails) are skipped.
+ */
+router.post('/projects/:id/images/import', async (req, res) => {
+  const project = get('SELECT * FROM projects WHERE id = ?', req.params.id);
+  if (!project) throw notFound('Project');
+  const tokens = [...new Set(Array.isArray(req.body?.tokens) ? req.body.tokens.map(String) : [])].slice(0, 40);
+  if (!tokens.length) throw badRequest('Select at least one image.');
+  const urls = tokens.map(urlOfToken);
+  const dir = path.join(config.imagesDir, String(project.id));
+  fs.mkdirSync(dir, { recursive: true });
+  const nameFor = clientNamer(project, all('SELECT file_name FROM images WHERE project_id = ?', project.id).map((r) => r.file_name));
+  const created = [];
+  const errors = [];
+  const optimized = [];
+  let small = 0;
+  for (const url of urls) {
+    try {
+      const file = await fetchFound(url, { maxBytes: config.maxImageBytes, key: config.googleMapsApiKey });
+      const up = await prepareUpload({ buffer: file.buffer, originalname: file.name });
+      if (up.info.mime !== 'image/svg+xml' && ((up.info.width || 0) < 300 || (up.info.height || 0) < 200)) {
+        small++;
+        continue;
+      }
+      const stored = storedName(up.info.ext);
+      fs.writeFileSync(path.join(dir, stored), up.buffer);
+      const { lastInsertRowid } = run(
+        `INSERT INTO images (project_id, file_path, file_name, original_name, mime, width, height, size)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        project.id, `images/${project.id}/${stored}`, nameFor(up.info.ext, slugify(path.parse(file.name).name)), file.name.slice(0, 255), up.info.mime, up.info.width, up.info.height, up.buffer.length
+      );
+      created.push(get('SELECT * FROM images WHERE id = ?', lastInsertRowid));
+      if (up.optimized) optimized.push(up.optimized);
+    } catch (err) {
+      errors.push(err.message);
+    }
+  }
+  touch(project.id);
+  if (!created.length && !small) throw badRequest([...new Set(errors)].join(' ') || 'No image could be downloaded.');
+  res.status(201).json({ created, errors: [...new Set(errors)], optimized, small });
+});
 
 /**
  * Add images of the Gallery library to the project. The files are copied, so the project keeps

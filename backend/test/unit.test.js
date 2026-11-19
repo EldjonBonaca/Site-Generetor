@@ -437,3 +437,55 @@ test('texts of the client (notes, service descriptions) reach every prompt as th
   assert.deepEqual(three.map(placeOf), ['Milano', 'Monza', 'Bergamo'], 'each service page aims at the next place');
   assert.ok(!about.includes('City / service area'), 'no city in the site data: the general rule');
 });
+
+test('photos found elsewhere: images of a public page, signed tokens, Google Maps listing, other formats converted', async () => {
+  const { imagesOfPage, tokenFor, urlOfToken, scanGooglePlace, isPlacesPhoto, fetchFound } = await import('../src/lib/photo-import.js');
+  const html = '<html><head><meta property="og:image" content="/img/cover.jpg"></head><body>' +
+    '<img src="/img/logo.png" width="180"><img src="/blank.gif" data-wpfc-original-src="/img/team-300x200.jpg" srcset="/img/team-300x200.jpg 300w, /img/team.jpg 1200w">' +
+    '<img src="/img/icon-phone.png"><img src="/img/thumb.jpg" width="80" height="80"><a href="/gallery/work-1.JPG">apri</a><div style="background-image:url(\'/img/hero.webp\')"></div>' +
+    '<script>var g = {"photos":["https:\\/\\/cdn.example\\/p\\/a1.jpg?w=1600\\u0026q=80","https:\\/\\/cdn.example\\/p\\/a1.jpg?w=400"]}</script><img src="/img/cover.jpg"></body></html>';
+  const urls = imagesOfPage(html, 'https://ref.example/chi-siamo/').map((i) => i.url);
+  assert.deepEqual(urls, [
+    'https://ref.example/img/cover.jpg', // the page image, listed once
+    'https://ref.example/img/team.jpg', // the largest version of a lazy-loaded photo
+    'https://ref.example/gallery/work-1.JPG', // a photo opened by a link
+    'https://ref.example/img/hero.webp', // a background photo
+    'https://cdn.example/p/a1.jpg?w=1600&q=80', // an address in the data of the page, once
+  ]);
+  assert.ok(!urls.some((u) => /logo|icon|thumb|blank/.test(u)), 'no logo, icon, thumbnail or placeholder');
+
+  // Tokens: only an address this app listed can be fetched
+  const token = tokenFor('https://ref.example/img/team.jpg');
+  assert.equal(urlOfToken(token), 'https://ref.example/img/team.jpg');
+  for (const bad of ['', 'abc', token.replace(/.$/, (c) => (c === 'A' ? 'B' : 'A')), Buffer.from('http://127.0.0.1/admin').toString('base64url') + '.' + token.split('.')[1]]) assert.throws(() => urlOfToken(bad), /not one of the images found/);
+  await assert.rejects(fetchFound('http://127.0.0.1:1/x.jpg', { maxBytes: 1000 }), /local network/, 'the server never fetches a local address');
+
+  // Google Maps: the official Places API, with the key of the app (never part of the listed addresses)
+  await assert.rejects(scanGooglePlace('Rossi, Via Roma 1', ''), /GOOGLE_MAPS_API_KEY/);
+  let asked = null;
+  const places = async (url, init) => {
+    asked = { url, init };
+    return new Response(JSON.stringify({ places: [{ id: 'P1', displayName: { text: 'Rossi Impianti' }, formattedAddress: 'Via Roma 1, Roma', photos: [{ name: 'places/P1/photos/AAA', widthPx: 4000, heightPx: 3000 }, { name: 'places/P1/photos/BBB', widthPx: 1200, heightPx: 900 }, { name: 'bad name' }] }] }), { headers: { 'content-type': 'application/json' } });
+  };
+  const g = await scanGooglePlace('Rossi Impianti, Via Roma 1, Roma', 'KEY-123', { fetchImpl: places });
+  assert.equal(asked.url, 'https://places.googleapis.com/v1/places:searchText');
+  assert.equal(asked.init.headers['X-Goog-Api-Key'], 'KEY-123');
+  assert.match(asked.init.headers['X-Goog-FieldMask'], /places\.photos/);
+  assert.equal(g.place, 'Rossi Impianti – Via Roma 1, Roma');
+  assert.deepEqual(g.images.map((i) => i.url), ['https://places.googleapis.com/v1/places/P1/photos/AAA/media?maxWidthPx=2400', 'https://places.googleapis.com/v1/places/P1/photos/BBB/media?maxWidthPx=1200']);
+  assert.ok(g.images.every((i) => isPlacesPhoto(i.url) && !i.url.includes('KEY-123')));
+  await assert.rejects(scanGooglePlace('x', 'KEY', { fetchImpl: async () => new Response(JSON.stringify({ error: { message: 'API key not valid' } }), { status: 400 }) }), /API key not valid/);
+  await assert.rejects(scanGooglePlace('x', 'KEY', { fetchImpl: async () => new Response('{}') }), /not found on Google Maps/);
+
+  // Upload: a JFIF / GIF / AVIF / TIFF file becomes WEBP, a JPG stays a JPG
+  const sharp = (await import('sharp')).default;
+  const { prepareUpload } = await import('../src/lib/upload.js');
+  const base = sharp({ create: { width: 640, height: 400, channels: 3, background: { r: 200, g: 80, b: 40 } } });
+  for (const [name, buffer, ext] of [['a.jfif', await base.clone().jpeg().toBuffer(), '.webp'], ['a.gif', await base.clone().gif().toBuffer(), '.webp'], ['a.tiff', await base.clone().tiff().toBuffer(), '.webp'], ['a.jpg', await base.clone().jpeg().toBuffer(), '.jpg']]) {
+    const up = await prepareUpload({ buffer, originalname: name });
+    assert.equal(up.info.ext, ext, name);
+    assert.equal((await sharp(up.buffer).metadata()).format, ext === '.webp' ? 'webp' : 'jpeg', name);
+    assert.deepEqual([up.info.width, up.info.height], [640, 400]);
+  }
+  await assert.rejects(prepareUpload({ buffer: Buffer.from('not an image'), originalname: 'x.heic' }), /not a valid image/);
+});

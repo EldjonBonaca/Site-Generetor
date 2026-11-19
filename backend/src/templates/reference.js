@@ -71,7 +71,7 @@ async function assertPublicHost(url, lookup) {
 }
 
 /** GET with the safety limits: public hosts only (checked again on every redirect), max size and time. */
-export async function safeGet(start, { maxBytes, fetchImpl = fetch, lookup = dns.lookup, accept = "*/*" }) {
+export async function safeGet(start, { maxBytes, fetchImpl = fetch, lookup = dns.lookup, accept = "*/*", binary = false }) {
   let url = start;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     await assertPublicHost(url, lookup);
@@ -93,20 +93,28 @@ export async function safeGet(start, { maxBytes, fetchImpl = fetch, lookup = dns
     try {
       if (!res.ok) throw badRequest(`The website answered with an error (${res.status}).`);
       const reader = res.body?.getReader?.();
+      if (!reader && binary) {
+        const whole = Buffer.from(await res.arrayBuffer());
+        return { url, buffer: whole.subarray(0, maxBytes), truncated: whole.length > maxBytes, text: '', type: res.headers.get('content-type') || '' };
+      }
       if (!reader) return { url, text: (await res.text()).slice(0, maxBytes), type: res.headers.get('content-type') || '' };
       const chunks = [];
       let size = 0;
+      let truncated = false;
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         size += value.length;
         if (size > maxBytes) {
+          truncated = true;
           await reader.cancel().catch(() => {});
           break;
         }
         chunks.push(value);
       }
-      return { url, text: Buffer.concat(chunks.map((c) => Buffer.from(c))).toString('utf8'), type: res.headers.get('content-type') || '' };
+      const body = Buffer.concat(chunks.map((c) => Buffer.from(c)));
+      // binary: the bytes as they are (an image); truncated: the answer was longer than maxBytes
+      return { url, text: binary ? '' : body.toString('utf8'), ...(binary ? { buffer: body } : {}), truncated, type: res.headers.get('content-type') || '' };
     } finally {
       clearTimeout(timer);
     }

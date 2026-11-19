@@ -47,6 +47,8 @@ export const config = {
   // Premium WordPress plugins installed on every exported site (lib/bundled-plugins.js)
   pluginsDir: path.join(storageDir, 'plugins'),
   maxImageBytes: Number(process.env.MAX_IMAGE_MB || 15) * 1024 * 1024,
+  // Photos of a business from its Google Maps listing (Places API (New)); empty: the import from Google Maps is off
+  googleMapsApiKey: (process.env.GOOGLE_MAPS_API_KEY || '').trim(),
   // Uploaded images of this size or larger are compressed below it (lib/optimize.js)
   optimizeImageBytes: Number(process.env.IMAGE_OPTIMIZE_KB || 1000) * 1000,
   maxKitBytes: Number(process.env.MAX_KIT_MB || 150) * 1024 * 1024,
